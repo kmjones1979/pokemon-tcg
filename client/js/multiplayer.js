@@ -76,7 +76,7 @@ export function cancelMatch() { socket?.emit("queue:cancel"); }
 export function createPrivateRoom(opts) { socket?.emit("room:create", opts); }
 export function joinPrivateRoom(code, opts) { socket?.emit("room:join", { code, ...opts }); }
 export function playCard(handIndex) { socket?.emit("game:play-card", { handIndex }); }
-export function attack(fromSlot, target) { socket?.emit("game:attack", { fromSlot, target }); }
+export function attack(fromSlot, target, abilityId = "basic") { socket?.emit("game:attack", { fromSlot, target, abilityId }); }
 export function endTurn() { socket?.emit("game:end-turn"); }
 export function concede() { socket?.emit("game:concede"); }
 

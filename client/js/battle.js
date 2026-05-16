@@ -10,16 +10,25 @@ export function effectiveDefense(card) {
   return Math.max(0, Math.round(d / 30));
 }
 
-export function computeDamage(attacker, defender, { abilityBonus = 0 } = {}) {
+// `ability` may include damageMult and may set `ignoreDefense`. abilityBonus
+// is a trainer-ability flat-add (e.g. Pikachu Fan +1).
+export function computeDamage(attacker, defender, opts = {}) {
+  const { abilityBonus = 0, ability = null } = opts;
   const attackerType = attacker.types?.[0];
   const mult = getMultiplier(attackerType, defender.types || []);
   const base = (attacker.cardAttack || 0) + abilityBonus;
-  const raw = base * mult - effectiveDefense(defender) / 2;
+  const abilityMult = ability?.damageMult ?? 1;
+  const ignoreDefense =
+    ability?.id === "special" &&
+    (attackerType === "flying" || attackerType === "ghost");
+  const defenseTerm = ignoreDefense ? 0 : effectiveDefense(defender) / 2;
+  const raw = base * mult * abilityMult - defenseTerm;
   const damage = mult === 0 ? 0 : Math.max(1, Math.round(raw));
   return {
     damage,
     multiplier: mult,
     verdict: describeMultiplier(mult),
+    ignoredDefense: ignoreDefense,
   };
 }
 

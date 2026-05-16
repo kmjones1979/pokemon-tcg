@@ -785,6 +785,93 @@ h1, h2, h3,
 .log-line.tone-win    { color: #f7d02c; font-weight: 700; }
 .log-line.tone-warn   { color: #ff5c63; }
 
+/* Ability popover — shown when the player has an attacker selected. */
+.ability-popover {
+  position: fixed;
+  z-index: 50;
+  width: 280px;
+  background: rgba(20, 23, 44, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--ink);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+.ap-title {
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.ap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ap-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  padding: 7px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  font-family: inherit;
+  transition: all 0.14s ease;
+}
+.ap-row:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.ap-row.selected {
+  background: rgba(247, 208, 44, 0.18);
+  border-color: rgba(247, 208, 44, 0.6);
+  box-shadow: 0 0 14px rgba(247, 208, 44, 0.3) inset;
+}
+.ap-row.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ap-name {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ap-cost {
+  background: rgba(247, 208, 44, 0.18);
+  color: #f7d02c;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+}
+.ap-mult {
+  color: var(--mid);
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+}
+.ap-status {
+  background: #735797;
+  color: #fff;
+  padding: 2px 5px;
+  border-radius: 5px;
+  font-size: 9px;
+}
+.ap-desc {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
 /* Damage preview shown when hovering an enemy slot with an attacker selected. */
 .dmg-preview {
   position: absolute;

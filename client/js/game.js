@@ -19,6 +19,7 @@
 // optional `status` ({ kind, turnsLeft }).
 
 import { computeDamage, rollStatus, isLockedOut, tickStatus } from "./battle.js";
+import { abilityById } from "./abilities.js";
 
 export const FIELD_SIZE = 5;
 export const STARTING_HAND = 5;
@@ -182,7 +183,10 @@ export function playCard(state, side, handIndex, { rand = Math.random } = {}) {
   return { ok: true, slot, instance: inst };
 }
 
-export function attack(state, side, fromSlot, target, { rand = Math.random } = {}) {
+export function attack(
+  state, side, fromSlot, target,
+  { rand = Math.random, abilityId = "basic" } = {},
+) {
   if (state.winner) return { ok: false, reason: "game over" };
   if (state.activePlayer !== side) return { ok: false, reason: "not your turn" };
   if (state.phase !== "main") return { ok: false, reason: "wrong phase" };
@@ -200,6 +204,11 @@ export function attack(state, side, fromSlot, target, { rand = Math.random } = {
     return { ok: false, reason: attackerInst.status.kind };
   }
 
+  const ability = abilityById(attackerInst.card, abilityId);
+  if (p.energy < ability.energyCost) {
+    return { ok: false, reason: `Need ${ability.energyCost} energy for ${ability.name}` };
+  }
+
   const { attackBonus } = abilityModifiers(p, attackerInst.card);
 
   // Target: "trainer" or a slot index on the opponent's field.
@@ -211,32 +220,63 @@ export function attack(state, side, fromSlot, target, { rand = Math.random } = {
     if (hasField) {
       return { ok: false, reason: "must attack opposing Pokémon first" };
     }
-    const damage = Math.max(1, attackerInst.card.cardAttack + attackBonus);
+    const base = attackerInst.card.cardAttack + attackBonus;
+    const damage = Math.max(1, Math.round(base * (ability.damageMult || 1)));
     o.trainerHp = Math.max(0, o.trainerHp - damage);
-    log(state, `${attackerInst.card.name} hit ${o.name} for ${damage}!`, "attack");
-    result = { damage, multiplier: 1, target: "trainer" };
+    log(state, `${attackerInst.card.name} used ${ability.name} on ${o.name} for ${damage}!`, "attack");
+    result = { damage, multiplier: 1, target: "trainer", abilityId, abilityName: ability.name };
   } else {
     const defenderSlot = target;
     const defenderInst = o.field[defenderSlot];
     if (!defenderInst) return { ok: false, reason: "no defender in slot" };
     const { defenseBonus } = abilityModifiers(o, defenderInst.card);
-    const calc = computeDamage(attackerInst.card, defenderInst.card, { abilityBonus: attackBonus });
-    // Apply defender's trainer-defense bonus by subtracting from damage.
+    const calc = computeDamage(attackerInst.card, defenderInst.card, {
+      abilityBonus: attackBonus,
+      ability,
+    });
     const damage = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);
 
-    let line = `${attackerInst.card.name} struck ${defenderInst.card.name} for ${damage}`;
+    let line = `${attackerInst.card.name} used ${ability.name} on ${defenderInst.card.name} for ${damage}`;
     if (calc.verdict.text) line += ` — ${calc.verdict.text}`;
     log(state, line, "attack");
 
-    // Status roll
-    const status = rollStatus(attackerInst.card, defenderInst.card, rand);
-    if (status && defenderInst.currentHp > 0) {
+    // Status: ability-guaranteed status overrides the type-based random roll.
+    let status = null;
+    if (ability.status && defenderInst.currentHp > 0) {
+      const turnsLeft = ability.status === "burn" ? 2 : 1;
+      status = { kind: ability.status, turnsLeft };
       defenderInst.status = status;
-      log(state, `${defenderInst.card.name} was inflicted with ${status.kind}!`, "status");
+      log(state, `${defenderInst.card.name} suffered ${status.kind}!`, "status");
+    } else {
+      // Otherwise fall back to the regular type-flavored chance
+      const rolled = rollStatus(attackerInst.card, defenderInst.card, rand);
+      if (rolled && defenderInst.currentHp > 0) {
+        defenderInst.status = rolled;
+        status = rolled;
+        log(state, `${defenderInst.card.name} was inflicted with ${rolled.kind}!`, "status");
+      }
     }
 
-    result = { damage, multiplier: calc.multiplier, verdict: calc.verdict, status, target: defenderSlot };
+    // Bug Special: leech 50% of damage as healing for the attacker.
+    if (ability.id === "special" && (attackerInst.card.types?.[0] === "bug")) {
+      const heal = Math.max(1, Math.floor(damage / 2));
+      const before = attackerInst.currentHp;
+      attackerInst.currentHp = Math.min(attackerInst.card.cardHp, attackerInst.currentHp + heal);
+      const gained = attackerInst.currentHp - before;
+      if (gained > 0) log(state, `${attackerInst.card.name} drained ${gained} HP.`, "status");
+    }
+
+    result = {
+      damage,
+      multiplier: calc.multiplier,
+      verdict: calc.verdict,
+      status,
+      target: defenderSlot,
+      abilityId,
+      abilityName: ability.name,
+      ignoredDefense: !!calc.ignoredDefense,
+    };
 
     if (defenderInst.currentHp <= 0) {
       log(state, `${defenderInst.card.name} fainted!`, "ko");
@@ -246,6 +286,8 @@ export function attack(state, side, fromSlot, target, { rand = Math.random } = {
     }
   }
 
+  // Charge the energy and mark the attacker as spent.
+  p.energy -= ability.energyCost;
   attackerInst.attackedThisTurn = true;
 
   if (checkWinner(state)) {
@@ -307,11 +349,12 @@ export function endTurn(state) {
 //         when it can.
 
 import { computeDamage as _computeDamage } from "./battle.js";
+import { basicAbility, specialAbility } from "./abilities.js";
 
 const POLICIES = {
-  easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false },
-  medium: { pickCard: "random",    pickTarget: "lowestHp", passPlayChance: 0.15, skipAttackChance: 0.1,  useTypeEff: false },
-  hard:   { pickCard: "expensive", pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true  },
+  easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false, useSpecial: false },
+  medium: { pickCard: "random",    pickTarget: "lowestHp", passPlayChance: 0.15, skipAttackChance: 0.1,  useTypeEff: false, useSpecial: "sometimes" },
+  hard:   { pickCard: "expensive", pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart" },
 };
 
 function chooseHandIndex(ai, policy, rand) {
@@ -434,7 +477,33 @@ export function aiTakeTurn(state, { rand = Math.random, difficulty = "medium" } 
     }
 
     const target = chooseTarget(state, attackerInst, policy, rand);
-    attack(state, "ai", attackerSlot, target, { rand });
+    // Decide which ability to use.
+    let abilityId = "basic";
+    if (policy.useSpecial) {
+      const special = specialAbility(attackerInst.card);
+      const canAfford = ai.energy >= special.energyCost;
+      if (canAfford) {
+        if (policy.useSpecial === "smart") {
+          // Hard: use special whenever it KOs the target or hits an SE matchup.
+          if (target !== "trainer") {
+            const t = state.players.player.field[target];
+            if (t) {
+              const basic = _computeDamage(attackerInst.card, t.card);
+              const spec  = _computeDamage(attackerInst.card, t.card, { ability: special });
+              const basicKO = basic.damage >= t.currentHp;
+              const specKO = spec.damage >= t.currentHp;
+              if (specKO && !basicKO) abilityId = "special";
+              else if (spec.multiplier >= 2 && ai.energy >= special.energyCost + 2) abilityId = "special";
+            }
+          } else if (ai.energy >= special.energyCost + 2) {
+            abilityId = "special";
+          }
+        } else if (policy.useSpecial === "sometimes" && rand() < 0.35) {
+          abilityId = "special";
+        }
+      }
+    }
+    attack(state, "ai", attackerSlot, target, { rand, abilityId });
   }
   endTurn(state);
 }

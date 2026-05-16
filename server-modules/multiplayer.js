@@ -309,10 +309,10 @@ function attach(io, supabase, pokedexOrGetter) {
       return out;
     });
 
-    socket.on("game:attack", async ({ fromSlot, target } = {}) => {
+    socket.on("game:attack", async ({ fromSlot, target, abilityId } = {}) => {
       await inRoom(async (room, side) => {
         const engine = await getEngine();
-        const r = engine.attack(room.state, side, fromSlot, target);
+        const r = engine.attack(room.state, side, fromSlot, target, { abilityId });
         if (!r.ok) { socket.emit("error", { error: r.reason }); return; }
         for (const recvSide of ["player", "ai"]) {
           emitToSocket(room.players[recvSide].socketId, "state:animation", {

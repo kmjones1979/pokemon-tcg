@@ -21,6 +21,7 @@ import {
 } from "./audio.js";
 import { TYPE_COLORS } from "./type-chart.js";
 import { computeDamage } from "./battle.js";
+import { abilitiesFor, abilityById, basicAbility } from "./abilities.js";
 import * as passkey from "./passkey.js";
 import * as deckBuilder from "./deck-builder.js";
 import * as mp from "./multiplayer.js";
@@ -38,6 +39,7 @@ let gameMode = "solo";      // "solo" | "mp"
 let mpOpponent = null;      // { displayName, ability } in multiplayer
 let chosenTrainer = null;   // remember during multiplayer matchmaking
 let soloSessionId = null;   // server-tracked anti-cheat session for solo matches
+let chosenAbilityId = "basic"; // ability the player will use on their next attack
 
 // --- Boot ------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
@@ -277,8 +279,8 @@ function turnHint() {
   const oppField = state.players.ai.field.filter(Boolean);
 
   if (selectedAttacker != null) {
-    if (oppField.length > 0) return "Tap an enemy Pokémon to attack it";
-    return "Tap the opposing trainer to attack directly";
+    if (oppField.length > 0) return "Pick an attack, then tap your target";
+    return "Pick an attack, then tap the opposing trainer";
   }
 
   // Are any of our Pokémon ready to attack?
@@ -358,14 +360,67 @@ function renderFields() {
   }
 }
 
+function showAbilityPopover(attackerInst) {
+  hideAbilityPopover();
+  const abilities = abilitiesFor(attackerInst.card);
+  const p = state.players.player;
+
+  const slot = $(`.player-field .field-slot[data-slot="${state.players.player.field.indexOf(attackerInst)}"]`);
+  const root = $("#arena");
+  const pop = document.createElement("div");
+  pop.className = "ability-popover";
+  pop.innerHTML = `
+    <div class="ap-title">${escape(attackerInst.card.name)} — choose attack</div>
+    <div class="ap-list">
+      ${abilities.map((ab) => {
+        const affordable = p.energy >= ab.energyCost;
+        const isSelected = ab.id === chosenAbilityId;
+        return `
+          <button class="ap-row ${affordable ? "" : "disabled"} ${isSelected ? "selected" : ""}"
+                  data-ability="${ab.id}" ${affordable ? "" : "disabled"}>
+            <span class="ap-name">${escape(ab.name)}</span>
+            <span class="ap-cost">${ab.energyCost > 0 ? `⚡${ab.energyCost}` : "free"}</span>
+            <span class="ap-mult">×${(ab.damageMult || 1).toFixed(2).replace(/\.00$/, "")}</span>
+            ${ab.status ? `<span class="ap-status">${ab.status}</span>` : ""}
+            <span class="ap-desc">${escape(ab.desc)}</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+  document.body.appendChild(pop);
+
+  // Position to the right of the attacker card.
+  if (slot) {
+    const r = slot.getBoundingClientRect();
+    pop.style.left = `${r.right + 14}px`;
+    pop.style.top = `${r.top - 6}px`;
+    if (r.right + 14 + 280 > window.innerWidth) {
+      // overflow — flip to the left side
+      pop.style.left = `${r.left - 14 - 280}px`;
+    }
+  }
+
+  pop.querySelectorAll(".ap-row").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("disabled")) return;
+      chosenAbilityId = btn.dataset.ability;
+      pop.querySelectorAll(".ap-row").forEach((b) => b.classList.remove("selected"));
+      btn.classList.add("selected");
+    });
+  });
+}
+
+function hideAbilityPopover() {
+  document.querySelector(".ability-popover")?.remove();
+}
+
 function showDamagePreview(slotEl, defenderInst) {
   if (!selectedAttacker) return;
   const attackerInst = state.players.player.field[selectedAttacker.slot];
   if (!attackerInst) return;
-  // The engine bonuses come from the player object; treat trainer bonuses
-  // as 0 here since we don't want this UI hint to leak the opposing
-  // trainer's defense bonus. It's a preview, not a guarantee.
-  const result = computeDamage(attackerInst.card, defenderInst.card);
+  const ability = abilityById(attackerInst.card, chosenAbilityId);
+  const result = computeDamage(attackerInst.card, defenderInst.card, { ability });
   const el = document.createElement("div");
   el.className = `dmg-preview tone-${result.verdict?.tone || "normal"}`;
   el.textContent = result.multiplier === 0 ? "MISS" : `-${result.damage}`;
@@ -477,7 +532,9 @@ function onSlotClick(side, slot) {
       return;
     }
     selectedAttacker = { slot };
-    renderFields();
+    chosenAbilityId = "basic"; // reset to basic each time you pick an attacker
+    render();
+    showAbilityPopover(inst);
     return;
   }
 
@@ -489,7 +546,9 @@ function onSlotClick(side, slot) {
 
   if (gameMode === "mp") {
     selectedAttacker = null;
-    mp.attack(fromSlot, slot);
+    hideAbilityPopover();
+    mp.attack(fromSlot, slot, chosenAbilityId);
+    chosenAbilityId = "basic";
     return;
   }
 
@@ -497,7 +556,7 @@ function onSlotClick(side, slot) {
   const defenderEl = $(`.ai-field .field-slot[data-slot="${slot}"] .card`);
   const attackerInst = state.players.player.field[fromSlot];
 
-  const result = attack(state, "player", fromSlot, slot);
+  const result = attack(state, "player", fromSlot, slot, { abilityId: chosenAbilityId });
   if (!result.ok) {
     flashVerdict(result.reason, "weak");
     selectedAttacker = null;
@@ -505,6 +564,8 @@ function onSlotClick(side, slot) {
     return;
   }
   selectedAttacker = null;
+  hideAbilityPopover();
+  chosenAbilityId = "basic";
   animateHit(attackerEl, defenderEl, attackerInst, result, () => {
     render();
     if (state.winner) return;
@@ -521,11 +582,13 @@ function bindTrainerAttackTarget() {
     const fromSlot = selectedAttacker.slot;
     if (gameMode === "mp") {
       selectedAttacker = null;
-      mp.attack(fromSlot, "trainer");
+      hideAbilityPopover();
+      mp.attack(fromSlot, "trainer", chosenAbilityId);
+      chosenAbilityId = "basic";
       return;
     }
     const attackerEl = $(`.player-field .field-slot[data-slot="${fromSlot}"] .card`);
-    const result = attack(state, "player", fromSlot, "trainer");
+    const result = attack(state, "player", fromSlot, "trainer", { abilityId: chosenAbilityId });
     if (!result.ok) {
       flashVerdict(result.reason, "weak");
       selectedAttacker = null;
