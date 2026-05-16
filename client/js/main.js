@@ -230,7 +230,9 @@ function render() {
           <div class="trainer-label">${escape(youLabel())} (${TRAINERS[state.players.player.ability]?.name || state.players.player.ability})</div>
           ${hpBar(state.players.player.trainerHp)}
           <div class="trainer-resources">
-            <span class="energy-pill">⚡ ${state.players.player.energy}/${state.players.player.maxEnergy}</span>
+            <div class="energy-pips" title="Energy ${state.players.player.energy}/${state.players.player.maxEnergy}">
+              ${renderEnergyPips(state.players.player.energy, state.players.player.maxEnergy)}
+            </div>
             <span>📚 ${state.players.player.deck.length}</span>
             <span>🗑 ${state.players.player.discard.length}</span>
           </div>
@@ -270,6 +272,17 @@ function render() {
 
 // Coach the player about what to do next. Reads state to figure out which
 // action is the most useful nudge.
+function renderEnergyPips(have, max) {
+  // Up to MAX_ENERGY (10) pips; light up `have`, dim the rest up to `max`,
+  // hide pips beyond `max`. Stay readable when `max` is small or large.
+  const total = Math.max(max, 1);
+  let html = "";
+  for (let i = 0; i < total; i++) {
+    html += `<span class="ep-pip ${i < have ? "lit" : "dim"}">⚡</span>`;
+  }
+  return html;
+}
+
 function turnHint() {
   if (!state) return "";
   if (state.winner) return "";
@@ -484,7 +497,10 @@ function escape(s) {
 
 // --- Interaction -----------------------------------------------------------
 function onHandCardClick(handIndex) {
-  if (state.activePlayer !== "player" || state.winner) return;
+  if (state.activePlayer !== "player" || state.winner) {
+    flashVerdict("Wait for your turn", "weak");
+    return;
+  }
   const p = state.players.player;
   const card = p.hand[handIndex];
   if (!card) return;
@@ -518,7 +534,10 @@ function onHandCardClick(handIndex) {
 
 function onSlotClick(side, slot) {
   if (state.winner) return;
-  if (state.activePlayer !== "player") return;
+  if (state.activePlayer !== "player") {
+    flashVerdict("Wait for your turn", "weak");
+    return;
+  }
 
   if (side === "player") {
     const inst = state.players.player.field[slot];
@@ -941,12 +960,22 @@ function onGameOver() {
 
   const overlay = document.createElement("div");
   overlay.className = "game-over";
+  const myKOs = state.players.player.discard.length;
+  const oppKOs = state.players.ai.discard.length;
+  const myHpLeft = state.players.player.trainerHp;
+  const oppHpLeft = state.players.ai.trainerHp;
   overlay.innerHTML = `
-    <div class="game-over-card">
+    <div class="game-over-card ${state.winner === "player" ? "win" : "loss"}">
       <h2>${state.winner === "player" ? "Victory!" : "Defeat"}</h2>
-      <p>${state.winner === "player"
+      <p class="go-sub">${state.winner === "player"
         ? "Your rival's trainer has been knocked out."
         : "Your trainer has been knocked out."}</p>
+      <div class="go-stats">
+        <div class="go-stat"><span>Turns played</span><strong>${state.turn}</strong></div>
+        <div class="go-stat"><span>Your KOs</span><strong>${oppKOs}</strong></div>
+        <div class="go-stat"><span>Their KOs</span><strong>${myKOs}</strong></div>
+        <div class="go-stat"><span>Trainer HP</span><strong>${myHpLeft} vs ${oppHpLeft}</strong></div>
+      </div>
       <button id="play-again-btn">Play again</button>
     </div>
   `;

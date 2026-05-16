@@ -30,9 +30,12 @@ let _instanceCounter = 0;
 const nextInstanceId = () => `i${++_instanceCounter}`;
 
 export const TRAINERS = {
-  brock:   { id: "brock",   name: "Brock",        bio: "+1 Defense to all Rock/Ground Pokémon",      portrait: "rock" },
-  misty:   { id: "misty",   name: "Misty",        bio: "Water cards cost 1 less Energy (min 1)",    portrait: "water" },
-  pikachu: { id: "pikachu", name: "Pikachu Fan",  bio: "+1 Attack to all Electric Pokémon",         portrait: "electric" },
+  brock:   { id: "brock",   name: "Brock",       bio: "+1 Defense to Rock/Ground",          portrait: "rock" },
+  misty:   { id: "misty",   name: "Misty",       bio: "Water cards cost 1 less (min 1)",    portrait: "water" },
+  pikachu: { id: "pikachu", name: "Pikachu Fan", bio: "+1 Attack to Electric Pokémon",      portrait: "electric" },
+  erika:   { id: "erika",   name: "Erika",       bio: "+1 HP to all Grass Pokémon",         portrait: "grass" },
+  sabrina: { id: "sabrina", name: "Sabrina",     bio: "Psychic specials cost 1 less",       portrait: "psychic" },
+  lance:   { id: "lance",   name: "Lance",       bio: "+1 Attack to Dragon Pokémon",        portrait: "dragon" },
 };
 
 function shuffle(arr, rand = Math.random) {
@@ -44,12 +47,14 @@ function shuffle(arr, rand = Math.random) {
   return a;
 }
 
-function instantiate(card) {
-  // Deep-ish clone the card data we need to track instance state.
+function instantiate(card, playerState) {
+  const { hpBonus } = playerState ? abilityModifiers(playerState, card) : { hpBonus: 0 };
+  const cardHp = (card.cardHp || 1) + hpBonus;
   return {
     instanceId: nextInstanceId(),
-    card, // immutable reference back to the original card definition
-    currentHp: card.cardHp,
+    card,
+    currentHp: cardHp,
+    maxHp: cardHp,
     summoningSickness: !hasQuickTrait(card),
     status: null,
   };
@@ -73,10 +78,27 @@ function abilityModifiers(playerState, card) {
   let costMod = 0;
   let attackBonus = 0;
   let defenseBonus = 0;
+  let hpBonus = 0;
   if (a === "misty" && card.types?.includes("water")) costMod -= 1;
   if (a === "pikachu" && card.types?.includes("electric")) attackBonus += 1;
   if (a === "brock" && (card.types?.includes("rock") || card.types?.includes("ground"))) defenseBonus += 1;
-  return { costMod, attackBonus, defenseBonus };
+  if (a === "erika" && card.types?.includes("grass")) hpBonus += 1;
+  if (a === "lance" && card.types?.includes("dragon")) attackBonus += 1;
+  // Sabrina's discount is applied per-ability (Psychic specials only), see
+  // specialAbilityCost() below.
+  return { costMod, attackBonus, defenseBonus, hpBonus };
+}
+
+// Per-trainer adjustment to a special ability's energy cost. Lookup is by
+// (playerState.ability, card type, ability id).
+export function trainerAbilityCostMod(playerState, card, ability) {
+  if (!playerState || !ability) return 0;
+  if (playerState.ability === "sabrina"
+      && card.types?.includes("psychic")
+      && ability.id === "special") {
+    return -1;
+  }
+  return 0;
 }
 
 export function effectiveCost(playerState, card) {
@@ -177,7 +199,7 @@ export function playCard(state, side, handIndex, { rand = Math.random } = {}) {
   if (slot === -1) return { ok: false, reason: "field is full" };
   p.energy -= cost;
   p.hand.splice(handIndex, 1);
-  const inst = instantiate(card);
+  const inst = instantiate(card, p);
   p.field[slot] = inst;
   log(state, `${p.name} summoned ${card.name}!`, "summon");
   return { ok: true, slot, instance: inst };
@@ -205,8 +227,11 @@ export function attack(
   }
 
   const ability = abilityById(attackerInst.card, abilityId);
-  if (p.energy < ability.energyCost) {
-    return { ok: false, reason: `Need ${ability.energyCost} energy for ${ability.name}` };
+  // Sabrina's trainer ability discounts Psychic specials.
+  const costMod = trainerAbilityCostMod(p, attackerInst.card, ability);
+  const effectiveAbilityCost = Math.max(0, ability.energyCost + costMod);
+  if (p.energy < effectiveAbilityCost) {
+    return { ok: false, reason: `Need ${effectiveAbilityCost} energy for ${ability.name}` };
   }
 
   const { attackBonus } = abilityModifiers(p, attackerInst.card);
@@ -287,7 +312,7 @@ export function attack(
   }
 
   // Charge the energy and mark the attacker as spent.
-  p.energy -= ability.energyCost;
+  p.energy -= effectiveAbilityCost;
   attackerInst.attackedThisTurn = true;
 
   if (checkWinner(state)) {

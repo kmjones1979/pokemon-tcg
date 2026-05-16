@@ -558,6 +558,9 @@ h1, h2, h3,
 .trainer-avatar[data-ability="brock"]   { background: linear-gradient(140deg, #B6A136, #1a1a0a); }
 .trainer-avatar[data-ability="misty"]   { background: linear-gradient(140deg, #6390F0, #0a1430); }
 .trainer-avatar[data-ability="pikachu"] { background: linear-gradient(140deg, #F7D02C, #2a2210); }
+.trainer-avatar[data-ability="erika"]   { background: linear-gradient(140deg, #7AC74C, #122412); }
+.trainer-avatar[data-ability="sabrina"] { background: linear-gradient(140deg, #F95587, #2c0e1c); }
+.trainer-avatar[data-ability="lance"]   { background: linear-gradient(140deg, #6F35FC, #0e0828); }
 .trainer-avatar::after {
   content: "";
   position: absolute;
@@ -616,6 +619,31 @@ h1, h2, h3,
   padding: 1px 8px;
   border-radius: 8px;
   font-weight: 700;
+}
+
+.energy-pips {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+.ep-pip {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  text-align: center;
+  font-size: 10px;
+  line-height: 14px;
+  border-radius: 50%;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.ep-pip.lit {
+  background: radial-gradient(circle at 30% 30%, #fff7c2, #f7d02c);
+  color: #5a4404;
+  box-shadow: 0 0 6px rgba(247, 208, 44, 0.6);
+}
+.ep-pip.dim {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.18);
 }
 
 .turn-banner {
@@ -1054,6 +1082,38 @@ h1, h2, h3,
   margin: 0 0 12px;
   font-size: 28px;
 }
+.game-over-card.win h2 {
+  background: linear-gradient(90deg, #f7d02c, #ee8130, #f95587);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.game-over-card.loss h2 {
+  color: var(--bad);
+}
+.go-sub {
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.go-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 24px;
+  margin-bottom: 4px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 12px 16px;
+  border-radius: 10px;
+}
+.go-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+.go-stat span { color: var(--muted); }
+.go-stat strong { color: var(--ink); font-family: "Press Start 2P", monospace; font-size: 10px; }
 .game-over-card button {
   margin-top: 20px;
   padding: 12px 22px;

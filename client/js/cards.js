@@ -37,7 +37,7 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
   el.style.setProperty("--type-2", c2);
 
   const hp = instance ? instance.currentHp : card.cardHp;
-  const maxHp = card.cardHp;
+  const maxHp = instance?.maxHp ?? card.cardHp;
 
   el.innerHTML = `
     <div class="card-inner">
