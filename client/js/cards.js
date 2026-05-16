@@ -1,0 +1,76 @@
+// Card rendering. Returns DOM elements; no game-state knowledge.
+
+import { TYPE_COLORS } from "./type-chart.js";
+
+const TYPE_GLYPH = {
+  normal: "★",
+  fire: "🔥",
+  water: "💧",
+  electric: "⚡",
+  grass: "🌿",
+  ice: "❄",
+  fighting: "✊",
+  poison: "☠",
+  ground: "⛰",
+  flying: "🕊",
+  psychic: "🌀",
+  bug: "🐛",
+  rock: "🪨",
+  ghost: "👻",
+  dragon: "🐉",
+  dark: "🌒",
+  steel: "⚙",
+  fairy: "✨",
+};
+
+export function renderCard(card, { compact = false, instance = null } = {}) {
+  const el = document.createElement("div");
+  el.className = `card type-${card.types?.[0] || "normal"}${compact ? " compact" : ""}`;
+  if (instance) el.dataset.instanceId = instance.instanceId;
+  el.dataset.cardId = card.id;
+
+  const primary = card.types?.[0] || "normal";
+  const secondary = card.types?.[1];
+  const c1 = TYPE_COLORS[primary] || "#888";
+  const c2 = TYPE_COLORS[secondary] || c1;
+  el.style.setProperty("--type-1", c1);
+  el.style.setProperty("--type-2", c2);
+
+  const hp = instance ? instance.currentHp : card.cardHp;
+  const maxHp = card.cardHp;
+
+  el.innerHTML = `
+    <div class="card-inner">
+      <div class="card-sheen"></div>
+      <header class="card-header">
+        <div class="cost-gem" title="${card.energyCost} Energy">${card.energyCost}</div>
+        <div class="card-hp" title="HP">${hp}<span class="card-hp-max">/${maxHp}</span></div>
+        <div class="card-types">
+          ${(card.types || []).map(
+            (t) =>
+              `<span class="type-badge" style="background:${TYPE_COLORS[t] || "#888"}" title="${t}">${TYPE_GLYPH[t] || "•"}</span>`,
+          ).join("")}
+        </div>
+      </header>
+      <div class="card-art">
+        <img loading="lazy" src="${card.sprite_front || ""}" alt="${card.name}" draggable="false">
+      </div>
+      <footer class="card-footer">
+        <div class="card-name">${escape(card.name)}</div>
+        <div class="card-attack" title="Attack">⚔ ${card.cardAttack}</div>
+      </footer>
+      ${instance && instance.status ? `<div class="card-status status-${instance.status.kind}">${instance.status.kind}</div>` : ""}
+      ${card.is_legendary ? `<div class="card-rarity">LEGENDARY</div>` : card.is_mythical ? `<div class="card-rarity mythical">MYTHICAL</div>` : ""}
+    </div>
+  `;
+
+  return el;
+}
+
+function escape(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

@@ -1,0 +1,15 @@
+node_modules
+.git
+scraper/cache
+test
+scripts/smoke-test.js
+scripts/passkey-smoke.js
+scripts/deck-builder-smoke.js
+scripts/multiplayer-smoke.js
+scripts/reward-smoke.js
+scripts/capture-*.js
+.env
+.env.production
+*.log
+.DS_Store
+/tmp

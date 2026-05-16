@@ -1,0 +1,236 @@
+/* Holographic card styling.
+   Two CSS variables drive the per-card palette:
+     --type-1: primary type color
+     --type-2: secondary type color (= primary for mono-type)
+*/
+
+.card {
+  position: relative;
+  width: 160px;
+  aspect-ratio: 5 / 7;
+  border-radius: 14px;
+  background: linear-gradient(150deg, var(--type-1, #888), var(--type-2, #444));
+  padding: 4px;
+  cursor: pointer;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.4),
+    filter 0.22s ease,
+    box-shadow 0.22s ease;
+  box-shadow:
+    0 6px 14px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  user-select: none;
+  flex-shrink: 0;
+  color: #fff;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.card .card-inner {
+  position: relative;
+  height: 100%;
+  border-radius: 11px;
+  background: #15192a;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Animated holographic sheen — diagonal gradient sweeping over the card.
+   `background-position` is the animated property, per spec. */
+.card .card-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.12) 45%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0.12) 55%,
+    transparent 70%
+  );
+  background-size: 300% 300%;
+  background-position: 0% 0%;
+  animation: holoSheen 4.5s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes holoSheen {
+  0%   { background-position: -150% 100%; }
+  100% { background-position: 200% -50%; }
+}
+
+.card:hover {
+  transform: translateY(-12px) rotateX(8deg);
+  filter: brightness(1.08);
+  box-shadow:
+    0 18px 30px rgba(0, 0, 0, 0.55),
+    0 0 24px var(--type-1, #888),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  z-index: 5;
+}
+
+.card.unplayable {
+  filter: grayscale(0.6) brightness(0.65);
+  cursor: not-allowed;
+}
+.card.unplayable:hover {
+  transform: none;
+  filter: grayscale(0.6) brightness(0.65);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+}
+
+.card.summoning::after,
+.card.spent::after {
+  content: "💤";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 8px;
+  padding: 2px 6px;
+  font-size: 13px;
+}
+.card.spent::after { content: "✓"; }
+
+.card.selected {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+  box-shadow:
+    0 0 24px var(--type-1, #fff),
+    0 0 60px var(--type-1, #fff);
+}
+
+.card.ko {
+  transition: filter 0.7s ease, transform 0.7s ease, opacity 0.7s ease;
+  filter: grayscale(1) brightness(0.4);
+  transform: scale(0.6) rotate(-12deg);
+  opacity: 0;
+}
+
+/* Header: cost, hp, types */
+.card-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 4px;
+  z-index: 2;
+}
+
+.cost-gem {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fff8, var(--type-1, #888));
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow:
+    inset 0 0 6px rgba(255, 255, 255, 0.5),
+    0 0 8px var(--type-1, #888);
+}
+
+.card-hp {
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.card-hp-max {
+  opacity: 0.55;
+  font-size: 9px;
+}
+
+.card-types {
+  display: flex;
+  gap: 3px;
+}
+.type-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18) inset;
+}
+
+/* Art */
+.card-art {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgba(255, 255, 255, 0.12),
+    rgba(0, 0, 0, 0.5)
+  );
+  position: relative;
+}
+.card-art img {
+  max-width: 100%;
+  max-height: 100%;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6));
+}
+
+/* Footer */
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 8px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+}
+.card-name {
+  font-weight: 700;
+  font-size: 13px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100px;
+}
+.card-attack {
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+}
+
+.card-rarity {
+  position: absolute;
+  bottom: 38px;
+  left: 8px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  color: gold;
+  text-shadow: 0 0 4px gold, 0 0 8px gold;
+  letter-spacing: 2px;
+}
+.card-rarity.mythical {
+  color: #ff90c8;
+  text-shadow: 0 0 4px #ff90c8, 0 0 8px #ff90c8;
+}
+
+.card-status {
+  position: absolute;
+  bottom: 38px;
+  right: 6px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 7px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+.card-status.status-burn      { background: #EE8130; color: #fff; }
+.card-status.status-paralyze  { background: #F7D02C; color: #222; }
+.card-status.status-sleep     { background: #735797; color: #fff; }
+
+/* Compact: smaller cards for the field */
+.card.compact {
+  width: 110px;
+}
+.card.compact .card-name { font-size: 11px; max-width: 70px; }
+.card.compact .card-hp { font-size: 9px; }
+.card.compact .cost-gem { width: 22px; height: 22px; font-size: 11px; }

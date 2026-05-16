@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["client/**", "shared/**", "server-modules/**", "index.html"],
+        "maxDuration": 300,
+        "memory": 512
+      }
+    }
+  ],
+  "routes": [
+    { "src": "/client/(.*)", "dest": "/server.js" },
+    { "src": "/socket.io/(.*)", "dest": "/server.js" },
+    { "src": "/api/(.*)", "dest": "/server.js" },
+    { "src": "/auth/(.*)", "dest": "/server.js" },
+    { "src": "/me/(.*)", "dest": "/server.js" },
+    { "src": "/(.*)", "dest": "/server.js" }
+  ]
+}

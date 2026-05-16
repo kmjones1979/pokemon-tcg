@@ -2,144 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Loading</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        margin: 0;
-        background-color: #f5f5f5;
-      }
-      .loader-wrapper {
-        text-align: center;
-      }
-      h1 {
-        font-size: 2rem;
-        color: #333;
-        margin-bottom: 20px;
-      }
-      .content-img {
-        max-width: 300px;
-        height: auto;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-      }
-      .loader-container {
-        text-align: center;
-      }
-      .loader {
-        display: inline-block;
-        width: 80px;
-        height: 80px;
-      }
-      .loader:after {
-        content: " ";
-        display: block;
-        width: 64px;
-        height: 64px;
-        margin: 8px;
-        border-radius: 50%;
-        border: 6px solid #808080;
-        border-color: #808080 transparent #808080 transparent;
-        animation: loader 1.2s linear infinite;
-      }
-      @keyframes loader {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-      .qr-code {
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        width: 100px;
-        height: 100px;
-        background-color: white;
-        padding: 5px;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-      }
-      .user-counter {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background-color: #808080;
-        color: white;
-        padding: 10px 15px;
-        border-radius: 20px;
-        font-weight: bold;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-      }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Pokémon TCG</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Press+Start+2P&display=swap"
+    />
+    <link rel="stylesheet" href="/client/css/cards.css" />
+    <link rel="stylesheet" href="/client/css/arena.css" />
+    <link rel="stylesheet" href="/client/css/deck-builder.css" />
   </head>
   <body>
-    <div class="loader-wrapper">
-      <h1>loading...</h1>
-      <div class="loader-container">
-        <div class="loader"></div>
-      </div>
+    <div class="landscape-prompt">
+      Rotate your phone to landscape ⤺
     </div>
 
-    <div class="qr-code" id="qr-code-container">
-      <!-- QR code will be generated here -->
-    </div>
+    <button id="mute-toggle" aria-label="Mute">🔊</button>
 
-    <div class="user-counter" id="user-counter">👥 1</div>
+    <section id="menu"></section>
+    <section id="arena" class="hidden"></section>
 
+    <!-- Socket.IO client (used by multiplayer.js). The slop-computer
+         auto-reload-on-disconnect is disabled in production because Vercel
+         frequently 400s WS upgrades, and reloading mid-passkey-flow breaks
+         registration. Multiplayer module creates its own socket lazily. -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
-      // Generate QR code with client-side library
-      function generateQRCode() {
-        const qrContainer = document.getElementById("qr-code-container");
-        const currentUrl = window.location.href;
-
-        // Create QR code using the library - using version 1 with L error correction for simple URLs
-        const qr = qrcode(3, "L");
-        qr.addData(currentUrl);
-        qr.make();
-
-        // Create SVG QR code
-        qrContainer.innerHTML = qr.createSvgTag({
-          cellSize: 5,
-          margin: 4,
-        });
-
-        // Adjust size of the SVG element
-        const svgElement = qrContainer.querySelector("svg");
-        svgElement.setAttribute("width", "100px");
-        svgElement.setAttribute("height", "100px");
+      // Only auto-reload on file changes during local dev.
+      if (location.hostname === "localhost" || location.hostname.endsWith(".local")) {
+        const _devSocket = io({ reconnection: false });
+        _devSocket.on("reload", () => window.location.reload());
       }
-
-      // Generate QR code on page load
-      window.addEventListener("load", generateQRCode);
-
-      const socket = io();
-
-      // Update user count when received from server
-      socket.on("userCount", (count) => {
-        document.getElementById("user-counter").textContent = `👥 ${count}`;
-      });
-
-      socket.on("reload", () => {
-        console.log("Reloading page...");
-        window.location.reload();
-      });
-
-      // Handle disconnection events
-      socket.on("disconnect", () => {
-        console.log("Disconnected from server, will reload in 1 second...");
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      });
     </script>
+
+    <script type="module" src="/client/js/main.js"></script>
   </body>
 </html>

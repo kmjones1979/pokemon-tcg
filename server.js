@@ -6,10 +6,28 @@ const chokidar = require("chokidar");
 const http = require("http");
 const socketIo = require("socket.io");
 const qrcode = require("qrcode-terminal");
+require("dotenv").config();
+const cookieParser = require("cookie-parser");
+const { createClient } = require("@supabase/supabase-js");
+const { buildDeck, toCard } = require("./shared/deck-builder");
+const auth = require("./server-modules/auth");
+const collection = require("./server-modules/collection");
+const multiplayer = require("./server-modules/multiplayer");
+const rewards = require("./server-modules/rewards");
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
+app.use(express.json({ limit: "256kb" }));
+app.use(cookieParser());
+
+// Default SESSION_SECRET for local dev only — production must set this.
+if (!process.env.SESSION_SECRET) {
+  process.env.SESSION_SECRET = require("crypto").randomBytes(32).toString("hex");
+  console.warn(
+    "[auth] SESSION_SECRET was not set. Generated an ephemeral one — sessions will be invalidated on restart.",
+  );
+}
 
 // Get local IP address
 function getLocalIp() {
@@ -26,7 +44,7 @@ function getLocalIp() {
 }
 
 const localIp = getLocalIp();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Generate server URL (still needed for console output)
 const serverUrl = `http://${localIp}:${PORT}`;
@@ -39,16 +57,100 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Set up file watcher
-const watcher = chokidar.watch("index.html", {
+// Set up file watcher — reload clients on any HTML/CSS/JS change.
+const watcher = chokidar.watch(["index.html", "client"], {
   ignored: /(^|[\/\\])\../, // ignore dotfiles
   persistent: true,
 });
 
-// When index.html changes, notify all clients
-watcher.on("change", (path) => {
-  console.log(`File ${path} has been changed`);
+watcher.on("change", (p) => {
+  console.log(`File ${p} has been changed`);
   io.emit("reload");
+});
+
+// --- Pokédex cache + deck endpoint -----------------------------------------
+//
+// Phase 2 (single-player) keeps all gameplay state in the browser. The server
+// is just a static host + a card-data API. We load the full Pokédex into
+// memory on boot so deck draws don't hit Supabase per-request.
+const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+let pokedex = []; // array of card objects, lazily loaded
+let _pokedexPromise = null;
+
+function loadPokedex() {
+  if (_pokedexPromise) return _pokedexPromise;
+  _pokedexPromise = (async () => {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      console.warn(
+        "[pokedex] SUPABASE_URL/SUPABASE_SERVICE_KEY missing — /api/deck will 503.",
+      );
+      return;
+    }
+    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { persistSession: false },
+    });
+    const PAGE = 1000;
+    const all = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from("pokemon")
+        .select("*")
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) {
+        console.error("[pokedex] supabase error:", error.message);
+        // Reset so the next request can retry
+        _pokedexPromise = null;
+        return;
+      }
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    pokedex = all.map(toCard);
+    console.log(`[pokedex] loaded ${pokedex.length} cards from Supabase`);
+  })();
+  return _pokedexPromise;
+}
+async function ensurePokedex() {
+  await loadPokedex();
+  return pokedex;
+}
+
+// --- Auth + session ---
+// We construct a Supabase client just for the auth/account routes so they can
+// share one connection. Reuses SUPABASE_URL/SUPABASE_SERVICE_KEY.
+let authSupabase = null;
+if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+  authSupabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: { persistSession: false },
+  });
+  auth.mount(app, authSupabase);
+  collection.mount(app, authSupabase);
+  rewards.mount(app, authSupabase, () => pokedex);
+} else {
+  console.warn("[auth] Supabase credentials missing — auth routes disabled.");
+}
+
+// Multiplayer wires into the Socket.IO server. It uses the Pokédex cache
+// (loaded below) and Supabase for deck hydration + match record persistence.
+// Attached after `pokedex` has been populated by loadPokedex().
+
+app.get("/api/pokedex/size", async (_req, res) => {
+  await ensurePokedex();
+  res.json({ size: pokedex.length });
+});
+
+app.get("/api/deck", async (req, res) => {
+  await ensurePokedex();
+  if (pokedex.length === 0) {
+    return res.status(503).json({ error: "pokedex not loaded yet" });
+  }
+  const seed = req.query.seed ? String(req.query.seed) : undefined;
+  const deck = buildDeck(pokedex, { seed });
+  res.json({ deck });
 });
 
 // Socket.io connection
@@ -160,13 +262,62 @@ if (!htmlContent.includes("socket.io")) {
   }
 }
 
-// Start the server
-server.listen(PORT, localIp, () => {
-  console.log(`Server running at http://${localIp}:${PORT}/`);
-  console.log(`You can also access it at http://localhost:${PORT}/`);
+// Start the server. Bind on all interfaces so both LAN IP and localhost work.
+// (Passkeys require a domain RP_ID, so localhost:3000 is the right URL for
+// local dev — IP-address RP_IDs are rejected by Chrome/Safari.)
+//
+// On Vercel we don't call .listen() — the platform owns the listener. The
+// boot still has to happen (loadPokedex + multiplayer.attach), but the
+// module.exports at the bottom hands the http server back to Vercel.
+const isVercel = !!process.env.VERCEL;
 
-  // Create QR code for console
-  console.log("\nAccess the server using the URL above.");
-  console.log("\nServer QR Code:");
-  qrcode.generate(serverUrl, { small: true });
+// Register Socket.IO handlers immediately. They'll await the Pokédex on
+// first event-triggered use. This works on both Vercel (where the function
+// is invoked per WebSocket connect) and Node (where attach is called once).
+multiplayer.attach(io, authSupabase, () => pokedex);
+
+// On Vercel, kick off the load so subsequent requests see a populated dex.
+// On local Node, this runs as part of normal boot.
+const bootPromise = loadPokedex();
+
+if (!isVercel) bootPromise.finally(() => {
+  server.listen(PORT, "0.0.0.0", () => {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`Server running at http://${localIp}:${PORT}/  (LAN — no passkeys)`);
+      console.log(`Use http://localhost:${PORT}/ for passkey login (required by WebAuthn)`);
+    } else {
+      console.log(`Server listening on :${PORT}`);
+    }
+
+    // Create QR code for console in dev only.
+    if (process.env.NODE_ENV !== "production") {
+      console.log("\nAccess the server using the URL above.");
+      console.log("\nServer QR Code:");
+      qrcode.generate(serverUrl, { small: true });
+    }
+  });
 });
+
+// Vercel adapter: export the http server. The platform forwards both
+// requests and WebSocket upgrades to it.
+if (isVercel) {
+  module.exports = server;
+}
+
+// Graceful shutdown so container hosts (Fly, Render, Docker) can recycle the
+// server cleanly. Tell connected clients the server is going away so they
+// can show a "reconnecting…" UI rather than dying silently.
+function shutdown(signal) {
+  console.log(`[shutdown] received ${signal}, draining...`);
+  io.emit("server:shutdown");
+  io.close(() => {
+    server.close(() => {
+      console.log("[shutdown] closed cleanly");
+      process.exit(0);
+    });
+  });
+  // Hard exit if we don't finish within 10s.
+  setTimeout(() => process.exit(1), 10000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
