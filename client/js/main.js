@@ -22,6 +22,7 @@ import {
 import { TYPE_COLORS } from "./type-chart.js";
 import { computeDamage } from "./battle.js";
 import { abilitiesFor, abilityById, basicAbility } from "./abilities.js";
+import { attachPreviewHandlers } from "./card-preview.js";
 import * as passkey from "./passkey.js";
 import * as deckBuilder from "./deck-builder.js";
 import * as mp from "./multiplayer.js";
@@ -42,6 +43,7 @@ let chosenTrainer = null;   // remember during multiplayer matchmaking
 let soloSessionId = null;   // server-tracked anti-cheat session for solo matches
 let chosenAbilityId = "basic"; // ability the player will use on their next attack
 let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
+let _prevEnergy = null; // tracks your energy across renders so we can pip-refill the new ones
 
 // --- Boot ------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
@@ -189,6 +191,7 @@ function renderMenu() {
         firstPlayer: "player",
       });
       _prevHps = { player: null, ai: null };
+      _prevEnergy = null;
       // Anti-cheat: register the solo session with the server.
       // The reward issued at game-over will require this id and a min duration.
       soloSessionId = null;
@@ -357,6 +360,9 @@ function render() {
 
   bindTrainerAttackTarget();
 
+  // Long-hover preview anywhere a card is rendered in-arena.
+  attachPreviewHandlers($("#arena"), cardLookup);
+
   // Trainer HP flash: if either side's HP dropped vs the previous render,
   // run the damage animation on that bar.
   for (const side of ["player", "ai"]) {
@@ -381,13 +387,18 @@ function render() {
 // Coach the player about what to do next. Reads state to figure out which
 // action is the most useful nudge.
 function renderEnergyPips(have, max) {
-  // Up to MAX_ENERGY (10) pips; light up `have`, dim the rest up to `max`,
-  // hide pips beyond `max`. Stay readable when `max` is small or large.
   const total = Math.max(max, 1);
+  // Pips index 0..total-1. Mark "refill" on pips that are newly lit since
+  // the previous render so they pop in.
+  const prev = _prevEnergy ?? have;
   let html = "";
   for (let i = 0; i < total; i++) {
-    html += `<span class="ep-pip ${i < have ? "lit" : "dim"}">⚡</span>`;
+    const lit = i < have;
+    const newlyLit = lit && i >= prev;
+    const cls = lit ? `lit${newlyLit ? " refill" : ""}` : "dim";
+    html += `<span class="ep-pip ${cls}">⚡</span>`;
   }
+  _prevEnergy = have;
   return html;
 }
 
@@ -479,6 +490,17 @@ function renderFields() {
       root.appendChild(slot);
     }
   }
+}
+
+// Resolve a card id to the full card definition (looks in hand, field, decks).
+function cardLookup(id) {
+  if (!state) return null;
+  for (const side of ["player", "ai"]) {
+    const p = state.players[side];
+    for (const c of p.hand) if (c && c.id === id) return c;
+    for (const inst of p.field) if (inst?.card?.id === id) return inst.card;
+  }
+  return null;
 }
 
 function showAbilityPopover(attackerInst) {
@@ -1121,7 +1143,10 @@ function closeMatchmakingModal() {
 function handleMpState(serverState) {
   const isFirst = state == null;
   state = serverState;
-  if (isFirst) _prevHps = { player: null, ai: null };
+  if (isFirst) {
+    _prevHps = { player: null, ai: null };
+    _prevEnergy = null;
+  }
   closeMatchmakingModal();
   gameMode = "mp";
   // Reuse the existing render() path. The state shape matches what the engine
