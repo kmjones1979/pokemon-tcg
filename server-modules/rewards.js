@@ -78,45 +78,93 @@ function consumeOffer(offerId, userId) {
   return o;
 }
 
-// Rate limit: each user can claim a solo reward at most once per 30s, and
-// at most 20 in any rolling hour. Anti-grind, not anti-cheat: a determined
-// attacker can still farm slowly. Real anti-cheat would tie rewards to a
-// server-tracked solo match record.
-const SOLO_HISTORY = new Map(); // userId → array of timestamps
-const SOLO_MIN_GAP_MS = 30 * 1000;
-const SOLO_HOURLY_CAP = 20;
+// Anti-cheat for solo rewards. Replaces the older "just trust the client"
+// payload with server-tracked sessions:
+//   POST /me/solo/start    -> records { userId, difficulty, startedAt }, returns sessionId
+//   POST /me/solo/end      -> validates session is real + ≥MIN_DURATION old, then rolls.
+// Plus a rolling rate limit so a determined attacker can't loop.
+const SOLO_SESSIONS = new Map(); // sessionId → { userId, difficulty, startedAt, claimed }
+const SOLO_HISTORY = new Map();   // userId → array of timestamps (claimed)
+const SOLO_MIN_DURATION_MS = 30 * 1000;  // games shorter than this are suspect
+const SOLO_MIN_GAP_MS = 30 * 1000;       // 1 reward per 30s
+const SOLO_HOURLY_CAP = 30;              // 30 rewards/hour ceiling
+const SESSION_TTL_MS = 60 * 60 * 1000;
+
+function gcSoloSessions() {
+  const now = Date.now();
+  for (const [id, s] of SOLO_SESSIONS) {
+    if (now - s.startedAt > SESSION_TTL_MS) SOLO_SESSIONS.delete(id);
+  }
+}
+setInterval(gcSoloSessions, 5 * 60 * 1000).unref?.();
+
 function canClaimSolo(userId) {
   const now = Date.now();
   let hist = SOLO_HISTORY.get(userId) || [];
   hist = hist.filter((t) => now - t < 60 * 60 * 1000);
-  if (hist.length >= SOLO_HOURLY_CAP) return false;
-  if (hist.length > 0 && now - hist[hist.length - 1] < SOLO_MIN_GAP_MS) return false;
+  if (hist.length >= SOLO_HOURLY_CAP) return { ok: false, reason: "hourly_cap" };
+  if (hist.length > 0 && now - hist[hist.length - 1] < SOLO_MIN_GAP_MS) {
+    return { ok: false, reason: "rate_limited", retryAfterMs: SOLO_MIN_GAP_MS - (now - hist[hist.length - 1]) };
+  }
   hist.push(now);
   SOLO_HISTORY.set(userId, hist);
-  return true;
+  return { ok: true };
 }
 
 // Express routes — mounted at /me/rewards/*
 function mount(app, supabase, getPokedex) {
-  // Solo (vs-AI) reward: client posts at game-over with { difficulty, won }.
-  // Server rolls and returns an offer. The client then POSTs /me/rewards/claim
-  // with the chosen pokemonId from the offer.
-  app.post("/me/rewards/solo", (req, res) => {
+  // Start a solo session — call when the match begins. Returns a sessionId
+  // that must be passed back to /me/solo/end. Without this handshake, no
+  // reward will be issued, which gates the "lie about a win" attack.
+  app.post("/me/solo/start", (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Sign in required." });
+    const difficulty = String(req.body?.difficulty || "easy");
+    if (!["easy", "medium", "hard"].includes(difficulty)) {
+      return res.status(400).json({ error: "Invalid difficulty." });
+    }
+    const sessionId = require("crypto").randomBytes(12).toString("base64url");
+    SOLO_SESSIONS.set(sessionId, {
+      userId: req.user.id,
+      difficulty,
+      startedAt: Date.now(),
+      claimed: false,
+    });
+    res.json({ sessionId });
+  });
+
+  // End a solo session — call when the player wins/loses. Server checks the
+  // session is real, owned by the same user, at least MIN_DURATION old, not
+  // already claimed, and applies per-user rate limit. Returns an offer
+  // shaped exactly like the multiplayer reward.
+  app.post("/me/solo/end", (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
     const pokedex = getPokedex();
     if (!pokedex || pokedex.length === 0) {
       return res.status(503).json({ error: "Pokédex not loaded yet." });
     }
-    const difficulty = String(req.body?.difficulty || "easy");
-    const won = !!req.body?.won;
+    const { sessionId, won } = req.body || {};
+    const session = SOLO_SESSIONS.get(sessionId);
+    if (!session) return res.json({ reward: null, reason: "no_session" });
+    if (session.userId !== req.user.id) {
+      return res.status(403).json({ error: "Session belongs to another user." });
+    }
+    if (session.claimed) return res.json({ reward: null, reason: "already_claimed" });
+    if (Date.now() - session.startedAt < SOLO_MIN_DURATION_MS) {
+      return res.json({ reward: null, reason: "session_too_short" });
+    }
+    session.claimed = true;
+
     let count = 0;
+    const difficulty = session.difficulty;
     if (won && difficulty === "medium") count = 1;
     else if (won && difficulty === "hard") count = 2;
-    else if (!won && difficulty === "hard") count = 1; // small consolation
-    if (count === 0) return res.json({ reward: null, reason: "no_drop" });
-    if (!canClaimSolo(req.user.id)) {
-      return res.json({ reward: null, reason: "rate_limited" });
+    else if (!won && difficulty === "hard") count = 1;
+    if (count === 0) {
+      return res.json({ reward: null, reason: "no_drop_for_difficulty" });
     }
+    const gate = canClaimSolo(req.user.id);
+    if (!gate.ok) return res.json({ reward: null, reason: gate.reason, retryAfterMs: gate.retryAfterMs });
+
     const picks = rollPicks(pokedex, count);
     const offerId = createOffer(req.user.id, picks);
     res.json({

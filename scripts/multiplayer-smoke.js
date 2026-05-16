@@ -73,59 +73,58 @@ async function main() {
   ]);
   console.log("✓ both clients entered the arena (match:found received)");
 
-  // Player A is server-side "player" (first one paired). Confirm A sees
-  // "Your move" and B sees a waiting banner.
-  const aTurn = await A.page.$eval(".turn-active", (el) => el.textContent.trim());
-  const bTurn = await B.page.$eval(".turn-active", (el) => el.textContent.trim());
-  if (!/your move/i.test(aTurn)) console.warn("expected A to be on their turn, got:", aTurn);
+  // First player is randomized — detect which side is active.
+  async function isActive(page) {
+    return /your move/i.test(await page.$eval(".turn-active", (el) => el.textContent));
+  }
+  let first = (await isActive(A.page)) ? A : B;
+  let second = first === A ? B : A;
+  console.log(`✓ first to move: ${first === A ? "A" : "B"}`);
 
-  // Capture pre-attack screenshot for both browsers.
-  await A.page.waitForTimeout(500);
-  await A.page.screenshot({ path: path.join(OUT, "mp-A-start.png") });
-  await B.page.screenshot({ path: path.join(OUT, "mp-B-start.png") });
+  await first.page.waitForTimeout(500);
+  await first.page.screenshot({ path: path.join(OUT, "mp-A-start.png") });
+  await second.page.screenshot({ path: path.join(OUT, "mp-B-start.png") });
 
-  // A plays a card.
-  const playableA = await A.page.$$(".hand .card:not(.unplayable)");
-  if (playableA.length === 0) throw new Error("A has no playable card");
-  await playableA[0].click();
-  // The card lands; A's field should now have 1 card.
-  await A.page.waitForFunction(
+  // First player summons.
+  const playable = await first.page.$$(".hand .card:not(.unplayable)");
+  if (playable.length === 0) throw new Error("first player has no playable card");
+  await playable[0].click();
+  await first.page.waitForFunction(
     () => document.querySelectorAll(".player-field .field-slot .card").length >= 1,
     { timeout: 5000 },
   );
-  console.log("✓ A summoned a Pokémon");
+  console.log("✓ first player summoned a Pokémon");
 
-  // B should see the opposing field populated.
-  await B.page.waitForFunction(
+  await second.page.waitForFunction(
     () => document.querySelectorAll(".ai-field .field-slot .card").length >= 1,
     { timeout: 8000 },
   );
-  console.log("✓ B saw the opposing field update");
+  console.log("✓ second player saw the opposing field update");
 
-  // A ends turn.
-  await A.page.click("#end-turn-btn");
-  await B.page.waitForFunction(
+  // First ends turn.
+  await first.page.click("#end-turn-btn");
+  await second.page.waitForFunction(
     () => /Your move/i.test(document.querySelector(".turn-active")?.textContent || ""),
     { timeout: 8000 },
   );
-  console.log("✓ turn switched to B");
+  console.log("✓ turn switched");
 
-  // B plays a card.
-  const playableB = await B.page.$$(".hand .card:not(.unplayable)");
-  if (playableB.length === 0) throw new Error("B has no playable card");
-  await playableB[0].click();
-  await B.page.waitForFunction(
+  // Second summons.
+  const playable2 = await second.page.$$(".hand .card:not(.unplayable)");
+  if (playable2.length === 0) throw new Error("second player has no playable card");
+  await playable2[0].click();
+  await second.page.waitForFunction(
     () => document.querySelectorAll(".player-field .field-slot .card").length >= 1,
     { timeout: 5000 },
   );
-  console.log("✓ B summoned a Pokémon");
+  console.log("✓ second player summoned a Pokémon");
 
-  await A.page.waitForFunction(
+  await first.page.waitForFunction(
     () => document.querySelectorAll(".ai-field .field-slot .card").length >= 1,
     { timeout: 8000 },
   );
 
-  await A.page.waitForTimeout(400);
+  await first.page.waitForTimeout(400);
   await A.page.screenshot({ path: path.join(OUT, "mp-A-midgame.png") });
   await B.page.screenshot({ path: path.join(OUT, "mp-B-midgame.png") });
 

@@ -143,6 +143,30 @@ app.get("/api/pokedex/size", async (_req, res) => {
   res.json({ size: pokedex.length });
 });
 
+// Public leaderboard — top players by wins. No auth required (read-only).
+app.get("/api/leaderboard", async (req, res) => {
+  if (!authSupabase) return res.json({ rows: [], me: null });
+  const limit = Math.min(50, Math.max(5, Number(req.query.limit) || 25));
+  const { data, error } = await authSupabase
+    .from("user_stats")
+    .select("user_id, display_name, matches_played, wins, losses, win_pct, cards_owned")
+    .gt("matches_played", 0)
+    .order("wins", { ascending: false })
+    .order("win_pct", { ascending: false })
+    .limit(limit);
+  if (error) return res.status(500).json({ error: error.message });
+  let me = null;
+  if (req.user) {
+    const { data: mine } = await authSupabase
+      .from("user_stats")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+    me = mine || null;
+  }
+  res.json({ rows: data || [], me });
+});
+
 app.get("/api/deck", async (req, res) => {
   await ensurePokedex();
   if (pokedex.length === 0) {

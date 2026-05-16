@@ -15,13 +15,17 @@ import {
 } from "./game.js";
 import { renderCard } from "./cards.js";
 import { fireAttackTrail, floatDamage, knockOut, flashVerdict, shakeHit } from "./animations.js";
-import { playCry, setMuted, isMuted } from "./audio.js";
+import {
+  playCry, setMuted, isMuted,
+  sfxAttack, sfxHit, sfxKO, sfxVictory, sfxDefeat, sfxCardPlay,
+} from "./audio.js";
 import { TYPE_COLORS } from "./type-chart.js";
 import { computeDamage } from "./battle.js";
 import * as passkey from "./passkey.js";
 import * as deckBuilder from "./deck-builder.js";
 import * as mp from "./multiplayer.js";
 import * as rewards from "./rewards.js";
+import * as leaderboard from "./leaderboard.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -33,6 +37,7 @@ let currentUser = null;     // populated after passkey login/register or /auth/m
 let gameMode = "solo";      // "solo" | "mp"
 let mpOpponent = null;      // { displayName, ability } in multiplayer
 let chosenTrainer = null;   // remember during multiplayer matchmaking
+let soloSessionId = null;   // server-tracked anti-cheat session for solo matches
 
 // --- Boot ------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
@@ -158,6 +163,22 @@ function renderMenu() {
         // straw on first-player random.
         firstPlayer: "player",
       });
+      // Anti-cheat: register the solo session with the server.
+      // The reward issued at game-over will require this id and a min duration.
+      soloSessionId = null;
+      if (currentUser) {
+        try {
+          const r = await fetch("/me/solo/start", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ difficulty: aiDifficulty }),
+          });
+          if (r.ok) {
+            const d = await r.json();
+            soloSessionId = d.sessionId || null;
+          }
+        } catch {}
+      }
       menu.classList.add("hidden");
       $("#arena").classList.remove("hidden");
       render();
@@ -193,6 +214,7 @@ function render() {
       <div class="turn-banner">
         <div class="turn-label">Turn ${state.turn}</div>
         <div class="turn-active">${state.activePlayer === "player" ? "Your move" : "Rival is thinking…"}</div>
+        <div class="turn-hint">${escape(turnHint())}</div>
       </div>
     </div>
 
@@ -244,6 +266,37 @@ function render() {
   if (state.winner) onGameOver();
 }
 
+// Coach the player about what to do next. Reads state to figure out which
+// action is the most useful nudge.
+function turnHint() {
+  if (!state) return "";
+  if (state.winner) return "";
+  if (state.activePlayer !== "player") return "Wait for your opponent…";
+  const p = state.players.player;
+  const me = p.field.filter(Boolean);
+  const oppField = state.players.ai.field.filter(Boolean);
+
+  if (selectedAttacker != null) {
+    if (oppField.length > 0) return "Tap an enemy Pokémon to attack it";
+    return "Tap the opposing trainer to attack directly";
+  }
+
+  // Are any of our Pokémon ready to attack?
+  const readyAttackers = p.field.filter(
+    (s) => s && !s.summoningSickness && !s.attackedThisTurn,
+  );
+  if (readyAttackers.length > 0) {
+    return `Tap one of your ${readyAttackers.length === 1 ? "Pokémon" : `${readyAttackers.length} Pokémon`} to attack`;
+  }
+
+  // Otherwise prompt summoning or end-turn.
+  const playable = p.hand.filter((c) => effectiveCost(p, c) <= p.energy);
+  if (playable.length > 0 && p.field.includes(null)) {
+    return `Tap a card from your hand to summon (${playable.length} affordable)`;
+  }
+  return "Click End Turn ▸";
+}
+
 function opponentLabel() {
   if (gameMode === "mp" && mpOpponent?.displayName) return mpOpponent.displayName;
   return state?.players?.ai?.name || "Rival";
@@ -280,6 +333,15 @@ function renderFields() {
         if (inst.summoningSickness) card.classList.add("summoning");
         if (inst.attackedThisTurn) card.classList.add("spent");
         if (selectedAttacker && side === "player" && selectedAttacker.slot === i) card.classList.add("selected");
+        // Pulse our ready attackers when it's our turn (cue: "tap me!").
+        const canActNow =
+          side === "player" &&
+          state.activePlayer === "player" &&
+          !state.winner &&
+          !inst.summoningSickness &&
+          !inst.attackedThisTurn &&
+          !selectedAttacker;
+        if (canActNow) card.classList.add("can-act");
         slot.appendChild(card);
         // Damage preview: when an enemy card is hovered AND we have an
         // attacker selected, show predicted -dmg above the target.
@@ -322,18 +384,28 @@ function renderHand() {
   hand.innerHTML = "";
   const p = state.players.player;
   const n = p.hand.length;
+  hand.dataset.size = String(n);
   p.hand.forEach((card, idx) => {
     const cardEl = renderCard(card);
     const cost = effectiveCost(p, card);
     cardEl.dataset.handIndex = String(idx);
     const playable = state.activePlayer === "player" && p.energy >= cost && state.players.player.field.includes(null);
     if (!playable) cardEl.classList.add("unplayable");
-    // Fan layout — slight rotation/translation per card.
+    // Pulse playable cards only when we have no other clearer action.
+    const hasReadyAttackers = p.field.some(
+      (s) => s && !s.summoningSickness && !s.attackedThisTurn,
+    );
+    if (playable && !hasReadyAttackers && !selectedAttacker) {
+      cardEl.classList.add("can-act");
+    }
+    // Fan layout — gentler curve for big hands so the central cards don't tower.
     const mid = (n - 1) / 2;
     const rel = idx - mid;
-    cardEl.style.setProperty("--fan-rot", `${rel * 3.5}deg`);
-    cardEl.style.setProperty("--fan-y", `${Math.abs(rel) * 6}px`);
-    cardEl.style.setProperty("--fan-x", `${rel * 4}px`);
+    const rotPer = n > 8 ? 2.4 : 3.5;
+    const yScale = n > 8 ? 3.5 : 6;
+    cardEl.style.setProperty("--fan-rot", `${rel * rotPer}deg`);
+    cardEl.style.setProperty("--fan-y", `${Math.abs(rel) * yScale}px`);
+    cardEl.style.setProperty("--fan-x", `${rel * 3.2}px`);
     cardEl.addEventListener("click", () => onHandCardClick(idx));
     hand.appendChild(cardEl);
   });
@@ -373,6 +445,7 @@ function onHandCardClick(handIndex) {
 
   if (gameMode === "mp") {
     // Optimistic cry, server will broadcast the canonical state.
+    sfxCardPlay();
     playCry(card.cry_url).catch(() => {});
     mp.playCard(handIndex);
     return;
@@ -383,6 +456,7 @@ function onHandCardClick(handIndex) {
     flashVerdict(result.reason, "weak");
     return;
   }
+  sfxCardPlay();
   playCry(card.cry_url).catch(() => {});
   render();
 }
@@ -468,13 +542,18 @@ function bindTrainerAttackTarget() {
 function animateHit(attackerEl, defenderEl, attackerInst, result, done) {
   const t = attackerInst?.card?.types?.[0] || "normal";
   fireAttackTrail(attackerEl, defenderEl, t);
+  sfxAttack();
   setTimeout(() => {
     floatDamage(defenderEl, result.multiplier === 0 ? "MISS" : `-${result.damage}`, {
       kind: result.multiplier >= 2 ? "super" : result.multiplier < 1 ? "weak" : "hit",
     });
-    if (result.multiplier !== 0) shakeHit(defenderEl);
+    if (result.multiplier !== 0) {
+      shakeHit(defenderEl);
+      sfxHit({ supereffective: result.multiplier >= 2 });
+    }
     if (result.verdict?.text) flashVerdict(result.verdict.text, result.verdict.tone);
     if (result.knockedOut) {
+      sfxKO();
       knockOut(defenderEl).then(() => done && done());
     } else {
       setTimeout(() => done && done(), 350);
@@ -530,6 +609,7 @@ function renderAccountPanel() {
         </div>
         <div class="account-actions">
           <button id="account-collection-btn">Collection</button>
+          <button id="account-leaderboard-btn">Leaderboard</button>
           <button id="account-logout-btn">Sign out</button>
         </div>
       </div>
@@ -542,6 +622,7 @@ function renderAccountPanel() {
         <span class="account-sub">Sign in to save stats and earn cards</span>
       </div>
       <div class="account-actions">
+        <button id="account-leaderboard-btn">Leaderboard</button>
         <button id="account-signin-btn">Sign in</button>
         <button id="account-register-btn" class="primary">Create account</button>
       </div>
@@ -559,6 +640,10 @@ function wireAccountPanel() {
   const $collection = $("#account-collection-btn");
   if ($collection) $collection.addEventListener("click", () => {
     deckBuilder.open({ onClose: () => {} });
+  });
+  const $leaderboard = $("#account-leaderboard-btn");
+  if ($leaderboard) $leaderboard.addEventListener("click", () => {
+    leaderboard.open({ onClose: () => {} });
   });
 }
 
@@ -733,12 +818,17 @@ function handleMpAnim(anim) {
     }
     const attackerType = (state?.players?.ai?.field?.[anim.fromSlot]?.card?.types?.[0]) || "normal";
     fireAttackTrail(attackerEl, defenderEl, attackerType);
+    sfxAttack();
     if (defenderEl) {
       floatDamage(defenderEl, anim.multiplier === 0 ? "MISS" : `-${anim.damage}`, {
         kind: anim.multiplier >= 2 ? "super" : anim.multiplier < 1 ? "weak" : "hit",
       });
-      if (anim.multiplier !== 0) shakeHit(defenderEl);
+      if (anim.multiplier !== 0) {
+        shakeHit(defenderEl);
+        sfxHit({ supereffective: anim.multiplier >= 2 });
+      }
     }
+    if (anim.knockedOut) sfxKO();
     if (anim.verdict?.text) flashVerdict(anim.verdict.text, anim.verdict.tone);
   } else if (anim.kind === "opponent-disconnected") {
     flashVerdict("Opponent disconnected — 60s grace", "weak");
@@ -761,13 +851,15 @@ function handleMpGameOver(over) {
 }
 
 function onGameOver() {
-  // In solo mode, ask the server for a reward roll.
-  if (gameMode === "solo" && currentUser) {
-    fetch("/me/rewards/solo", {
+  if (state.winner === "player") sfxVictory();
+  else sfxDefeat();
+  // In solo mode, finalise the server-tracked session and ask for a reward.
+  if (gameMode === "solo" && currentUser && soloSessionId) {
+    fetch("/me/solo/end", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        difficulty: aiDifficulty,
+        sessionId: soloSessionId,
         won: state.winner === "player",
       }),
     })
@@ -781,6 +873,7 @@ function onGameOver() {
         }
       })
       .catch(() => {});
+    soloSessionId = null;
   }
 
   const overlay = document.createElement("div");

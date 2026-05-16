@@ -62,3 +62,144 @@ export function setMuted(m) {
 export function isMuted() {
   return _muted;
 }
+
+// --- Procedural SFX --------------------------------------------------------
+// Lightweight synthesized sounds using Web Audio primitives. Saves shipping
+// any audio assets, lets us tune timbres per gameplay event.
+
+function fxGain(c, level) {
+  const g = c.createGain();
+  g.gain.value = level;
+  g.connect(c.destination);
+  return g;
+}
+
+// Attack swoosh: short filtered noise burst.
+export function sfxAttack(typeColor = "#fff") {
+  if (_muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const len = 0.18;
+  const buffer = c.createBuffer(1, c.sampleRate * len, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    // Pinkish noise envelope
+    const t = i / data.length;
+    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2);
+  }
+  const src = c.createBufferSource();
+  src.buffer = buffer;
+  const filter = c.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(2200, c.currentTime);
+  filter.frequency.linearRampToValueAtTime(600, c.currentTime + len);
+  filter.Q.value = 4;
+  src.connect(filter).connect(fxGain(c, 0.18));
+  src.start();
+}
+
+// Damage hit: short tonal blip with downward pitch sweep.
+export function sfxHit({ supereffective = false } = {}) {
+  if (_muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const osc = c.createOscillator();
+  osc.type = supereffective ? "square" : "triangle";
+  const startHz = supereffective ? 900 : 550;
+  osc.frequency.setValueAtTime(startHz, c.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(startHz * 0.4, c.currentTime + 0.12);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.22, c.currentTime + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.18);
+  osc.connect(g).connect(c.destination);
+  osc.start();
+  osc.stop(c.currentTime + 0.2);
+}
+
+// KO ding: descending chord, signals a Pokémon fainted.
+export function sfxKO() {
+  if (_muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const notes = [392, 311, 247]; // G4, Eb4, B3 — minor-ish drop
+  notes.forEach((freq, i) => {
+    const osc = c.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const g = c.createGain();
+    const start = c.currentTime + i * 0.08;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(0.18, start + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + 0.36);
+    osc.connect(g).connect(c.destination);
+    osc.start(start);
+    osc.stop(start + 0.4);
+  });
+}
+
+// Victory: ascending arpeggio, plays at game-over for the winner.
+export function sfxVictory() {
+  if (_muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const notes = [392, 494, 587, 784]; // G4, B4, D5, G5 — major triad ascending
+  notes.forEach((freq, i) => {
+    const osc = c.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    const g = c.createGain();
+    const start = c.currentTime + i * 0.11;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(0.22, start + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+    osc.connect(g).connect(c.destination);
+    osc.start(start);
+    osc.stop(start + 0.4);
+  });
+}
+
+// Defeat: a falling minor cadence.
+export function sfxDefeat() {
+  if (_muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const notes = [440, 370, 311, 247]; // A4, F#4, Eb4, B3
+  notes.forEach((freq, i) => {
+    const osc = c.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const g = c.createGain();
+    const start = c.currentTime + i * 0.14;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(0.18, start + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + 0.42);
+    osc.connect(g).connect(c.destination);
+    osc.start(start);
+    osc.stop(start + 0.45);
+  });
+}
+
+// Card play "thud" — a low percussive blip.
+export function sfxCardPlay() {
+  if (_muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const osc = c.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(180, c.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(60, c.currentTime + 0.12);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, c.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.18, c.currentTime + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.15);
+  osc.connect(g).connect(c.destination);
+  osc.start();
+  osc.stop(c.currentTime + 0.16);
+}

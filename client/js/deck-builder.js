@@ -13,7 +13,9 @@ const MAX_COPIES = 2;
 let _onClose = null;          // close callback
 let _collection = [];          // [{id, name, types, ..., quantity}]
 let _decks = [];               // [{id, name, card_ids[], is_active}]
-let _activeDeckId = null;      // id of the deck we're editing
+let _activeDeckId = null;      // id of the user's currently-active deck (used in matches)
+let _editingDeckId = null;     // id of the deck the user is currently editing (or null = new)
+let _editingDeckName = "Main Deck";
 let _editorIds = [];           // current draft as a flat list of pokemon ids
 let _filter = { type: "all", tier: "all", search: "" };
 
@@ -54,10 +56,12 @@ async function refresh() {
     const active = _decks.find((d) => d.is_active);
     if (active) {
       _activeDeckId = active.id;
-      _editorIds = active.card_ids.slice();
+      // If the editor is empty (first open), default to editing the active deck.
+      if (!_editingDeckId) {
+        loadDeckIntoEditor(active);
+      }
     } else {
       _activeDeckId = null;
-      _editorIds = [];
     }
     render();
   } catch (err) {
@@ -113,6 +117,20 @@ function render() {
         </section>
 
         <aside class="cb-deck">
+          <div class="cb-deck-switcher">
+            <select class="cb-deck-select">
+              <option value="__new__" ${!_editingDeckId ? "selected" : ""}>+ New deck</option>
+              ${_decks.map((d) => `
+                <option value="${d.id}" ${d.id === _editingDeckId ? "selected" : ""}>
+                  ${escape(d.name)}${d.is_active ? " ★" : ""}
+                </option>
+              `).join("")}
+            </select>
+            <input type="text" class="cb-deck-name" value="${escape(_editingDeckName)}" maxlength="40">
+            ${_editingDeckId
+              ? `<button class="cb-deck-delete" title="Delete this deck">🗑</button>`
+              : ""}
+          </div>
           <div class="cb-section-title">
             Deck (<span class="cb-deck-count">${_editorIds.length}</span>/${DECK_SIZE})
             <div class="cb-deck-bymtier">
@@ -124,8 +142,11 @@ function render() {
             <button class="cb-auto">Auto-fill</button>
             <button class="cb-clear">Clear</button>
             <button class="cb-save primary" ${_editorIds.length === DECK_SIZE ? "" : "disabled"}>
-              Save as Active
+              ${_editingDeckId ? "Save" : "Save deck"}
             </button>
+            ${_editingDeckId && _editingDeckId !== _activeDeckId
+              ? `<button class="cb-activate">Use this</button>`
+              : ""}
           </div>
           <div class="cb-deck-hint">${deckHint(deckSummary, _editorIds.length)}</div>
         </aside>
@@ -206,6 +227,58 @@ function render() {
   overlay.querySelector(".cb-auto").addEventListener("click", autoFill);
   overlay.querySelector(".cb-clear").addEventListener("click", () => { _editorIds = []; render(); });
   overlay.querySelector(".cb-save").addEventListener("click", saveDeck);
+  overlay.querySelector(".cb-deck-select")?.addEventListener("change", onSwitchDeck);
+  overlay.querySelector(".cb-deck-name")?.addEventListener("input", (e) => {
+    _editingDeckName = e.target.value.slice(0, 40);
+  });
+  overlay.querySelector(".cb-deck-delete")?.addEventListener("click", deleteCurrentDeck);
+  overlay.querySelector(".cb-activate")?.addEventListener("click", setCurrentAsActive);
+}
+
+function loadDeckIntoEditor(deck) {
+  _editingDeckId = deck.id;
+  _editingDeckName = deck.name;
+  _editorIds = deck.card_ids.slice();
+}
+
+function onSwitchDeck(e) {
+  const v = e.target.value;
+  if (v === "__new__") {
+    _editingDeckId = null;
+    _editingDeckName = `Deck ${_decks.length + 1}`;
+    _editorIds = [];
+  } else {
+    const d = _decks.find((x) => x.id === v);
+    if (d) loadDeckIntoEditor(d);
+  }
+  render();
+}
+
+async function deleteCurrentDeck() {
+  if (!_editingDeckId) return;
+  if (!confirm(`Delete "${_editingDeckName}"?`)) return;
+  try {
+    const r = await fetch(`/me/decks/${_editingDeckId}`, { method: "DELETE" });
+    if (!r.ok) throw new Error("delete failed");
+    _editingDeckId = null;
+    _editingDeckName = "Main Deck";
+    _editorIds = [];
+    await refresh();
+  } catch (err) {
+    alert("Could not delete: " + (err.message || "unknown"));
+  }
+}
+
+async function setCurrentAsActive() {
+  if (!_editingDeckId) return;
+  try {
+    const r = await fetch(`/me/decks/${_editingDeckId}/active`, { method: "POST" });
+    if (!r.ok) throw new Error("activate failed");
+    _activeDeckId = _editingDeckId;
+    await refresh();
+  } catch (err) {
+    alert("Could not activate: " + (err.message || "unknown"));
+  }
 }
 
 function renderTypeOptions(current) {
@@ -285,29 +358,31 @@ function autoFill() {
 
 async function saveDeck() {
   if (_editorIds.length !== DECK_SIZE) return;
-  // If the user already has an active deck we update it; otherwise create.
-  const url = _activeDeckId ? `/me/decks/${_activeDeckId}` : "/me/decks";
-  const method = _activeDeckId ? "PATCH" : "POST";
+  // Update an existing deck (we're editing one) or create a new one.
+  const url = _editingDeckId ? `/me/decks/${_editingDeckId}` : "/me/decks";
+  const method = _editingDeckId ? "PATCH" : "POST";
+  const setActive = !_activeDeckId; // first deck a user creates becomes active
   try {
     const res = await fetch(url, {
       method,
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        name: "Main Deck",
+        name: _editingDeckName || "Main Deck",
         card_ids: _editorIds,
-        set_active: true,
+        set_active: setActive,
       }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "save failed");
-    if (!_activeDeckId) {
-      _activeDeckId = data.deck.id;
-      // mark active explicitly (POST handles this server-side via set_active)
-    } else {
-      // If we updated, also make sure it's flagged active.
-      await fetch(`/me/decks/${_activeDeckId}/active`, { method: "POST" });
+    if (!_editingDeckId) {
+      _editingDeckId = data.deck.id;
+      if (setActive) _activeDeckId = data.deck.id;
     }
     flashSaved();
+    // Refresh the deck list so the new/renamed deck appears in the dropdown.
+    const r = await fetch("/me/decks");
+    if (r.ok) _decks = (await r.json()).decks;
+    render();
   } catch (err) {
     alert("Save failed: " + (err.message || "unknown"));
   }

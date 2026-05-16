@@ -179,6 +179,122 @@ h1, h2, h3,
   border-color: transparent;
   font-weight: 700;
 }
+
+/* === Leaderboard overlay === */
+.lb-overlay {
+  position: fixed; inset: 0;
+  background: rgba(8, 9, 18, 0.86);
+  z-index: 2400;
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+}
+.lb-overlay.hidden { display: none; }
+.lb-card {
+  width: 92vw;
+  max-width: 820px;
+  background: linear-gradient(180deg, #181b35 0%, #0c0d1a 100%);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 18px 22px;
+  color: var(--ink);
+}
+.lb-loading, .lb-error, .lb-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+.lb-error button {
+  display: block;
+  margin: 14px auto 0;
+  padding: 6px 14px;
+  background: var(--bg-mid);
+  color: var(--ink);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.lb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.lb-title {
+  font-family: "Press Start 2P", monospace;
+  font-size: 14px;
+  background: linear-gradient(90deg, #f7d02c, #ee8130, #f95587);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lb-x {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid rgba(255,255,255,0.12);
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+}
+.lb-mystats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  background: rgba(247, 208, 44, 0.08);
+  border: 1px solid rgba(247, 208, 44, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.lb-mystat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lb-mystat span { color: var(--muted); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; }
+.lb-mystat strong { font-size: 13px; }
+.lb-anon { color: var(--muted); font-size: 11px; padding: 6px 4px 12px; }
+.lb-table {
+  background: rgba(255,255,255,0.02);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.lb-row {
+  display: grid;
+  grid-template-columns: 50px 1fr 70px 70px 70px 70px;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.lb-row.lb-head {
+  background: rgba(255,255,255,0.04);
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.lb-row.is-me {
+  background: rgba(247, 208, 44, 0.12);
+  border-left: 3px solid #f7d02c;
+  font-weight: 700;
+}
+.lb-rank {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  color: var(--mid);
+}
+.lb-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-cell {
+  text-align: right;
+  color: var(--ink);
+}
 .trainer-card {
   background: var(--bg-mid);
   border: 2px solid transparent;
@@ -557,6 +673,10 @@ h1, h2, h3,
   padding: 24px 24px 12px;
   z-index: 4;
   pointer-events: auto;
+  /* Keep the hand within a width that doesn't collide with the trainer/
+     action bars on the sides. Cards overlap more tightly when crowded. */
+  max-width: min(70vw, 900px);
+  justify-content: center;
 }
 .hand .card {
   transform:
@@ -564,11 +684,42 @@ h1, h2, h3,
     rotate(var(--fan-rot, 0));
   margin: 0 -22px;
 }
+/* Tighter overlap when the hand grows. The data attribute is set by JS. */
+.hand[data-size="7"] .card { margin: 0 -40px; }
+.hand[data-size="8"] .card { margin: 0 -52px; }
+.hand[data-size="9"] .card { margin: 0 -62px; }
+.hand[data-size="10"] .card,
+.hand[data-size="11"] .card,
+.hand[data-size="12"] .card { margin: 0 -72px; }
 .hand .card:hover {
   transform:
     translate(var(--fan-x, 0), calc(var(--fan-y, 0) - 24px))
     rotate(0deg);
   z-index: 10;
+}
+
+/* Visual hint: cards that are playable AND it's your turn pulse softly so
+   the player sees what they can act on. The default-on selector matches the
+   `.can-act` class added by JS. */
+@keyframes canActPulse {
+  0%,100% { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 0 0 var(--type-1); }
+  50%     { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 18px 4px var(--type-1); }
+}
+.card.can-act {
+  animation: canActPulse 1.6s ease-in-out infinite;
+}
+
+/* Player-action banner: a subtle line under the turn banner cueing the
+   player to act ("Tap a card to summon" / "Tap one of your Pokémon to
+   attack" / "Click End Turn to pass"). */
+.turn-banner .turn-hint {
+  font-size: 9.5px;
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--mid);
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+  font-weight: 500;
+  min-height: 14px;
 }
 
 .action-bar {
