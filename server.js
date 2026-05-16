@@ -14,6 +14,7 @@ const auth = require("./server-modules/auth");
 const collection = require("./server-modules/collection");
 const multiplayer = require("./server-modules/multiplayer");
 const rewards = require("./server-modules/rewards");
+const achievements = require("./server-modules/achievements");
 
 const app = express();
 const server = http.createServer(app);
@@ -130,6 +131,34 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   auth.mount(app, authSupabase);
   collection.mount(app, authSupabase);
   rewards.mount(app, authSupabase, () => pokedex);
+  achievements.mount(app, authSupabase);
+
+  // Match history for the signed-in user.
+  app.get("/me/matches", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Sign in required." });
+    const { data, error } = await authSupabase
+      .from("matches")
+      .select(`
+        id, p1_user_id, p2_user_id, winner_id, reason, turns, started_at, ended_at,
+        p1:p1_user_id(display_name),
+        p2:p2_user_id(display_name)
+      `)
+      .or(`p1_user_id.eq.${req.user.id},p2_user_id.eq.${req.user.id}`)
+      .order("started_at", { ascending: false })
+      .limit(25);
+    if (error) return res.status(500).json({ error: error.message });
+    const rows = (data || []).map((m) => ({
+      id: m.id,
+      iWon: m.winner_id === req.user.id,
+      iWasP1: m.p1_user_id === req.user.id,
+      opponent: m.p1_user_id === req.user.id ? m.p2?.display_name : m.p1?.display_name,
+      reason: m.reason,
+      turns: m.turns,
+      startedAt: m.started_at,
+      endedAt: m.ended_at,
+    }));
+    res.json({ matches: rows });
+  });
 } else {
   console.warn("[auth] Supabase credentials missing — auth routes disabled.");
 }

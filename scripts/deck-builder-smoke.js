@@ -25,7 +25,7 @@ async function main() {
       isUserVerified: true, automaticPresenceSimulation: true,
     },
   });
-  await page.addInitScript((n) => { window.prompt = () => n; }, DISPLAY);
+  await page.addInitScript((n) => { window.__autoFillName = n; window.prompt = () => n; }, DISPLAY);
   const errs = [];
   page.on("pageerror", (e) => errs.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error") errs.push("console.error: " + m.text()); });

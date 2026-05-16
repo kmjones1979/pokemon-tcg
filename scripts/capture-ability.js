@@ -13,7 +13,7 @@ fs.mkdirSync(OUT, { recursive: true });
   await cdp.send("WebAuthn.addVirtualAuthenticator", {
     options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
   });
-  await page.addInitScript((n) => { window.prompt = () => n; }, `Ash-${Date.now().toString(36)}`);
+  await page.addInitScript((n) => { window.__autoFillName = n; window.prompt = () => n; }, `Ash-${Date.now().toString(36)}`);
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#account-register-btn");
   await page.click("#account-register-btn");

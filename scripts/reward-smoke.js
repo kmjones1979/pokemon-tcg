@@ -27,7 +27,7 @@ async function makePlayer(browser, label) {
       isUserVerified: true, automaticPresenceSimulation: true,
     },
   });
-  await page.addInitScript((n) => { window.prompt = () => n; }, label);
+  await page.addInitScript((n) => { window.__autoFillName = n; window.prompt = () => n; }, label);
   // suppress the native confirm() for concede
   await page.addInitScript(() => { window.confirm = () => true; });
   const errs = [];

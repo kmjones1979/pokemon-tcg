@@ -29,7 +29,7 @@ async function makePlayer(browser, label) {
       isUserVerified: true, automaticPresenceSimulation: true,
     },
   });
-  await page.addInitScript((n) => { window.prompt = () => n; }, label);
+  await page.addInitScript((n) => { window.__autoFillName = n; window.prompt = () => n; }, label);
   const errs = [];
   page.on("pageerror", (e) => errs.push(`[${label}] pageerror: ${e.message}`));
   page.on("console", (m) => {

@@ -42,8 +42,9 @@ async function main() {
     if (m.type() === "error") errs.push("console.error: " + m.text());
   });
 
-  // Override prompt() so register flow doesn't block on a dialog.
+  // Provide the display name to the auth modal (and the legacy prompt path).
   await page.addInitScript((name) => {
+    window.__autoFillName = name;
     window.prompt = () => name;
   }, DISPLAY);
 

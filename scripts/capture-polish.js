@@ -22,7 +22,7 @@ async function main() {
     options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
   });
   const label = `Polish-${Date.now().toString(36)}`;
-  await page.addInitScript((n) => { window.prompt = () => n; }, label);
+  await page.addInitScript((n) => { window.__autoFillName = n; window.prompt = () => n; }, label);
 
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#account-register-btn");

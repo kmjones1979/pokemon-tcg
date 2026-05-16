@@ -27,6 +27,7 @@ import * as deckBuilder from "./deck-builder.js";
 import * as mp from "./multiplayer.js";
 import * as rewards from "./rewards.js";
 import * as leaderboard from "./leaderboard.js";
+import * as achievements from "./achievements.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -40,6 +41,7 @@ let mpOpponent = null;      // { displayName, ability } in multiplayer
 let chosenTrainer = null;   // remember during multiplayer matchmaking
 let soloSessionId = null;   // server-tracked anti-cheat session for solo matches
 let chosenAbilityId = "basic"; // ability the player will use on their next attack
+let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
 
 // --- Boot ------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
@@ -54,6 +56,17 @@ window.addEventListener("DOMContentLoaded", async () => {
     refreshMuteIcon();
   });
   refreshMuteIcon();
+
+  // QR / deep-link: if ?code=XXXXXX is in the URL, prompt to auto-join that
+  // private room once the user has picked a trainer.
+  const urlParams = new URLSearchParams(location.search);
+  const incomingCode = urlParams.get("code");
+  if (incomingCode) {
+    flashVerdict(`Tap a trainer, then join ${incomingCode.toUpperCase()}`, "super");
+    // After they pick a trainer, the auto-join handler in renderMenu will
+    // fire. We stash the code on a hidden global.
+    window.__incomingRoomCode = incomingCode.toUpperCase();
+  }
 });
 
 function refreshMuteIcon() {
@@ -104,6 +117,7 @@ function renderMenu() {
         <div class="play-modes">
           <button class="mode-btn" id="mode-mp-match" disabled>Find online match</button>
           <button class="mode-btn" id="mode-mp-friend" disabled>Play vs friend (code)</button>
+          <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
     </div>
@@ -132,6 +146,18 @@ function renderMenu() {
       btn.textContent = `Battle as ${TRAINERS[chosen].name} ▸`;
       $("#mode-mp-match").disabled = false;
       $("#mode-mp-friend").disabled = false;
+
+      // QR auto-join: if we landed here via ?code=XXXXX, jump straight to
+      // the friend-join flow now that a trainer is picked.
+      if (window.__incomingRoomCode) {
+        const code = window.__incomingRoomCode;
+        delete window.__incomingRoomCode;
+        // history clean-up so a refresh doesn't re-trigger.
+        history.replaceState({}, "", location.pathname);
+        startMultiplayer({ mode: "friend" }).then(() => {
+          document.body.dispatchEvent(new CustomEvent("mpFriendJoin", { detail: { code } }));
+        });
+      }
     });
   });
 
@@ -160,11 +186,9 @@ function renderMenu() {
         aiDeck,
         playerAbility: chosen,
         aiAbility: aiTrainer,
-        // Solo: human always goes first. The going-second bonus only matters
-        // when both players are human and one happened to draw the short
-        // straw on first-player random.
         firstPlayer: "player",
       });
+      _prevHps = { player: null, ai: null };
       // Anti-cheat: register the solo session with the server.
       // The reward issued at game-over will require this id and a min duration.
       soloSessionId = null;
@@ -193,6 +217,72 @@ function renderMenu() {
 
   $("#mode-mp-match").addEventListener("click", () => startMultiplayer({ mode: "queue" }));
   $("#mode-mp-friend").addEventListener("click", () => startMultiplayer({ mode: "friend" }));
+  $("#how-to-play-btn").addEventListener("click", showHowToPlay);
+
+  // First-time helper: nudge new visitors who haven't started a game yet.
+  if (!localStorage.getItem("pokemon-tcg-seen-howto")) {
+    setTimeout(() => {
+      if (document.body.contains($("#how-to-play-btn"))) {
+        $("#how-to-play-btn").classList.add("can-act");
+      }
+    }, 800);
+  }
+}
+
+function showHowToPlay() {
+  localStorage.setItem("pokemon-tcg-seen-howto", "1");
+  document.querySelector(".howto-overlay")?.remove();
+  const o = document.createElement("div");
+  o.className = "howto-overlay";
+  o.innerHTML = `
+    <div class="howto-card">
+      <h2>How to Play</h2>
+      <div class="howto-step">
+        <div class="howto-num">1</div>
+        <div>
+          <strong>Each turn</strong> you draw a card and your max Energy ⚡ grows
+          by 1 (up to 10). Play Pokémon from your hand by clicking them — they
+          cost Energy based on their tier.
+        </div>
+      </div>
+      <div class="howto-step">
+        <div class="howto-num">2</div>
+        <div>
+          <strong>To attack</strong>, tap one of your Pokémon to select it, then
+          choose its <em>Basic</em> attack (free) or its <em>Special</em> attack
+          (costs extra Energy, more damage, often inflicts a status).
+        </div>
+      </div>
+      <div class="howto-step">
+        <div class="howto-num">3</div>
+        <div>
+          <strong>Then tap a target</strong> — an enemy Pokémon, or the opposing
+          trainer's portrait when their field is empty. Reduce their trainer's
+          HP from 30 to 0 to win.
+        </div>
+      </div>
+      <div class="howto-step">
+        <div class="howto-num">4</div>
+        <div>
+          <strong>Types matter.</strong> Fire beats Grass, Water beats Fire, etc.
+          Hover an enemy with your attacker selected to preview damage.
+        </div>
+      </div>
+      <div class="howto-step">
+        <div class="howto-num">5</div>
+        <div>
+          <strong>Earn cards</strong> by winning matches. Sign in to save your
+          collection, build custom decks, and climb the leaderboard.
+        </div>
+      </div>
+      <button class="howto-close">Got it ✓</button>
+    </div>
+  `;
+  document.body.appendChild(o);
+  o.querySelector(".howto-close").addEventListener("click", () => o.remove());
+  o.addEventListener("click", (e) => {
+    if (e.target === o) o.remove();
+  });
 }
 
 // --- Arena rendering -------------------------------------------------------
@@ -202,7 +292,7 @@ function render() {
   arena.innerHTML = `
     <div class="arena-bg"></div>
     <div class="trainer-row top">
-      <div class="trainer-block ai">
+      <div class="trainer-block ai${state.activePlayer === "ai" && !state.winner ? " is-turn" : ""}">
         <div class="trainer-avatar" data-ability="${state.players.ai.ability}"></div>
         <div class="trainer-meta">
           <div class="trainer-label">${escape(opponentLabel())} (${TRAINERS[state.players.ai.ability]?.name || state.players.ai.ability})</div>
@@ -224,7 +314,7 @@ function render() {
     <div class="field player-field" id="player-field"></div>
 
     <div class="trainer-row bottom">
-      <div class="trainer-block player">
+      <div class="trainer-block player${state.activePlayer === "player" && !state.winner ? " is-turn" : ""}">
         <div class="trainer-avatar" data-ability="${state.players.player.ability}"></div>
         <div class="trainer-meta">
           <div class="trainer-label">${escape(youLabel())} (${TRAINERS[state.players.player.ability]?.name || state.players.player.ability})</div>
@@ -266,6 +356,24 @@ function render() {
   });
 
   bindTrainerAttackTarget();
+
+  // Trainer HP flash: if either side's HP dropped vs the previous render,
+  // run the damage animation on that bar.
+  for (const side of ["player", "ai"]) {
+    const cur = state.players[side].trainerHp;
+    const prev = _prevHps[side];
+    if (prev != null && cur < prev) {
+      const bar = $(`.trainer-block.${side} .hp-bar`);
+      if (bar) {
+        bar.classList.remove("damaged");
+        // Force reflow to replay the animation on consecutive hits.
+        // eslint-disable-next-line no-unused-expressions
+        bar.offsetHeight;
+        bar.classList.add("damaged");
+      }
+    }
+    _prevHps[side] = cur;
+  }
 
   if (state.winner) onGameOver();
 }
@@ -691,6 +799,8 @@ function renderAccountPanel() {
         </div>
         <div class="account-actions">
           <button id="account-collection-btn">Collection</button>
+          <button id="account-achievements-btn">Achievements</button>
+          <button id="account-matches-btn">History</button>
           <button id="account-leaderboard-btn">Leaderboard</button>
           <button id="account-logout-btn">Sign out</button>
         </div>
@@ -727,38 +837,126 @@ function wireAccountPanel() {
   if ($leaderboard) $leaderboard.addEventListener("click", () => {
     leaderboard.open({ onClose: () => {} });
   });
+  const $ach = $("#account-achievements-btn");
+  if ($ach) $ach.addEventListener("click", () => {
+    achievements.openAchievements({ onClose: () => {} });
+  });
+  const $mh = $("#account-matches-btn");
+  if ($mh) $mh.addEventListener("click", () => {
+    achievements.openMatchHistory({ onClose: () => {} });
+  });
 }
 
-async function onRegister() {
+function onRegister() {
   if (!passkey.isSupported()) {
     alert("Passkeys aren't supported on this browser. Try Safari, Chrome, or Edge.");
     return;
   }
-  const displayName = prompt("Choose a display name (2-32 chars). Other trainers will see this.");
-  if (!displayName) return;
-  try {
-    const user = await passkey.register(displayName.trim());
-    currentUser = user;
-    flashVerdict(`Welcome, ${user.display_name}!`, "super");
-    renderMenu();
-  } catch (err) {
-    alert(err.message || "Sign up failed.");
-  }
+  // Use a custom modal instead of prompt() — on mobile, prompt() can break
+  // the user-gesture chain that WebAuthn requires for credentials.create(),
+  // producing "document not focused" / NotAllowedError. The modal's submit
+  // button is the gesture that triggers the WebAuthn ceremony.
+  showAuthModal({
+    title: "Create account",
+    submitLabel: "Create",
+    placeholder: "Trainer name (2-32 chars)",
+    onSubmit: async (name) => {
+      const displayName = name.trim();
+      if (displayName.length < 2) return "Name must be at least 2 chars.";
+      try {
+        const user = await passkey.register(displayName);
+        currentUser = user;
+        flashVerdict(`Welcome, ${user.display_name}!`, "super");
+        renderMenu();
+        return null;
+      } catch (err) {
+        return err.message || "Sign up failed.";
+      }
+    },
+  });
 }
 
-async function onSignIn() {
+function onSignIn() {
   if (!passkey.isSupported()) {
     alert("Passkeys aren't supported on this browser.");
     return;
   }
-  try {
-    const user = await passkey.login("");
-    currentUser = user;
-    flashVerdict(`Welcome back, ${user.display_name}`, "super");
-    renderMenu();
-  } catch (err) {
-    alert(err.message || "Sign-in failed.");
+  showAuthModal({
+    title: "Sign in",
+    submitLabel: "Continue",
+    placeholder: "Trainer name (optional)",
+    helpText: "Leave blank to use any passkey saved on this device.",
+    optional: true,
+    onSubmit: async (name) => {
+      try {
+        const user = await passkey.login(name?.trim() || "");
+        currentUser = user;
+        flashVerdict(`Welcome back, ${user.display_name}`, "super");
+        renderMenu();
+        return null;
+      } catch (err) {
+        return err.message || "Sign-in failed.";
+      }
+    },
+  });
+}
+
+function showAuthModal({ title, submitLabel, placeholder, helpText, optional, onSubmit }) {
+  // Tear down any prior auth modal.
+  document.querySelector(".auth-modal")?.remove();
+  const m = document.createElement("div");
+  m.className = "auth-modal";
+  m.innerHTML = `
+    <div class="auth-card">
+      <div class="auth-title">${escape(title)}</div>
+      <input class="auth-input" type="text" autocomplete="username webauthn"
+             maxlength="32" placeholder="${escape(placeholder || "")}" />
+      ${helpText ? `<div class="auth-help">${escape(helpText)}</div>` : ""}
+      <div class="auth-err" style="display:none"></div>
+      <div class="auth-row">
+        <button class="auth-cancel">Cancel</button>
+        <button class="auth-submit primary">${escape(submitLabel)}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(m);
+  const input = m.querySelector(".auth-input");
+  const errEl = m.querySelector(".auth-err");
+  const submit = m.querySelector(".auth-submit");
+  const cancel = m.querySelector(".auth-cancel");
+  setTimeout(() => input.focus(), 30);
+
+  // Test-only fast path: if Playwright/an automation tool sets
+  // window.__autoFillName, auto-fill and submit so the existing scripts that
+  // used window.prompt = () => name still work end-to-end.
+  if (typeof window.__autoFillName === "string") {
+    input.value = window.__autoFillName;
+    setTimeout(() => submit.click(), 50);
   }
+
+  async function go() {
+    const val = input.value;
+    if (!optional && !val.trim()) {
+      errEl.style.display = "block";
+      errEl.textContent = "Please enter a name.";
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = "Working…";
+    const err = await onSubmit(val);
+    if (err) {
+      errEl.style.display = "block";
+      errEl.textContent = err;
+      submit.disabled = false;
+      submit.textContent = submitLabel;
+    } else {
+      m.remove();
+    }
+  }
+
+  submit.addEventListener("click", go);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  cancel.addEventListener("click", () => m.remove());
 }
 
 async function onLogout() {
@@ -834,10 +1032,19 @@ function showMatchmakingModal({ kind, code }) {
       <button class="mm-cancel">Cancel</button>
     `;
   } else if (kind === "host") {
+    const joinUrl = `${location.origin}/?code=${encodeURIComponent(code)}`;
     body = `
-      <div class="mm-title">Share this code</div>
+      <div class="mm-title">Share this with a friend</div>
       <div class="mm-code">${code}</div>
-      <div class="mm-hint">Send this code to a friend. As soon as they enter it, the match starts.</div>
+      <div class="mm-qr" id="mm-qr"></div>
+      <div class="mm-hint">
+        Have them tap <strong>Play vs friend → Join</strong> and enter this code,<br>
+        or scan the QR with their phone camera.
+      </div>
+      <div class="mm-share">
+        <button class="mm-copy" data-text="${escape(code)}">Copy code</button>
+        <button class="mm-copy" data-text="${escape(joinUrl)}">Copy link</button>
+      </div>
       <button class="mm-cancel">Cancel</button>
     `;
   } else if (kind === "friend-choose") {
@@ -855,6 +1062,41 @@ function showMatchmakingModal({ kind, code }) {
     `;
   }
   modal.innerHTML = `<div class="mm-card">${body}</div>`;
+
+  // QR code for the host modal (built using the qrcode-generator script
+  // already bundled in index.html as `window.qrcode`).
+  if (kind === "host" && typeof window.qrcode === "function") {
+    const joinUrl = `${location.origin}/?code=${encodeURIComponent(code)}`;
+    const qr = window.qrcode(0, "M");
+    qr.addData(joinUrl);
+    qr.make();
+    const wrap = modal.querySelector("#mm-qr");
+    if (wrap) {
+      wrap.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2 });
+      const svg = wrap.querySelector("svg");
+      if (svg) {
+        svg.setAttribute("width", "140");
+        svg.setAttribute("height", "140");
+      }
+    }
+  }
+
+  // Copy buttons for the host modal.
+  modal.querySelectorAll(".mm-copy").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const txt = btn.dataset.text;
+      try {
+        await navigator.clipboard.writeText(txt);
+        const orig = btn.textContent;
+        btn.textContent = "Copied!";
+        setTimeout(() => (btn.textContent = orig), 1200);
+      } catch {
+        // Clipboard may be unavailable; show a hint instead
+        flashVerdict("Couldn't copy — long-press to select", "weak");
+      }
+    });
+  });
+
   modal.querySelector(".mm-cancel")?.addEventListener("click", () => {
     mp.cancelMatch();
     closeMatchmakingModal();
@@ -877,7 +1119,9 @@ function closeMatchmakingModal() {
 }
 
 function handleMpState(serverState) {
+  const isFirst = state == null;
   state = serverState;
+  if (isFirst) _prevHps = { player: null, ai: null };
   closeMatchmakingModal();
   gameMode = "mp";
   // Reuse the existing render() path. The state shape matches what the engine
@@ -935,6 +1179,10 @@ function handleMpGameOver(over) {
 function onGameOver() {
   if (state.winner === "player") sfxVictory();
   else sfxDefeat();
+  // Post-match achievement check (fires toasts for newly-unlocked ones).
+  if (currentUser) {
+    setTimeout(() => achievements.checkForNewUnlocks(), 1500);
+  }
   // In solo mode, finalise the server-tracked session and ask for a reward.
   if (gameMode === "solo" && currentUser && soloSessionId) {
     fetch("/me/solo/end", {
