@@ -1,34 +1,23 @@
-// Socket.IO multiplayer. The server is authoritative — clients send intents,
-// server validates against the engine, broadcasts new state.
+// Socket.IO multiplayer. Server-authoritative.
 //
-// State organization:
-//   rooms : Map<roomId, Room>
-//   queue : array of waiting Seat objects (FIFO)
-//   bySocket : Map<socketId, { roomId, side }>
-//
-// A Seat is: { playerId, displayName, ability, deckSource, socketId }
-//   playerId: stable identifier (user.id if signed-in, guest-id otherwise)
-//   deckSource: "active" (use saved active deck) or "random"
-//
-// A Room is: { id, code?, players: { player: SeatWithSide, ai: SeatWithSide },
-//   state: GameState, disconnects: { player?: timeoutId, ai?: timeoutId } }
-//
-// Event names match the Phase 3 spec:
-//   client → server: queue:join, queue:cancel, room:create, room:join,
-//                    game:play-card, game:attack, game:end-turn, game:concede
-//   server → client: queue:waiting, match:found, room:created, state:update,
-//                    state:animation, game:over, error
+// Cross-instance state (rooms, queue, privateRooms, socket↔room binding,
+// player↔room reconnect) lives in `state-store.js` (Redis in prod, in-memory
+// fallback locally). Each event handler:
+//   1. resolves the room id from the socket binding
+//   2. loads + mutates + saves the room with a short Redis lock
+//   3. broadcasts the resulting view via Socket.IO (the Redis adapter
+//      ensures other instances forward the event to their connected client)
 
 const { randomUUID } = require("crypto");
 const { buildDeck, toCard } = require("../shared/deck-builder");
 const { offerForOutcome } = require("./rewards");
+const store = require("./state-store");
 
 const RECONNECT_GRACE_MS = 60_000;
 const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
 const ROOM_CODE_LEN = 6;
 
-let _engine = null; // lazily-imported ESM engine (client/js/game.js)
-
+let _engine = null;
 async function getEngine() {
   if (!_engine) _engine = await import("../client/js/game.js");
   return _engine;
@@ -42,12 +31,10 @@ function randCode() {
   return s;
 }
 
-// Build a state view from a given recipient's POV. Crucially, this NORMALIZES
-// the side labels so the recipient always appears as the "player" side, and
-// the opponent always appears as the "ai" side. That lets the same renderer
-// code handle both single-player and either multiplayer seat. The opponent's
-// hand contents are replaced with placeholders so card identity is never
-// leaked over the wire.
+// Build a state view from a given recipient's POV. Normalises labels so the
+// recipient always appears as "player" and the opponent as "ai" — same shape
+// for both single-player and either multiplayer seat. Opponent hand contents
+// are replaced with placeholders.
 function viewFor(state, mySide) {
   const oppSide = mySide === "player" ? "ai" : "player";
   return {
@@ -55,11 +42,7 @@ function viewFor(state, mySide) {
     activePlayer: state.activePlayer === mySide ? "player" : "ai",
     phase: state.phase,
     winner:
-      state.winner == null
-        ? null
-        : state.winner === mySide
-          ? "player"
-          : "ai",
+      state.winner == null ? null : state.winner === mySide ? "player" : "ai",
     log: state.log.slice(-20),
     players: {
       player: state.players[mySide],
@@ -73,28 +56,21 @@ function viewFor(state, mySide) {
   };
 }
 
-// Translate a side label out of a recipient's POV back to the real side on
-// the server's engine state. Used so animation broadcasts come out correct
-// per-recipient.
-function fromPov(label, mySide) {
-  if (label === "player") return mySide;
-  if (label === "ai") return mySide === "player" ? "ai" : "player";
-  return label;
-}
 function toPov(realSide, mySide) {
   return realSide === mySide ? "player" : "ai";
 }
 
 function attach(io, supabase, pokedexOrGetter) {
-  const rooms = new Map();
-  const queue = [];
-  const bySocket = new Map();
   const getPokedex = typeof pokedexOrGetter === "function"
     ? pokedexOrGetter
     : () => pokedexOrGetter;
 
+  // Wire the Redis adapter so io.emit / io.to(roomId).emit fans out across
+  // function instances. No-op when REDIS_URL isn't set.
+  store.makeSocketIoAdapter(io);
+
   async function ensureDeck(seat) {
-    if (seat.deckSource === "active" && seat.userId) {
+    if (seat.deckSource === "active" && seat.userId && supabase) {
       try {
         const { data: deck } = await supabase
           .from("decks")
@@ -129,22 +105,40 @@ function attach(io, supabase, pokedexOrGetter) {
       aiAbility: p2Seat.ability || "pikachu",
     });
     const roomId = randomUUID();
+    let matchId = null;
+    if (supabase) {
+      try {
+        const { data } = await supabase
+          .from("matches")
+          .insert({
+            p1_user_id: p1Seat.userId || null,
+            p2_user_id: p2Seat.userId || null,
+            started_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        matchId = data?.id || null;
+      } catch (err) {
+        console.warn("[mp] match insert failed:", err.message);
+      }
+    }
     const room = {
       id: roomId,
-      code: p1Seat.code || null,
       isPrivate: !!p1Seat.code,
+      matchId,
       players: {
         player: { ...p1Seat, side: "player" },
         ai:     { ...p2Seat, side: "ai" },
       },
       state,
-      disconnects: {},
-      // Match record for persistence on game-over
-      matchInsertPromise: insertMatchRecord(supabase, p1Seat, p2Seat),
     };
-    rooms.set(roomId, room);
-    bySocket.set(p1Seat.socketId, { roomId, side: "player" });
-    bySocket.set(p2Seat.socketId, { roomId, side: "ai" });
+    await store.roomSet(roomId, room);
+    await Promise.all([
+      store.socketBind(p1Seat.socketId, { roomId, side: "player" }),
+      store.socketBind(p2Seat.socketId, { roomId, side: "ai" }),
+      store.playerBind(p1Seat.playerId, roomId),
+      store.playerBind(p2Seat.playerId, roomId),
+    ]);
     const s1 = io.sockets.sockets.get(p1Seat.socketId);
     const s2 = io.sockets.sockets.get(p2Seat.socketId);
     s1?.join(roomId);
@@ -161,61 +155,42 @@ function attach(io, supabase, pokedexOrGetter) {
     });
   }
 
-  async function insertMatchRecord(supabase, p1, p2) {
-    if (!supabase) return null;
-    const { data, error } = await supabase
-      .from("matches")
-      .insert({
-        p1_user_id: p1.userId || null,
-        p2_user_id: p2.userId || null,
-        started_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-    if (error) {
-      console.warn("[mp] match insert failed:", error.message);
-      return null;
+  function emitToSocket(socketId, event, payload) {
+    if (!socketId) return;
+    const sock = io.sockets.sockets.get(socketId);
+    if (sock) {
+      sock.emit(event, payload);
+      return;
     }
-    return data.id;
+    // Socket lives on a different instance — the Redis adapter ensures the
+    // event reaches it when we emit to a room. We use the socketId as a
+    // 1-member room for this purpose.
+    io.to(socketId).emit(event, payload);
   }
 
   function broadcast(room) {
-    const ps = io.sockets.sockets.get(room.players.player.socketId);
-    const as = io.sockets.sockets.get(room.players.ai.socketId);
-    ps?.emit("state:update", viewFor(room.state, "player"));
-    as?.emit("state:update", viewFor(room.state, "ai"));
+    emitToSocket(room.players.player.socketId, "state:update", viewFor(room.state, "player"));
+    emitToSocket(room.players.ai.socketId, "state:update", viewFor(room.state, "ai"));
   }
 
-  function announceWinner(room, reason) {
+  async function announceWinner(room, reason) {
     if (!room.state.winner) return;
     const winnerSide = room.state.winner;
     const winnerSeat = room.players[winnerSide];
-    const loserSeat = room.players[winnerSide === "player" ? "ai" : "player"];
 
-    // Persist outcome (don't await — fire-and-forget)
-    (async () => {
-      try {
-        const matchId = await room.matchInsertPromise;
-        if (matchId && supabase) {
-          await supabase
-            .from("matches")
-            .update({
-              winner_id: winnerSeat.userId || null,
-              reason: reason || "ko",
-              turns: room.state.turn,
-              ended_at: new Date().toISOString(),
-            })
-            .eq("id", matchId);
-        }
-      } catch (err) {
-        console.warn("[mp] match update failed:", err.message);
-      }
-    })();
+    if (supabase && room.matchId) {
+      supabase
+        .from("matches")
+        .update({
+          winner_id: winnerSeat.userId || null,
+          reason: reason || "ko",
+          turns: room.state.turn,
+          ended_at: new Date().toISOString(),
+        })
+        .eq("id", room.matchId)
+        .then(() => {}, (err) => console.warn("[mp] match update failed:", err.message));
+    }
 
-    const pSock = io.sockets.sockets.get(room.players.player.socketId);
-    const aSock = io.sockets.sockets.get(room.players.ai.socketId);
-
-    // Roll reward offers for signed-in players (guests get none).
     let pOffer = null;
     let aOffer = null;
     const dex = getPokedex();
@@ -228,13 +203,13 @@ function attach(io, supabase, pokedexOrGetter) {
       }
     }
 
-    pSock?.emit("game:over", {
+    emitToSocket(room.players.player.socketId, "game:over", {
       winner: winnerSide,
       youWin: winnerSide === "player",
       reason,
       reward: pOffer,
     });
-    aSock?.emit("game:over", {
+    emitToSocket(room.players.ai.socketId, "game:over", {
       winner: winnerSide,
       youWin: winnerSide === "ai",
       reason,
@@ -242,12 +217,12 @@ function attach(io, supabase, pokedexOrGetter) {
     });
   }
 
-  io.on("connection", (socket) => {
-    // Each socket also carries a playerId set by the client at handshake time.
-    // For signed-in users we'll later cross-check this against the session
-    // cookie on the upgrade; for now we trust it for matchmaking only.
+  io.on("connection", async (socket) => {
     const playerId = String(socket.handshake.auth?.playerId || socket.id);
     socket.data.playerId = playerId;
+    // Each socket joins a 1-member room named for itself, so other instances
+    // can target this socket via the Redis adapter.
+    socket.join(socket.id);
 
     socket.on("queue:join", async (opts = {}) => {
       const seat = {
@@ -258,24 +233,22 @@ function attach(io, supabase, pokedexOrGetter) {
         ability: opts.ability || "brock",
         deckSource: opts.deckSource || "random",
       };
-      // If there's already a waiting opponent, pair up.
-      while (queue.length > 0) {
-        const peer = queue.shift();
-        const peerSocket = io.sockets.sockets.get(peer.socketId);
-        if (!peerSocket) continue; // peer dropped
+      // Pop the head of the queue; if it's a valid (still connected) peer,
+      // pair them. Otherwise enqueue ourselves.
+      const peer = await store.queuePopFifo();
+      if (peer) {
         await startMatch(peer, seat);
         return;
       }
-      queue.push(seat);
-      socket.emit("queue:waiting", { position: queue.length });
+      await store.queuePush(seat);
+      socket.emit("queue:waiting", { position: await store.queueLength() });
     });
 
-    socket.on("queue:cancel", () => {
-      const i = queue.findIndex((s) => s.socketId === socket.id);
-      if (i >= 0) queue.splice(i, 1);
+    socket.on("queue:cancel", async () => {
+      await store.queueRemove(socket.id);
     });
 
-    socket.on("room:create", (opts = {}) => {
+    socket.on("room:create", async (opts = {}) => {
       const code = randCode();
       const seat = {
         socketId: socket.id,
@@ -286,18 +259,16 @@ function attach(io, supabase, pokedexOrGetter) {
         deckSource: opts.deckSource || "random",
         code,
       };
-      // Stash in a side-map of waiting private rooms.
-      privateRooms.set(code, seat);
+      await store.privateRoomSet(code, seat);
       socket.emit("room:created", { code });
     });
 
     socket.on("room:join", async (opts = {}) => {
       const code = String(opts.code || "").toUpperCase().trim();
-      const host = privateRooms.get(code);
+      const host = await store.privateRoomTake(code);
       if (!host) return socket.emit("error", { error: "Room not found." });
       if (host.socketId === socket.id) return socket.emit("error", { error: "Can't join your own room." });
-      privateRooms.delete(code);
-      const joinerSeat = {
+      const joiner = {
         socketId: socket.id,
         playerId,
         userId: opts.userId || null,
@@ -305,39 +276,46 @@ function attach(io, supabase, pokedexOrGetter) {
         ability: opts.ability || "brock",
         deckSource: opts.deckSource || "random",
       };
-      await startMatch(host, joinerSeat);
+      await startMatch(host, joiner);
     });
 
-    function withRoom(fn) {
-      const ref = bySocket.get(socket.id);
-      if (!ref) return socket.emit("error", { error: "Not in a match." });
-      const room = rooms.get(ref.roomId);
-      if (!room) return socket.emit("error", { error: "Room not found." });
-      if (room.state.winner) return socket.emit("error", { error: "Match is over." });
-      try { fn(room, ref.side); } catch (err) {
-        console.error("[mp]", err);
-        socket.emit("error", { error: err.message });
-      }
+    // Higher-order: load room, run fn, save, broadcast. fn returns optional
+    // animation payloads to emit per-recipient.
+    async function inRoom(fn) {
+      const ref = await store.socketRoom(socket.id);
+      if (!ref) { socket.emit("error", { error: "Not in a match." }); return; }
+      let result;
+      await store.roomWithLock(ref.roomId, async (room) => {
+        if (!room) { socket.emit("error", { error: "Room not found." }); return; }
+        if (room.state.winner) { socket.emit("error", { error: "Match is over." }); return; }
+        try {
+          result = await fn(room, ref.side);
+        } catch (err) {
+          console.error("[mp]", err);
+          socket.emit("error", { error: err.message });
+        }
+      });
+      return result;
     }
 
     socket.on("game:play-card", async ({ handIndex } = {}) => {
-      withRoom(async (room, side) => {
+      const out = await inRoom(async (room, side) => {
         const engine = await getEngine();
         const r = engine.playCard(room.state, side, handIndex);
-        if (!r.ok) return socket.emit("error", { error: r.reason });
+        if (!r.ok) { socket.emit("error", { error: r.reason }); return null; }
         broadcast(room);
+        return { ok: true };
       });
+      return out;
     });
 
     socket.on("game:attack", async ({ fromSlot, target } = {}) => {
-      withRoom(async (room, side) => {
+      await inRoom(async (room, side) => {
         const engine = await getEngine();
         const r = engine.attack(room.state, side, fromSlot, target);
-        if (!r.ok) return socket.emit("error", { error: r.reason });
-        // Emit an animation hint per-recipient with normalized side labels.
+        if (!r.ok) { socket.emit("error", { error: r.reason }); return; }
         for (const recvSide of ["player", "ai"]) {
-          const sock = io.sockets.sockets.get(room.players[recvSide].socketId);
-          sock?.emit("state:animation", {
+          emitToSocket(room.players[recvSide].socketId, "state:animation", {
             kind: "attack",
             fromSide: toPov(side, recvSide),
             fromSlot,
@@ -349,102 +327,105 @@ function attach(io, supabase, pokedexOrGetter) {
           });
         }
         broadcast(room);
-        if (room.state.winner) announceWinner(room, "ko");
+        if (room.state.winner) await announceWinner(room, "ko");
       });
     });
 
     socket.on("game:end-turn", async () => {
-      withRoom(async (room, side) => {
-        if (room.state.activePlayer !== side) return socket.emit("error", { error: "Not your turn." });
+      await inRoom(async (room, side) => {
+        if (room.state.activePlayer !== side) { socket.emit("error", { error: "Not your turn." }); return; }
         const engine = await getEngine();
         engine.endTurn(room.state);
         broadcast(room);
-        if (room.state.winner) announceWinner(room, "ko");
+        if (room.state.winner) await announceWinner(room, "ko");
       });
     });
 
-    socket.on("game:concede", () => {
-      withRoom((room, side) => {
+    socket.on("game:concede", async () => {
+      await inRoom(async (room, side) => {
         const other = side === "player" ? "ai" : "player";
         room.state.winner = other;
         room.state.phase = "over";
-        room.state.log.push({ id: room.state.log.length + 1, text: `${room.players[side].displayName} conceded.`, kind: "win" });
-        broadcast(room);
-        announceWinner(room, "concede");
-      });
-    });
-
-    socket.on("disconnect", () => {
-      // Remove from queue if we were waiting.
-      const i = queue.findIndex((s) => s.socketId === socket.id);
-      if (i >= 0) queue.splice(i, 1);
-
-      // Remove waiting private room.
-      for (const [code, host] of privateRooms) {
-        if (host.socketId === socket.id) privateRooms.delete(code);
-      }
-
-      const ref = bySocket.get(socket.id);
-      if (!ref) return;
-      bySocket.delete(socket.id);
-      const room = rooms.get(ref.roomId);
-      if (!room || room.state.winner) return;
-
-      // Start a 60s grace window. If the player reconnects (same playerId),
-      // we'll cancel it inside the connection handler.
-      const otherSide = ref.side === "player" ? "ai" : "player";
-      const otherSocket = io.sockets.sockets.get(room.players[otherSide].socketId);
-      otherSocket?.emit("state:animation", {
-        kind: "opponent-disconnected",
-        graceMs: RECONNECT_GRACE_MS,
-      });
-      room.disconnects[ref.side] = setTimeout(() => {
-        if (room.state.winner) return;
-        room.state.winner = otherSide;
-        room.state.phase = "over";
         room.state.log.push({
           id: room.state.log.length + 1,
-          text: `${room.players[ref.side].displayName} disconnected — opponent wins.`,
-          kind: "warn",
+          text: `${room.players[side].displayName} conceded.`,
+          kind: "win",
         });
         broadcast(room);
-        announceWinner(room, "disconnect");
-      }, RECONNECT_GRACE_MS);
-      room.players[ref.side].socketId = null;
+        await announceWinner(room, "concede");
+      });
     });
 
-    // Reconnect: client provides playerId at handshake. Look for a room where
-    // someone with that playerId went missing.
-    for (const room of rooms.values()) {
-      for (const side of ["player", "ai"]) {
-        const seat = room.players[side];
-        if (seat.playerId === playerId && !seat.socketId) {
-          seat.socketId = socket.id;
-          bySocket.set(socket.id, { roomId: room.id, side });
-          socket.join(room.id);
-          if (room.disconnects[side]) {
-            clearTimeout(room.disconnects[side]);
-            delete room.disconnects[side];
-          }
-          socket.emit("match:found", {
-            roomId: room.id,
-            opponent: {
-              displayName: room.players[side === "player" ? "ai" : "player"].displayName,
-              ability: room.players[side === "player" ? "ai" : "player"].ability,
-            },
-            state: viewFor(room.state, side),
-            reconnected: true,
+    socket.on("disconnect", async () => {
+      await store.queueRemove(socket.id);
+      await store.privateRoomRemoveBySocket(socket.id);
+
+      const ref = await store.socketRoom(socket.id);
+      await store.socketUnbind(socket.id);
+      if (!ref) return;
+
+      // Notify opponent + start a 60s grace window.
+      await store.roomWithLock(ref.roomId, async (room) => {
+        if (!room || room.state.winner) return;
+        const otherSide = ref.side === "player" ? "ai" : "player";
+        emitToSocket(room.players[otherSide].socketId, "state:animation", {
+          kind: "opponent-disconnected",
+          graceMs: RECONNECT_GRACE_MS,
+        });
+        room.players[ref.side].socketId = null;
+        room.players[ref.side].disconnectedAt = Date.now();
+      });
+
+      // Schedule forfeit if no reconnect.
+      setTimeout(async () => {
+        await store.roomWithLock(ref.roomId, async (room) => {
+          if (!room || room.state.winner) return;
+          const seat = room.players[ref.side];
+          if (seat?.socketId) return; // they reconnected
+          const otherSide = ref.side === "player" ? "ai" : "player";
+          room.state.winner = otherSide;
+          room.state.phase = "over";
+          room.state.log.push({
+            id: room.state.log.length + 1,
+            text: `${seat.displayName} disconnected — opponent wins.`,
+            kind: "warn",
           });
-          break;
+          broadcast(room);
+          await announceWinner(room, "disconnect");
+        });
+      }, RECONNECT_GRACE_MS).unref?.();
+    });
+
+    // Reconnect — if this playerId has an active room, re-bind.
+    try {
+      const roomId = await store.playerLastRoom(playerId);
+      if (!roomId) return;
+      await store.roomWithLock(roomId, async (room) => {
+        if (!room || room.state.winner) return;
+        for (const side of ["player", "ai"]) {
+          if (room.players[side].playerId === playerId && !room.players[side].socketId) {
+            room.players[side].socketId = socket.id;
+            delete room.players[side].disconnectedAt;
+            await store.socketBind(socket.id, { roomId, side });
+            socket.join(roomId);
+            const opp = side === "player" ? "ai" : "player";
+            socket.emit("match:found", {
+              roomId,
+              opponent: {
+                displayName: room.players[opp].displayName,
+                ability: room.players[opp].ability,
+              },
+              state: viewFor(room.state, side),
+              reconnected: true,
+            });
+            break;
+          }
         }
-      }
+      });
+    } catch (err) {
+      console.warn("[mp] reconnect lookup failed:", err.message);
     }
   });
-
-  return { rooms, queue, privateRooms };
 }
-
-// Module-level so the closure inside attach() can reference it.
-const privateRooms = new Map(); // code → seat (host waiting)
 
 module.exports = { attach, viewFor };

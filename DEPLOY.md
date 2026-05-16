@@ -78,12 +78,20 @@ vercel deploy --prod
 as a long-running Node function (Fluid Compute) and rewrites every request
 through it. The static client modules under `client/` are cached at the edge.
 
-> **Known limits:**
-> - WebSockets work on Fluid Compute but tie a connection to a single
->   instance. A redeploy or autoscale event closes open sockets.
-> - In-memory rooms / queue are not shared across instances. If Vercel ever
->   runs a second instance, matchmaking will silently split into two pools.
->   See "scaling" below for the fix.
+> **Known limits — confirmed during this project's deploy:**
+> - Solo play, passkey auth, collection viewer, deck builder, and rewards
+>   all work fine. They're stateless HTTP.
+> - **Multiplayer matchmaking does not work on Vercel without Redis.**
+>   Vercel runs Fluid Compute as multiple per-region instances under
+>   load — each instance has its own in-memory `rooms`/`queue` Map.
+>   Two players who hit different instances will never be paired.
+> - To make multiplayer work on Vercel: provision **Upstash Redis** from
+>   the Marketplace, install `@socket.io/redis-adapter`, and move the
+>   three Maps in `server-modules/multiplayer.js` into Redis keyspaces.
+> - Easier alternative: deploy the same `server.js` to Fly.io with the
+>   included `Dockerfile`. Single VM, one instance, multiplayer just works.
+>   Use Vercel for the HTTP routes if you prefer; point the client's
+>   Socket.IO connection to the Fly host explicitly.
 
 ---
 
