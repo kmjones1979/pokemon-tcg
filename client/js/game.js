@@ -153,6 +153,22 @@ function log(state, text, kind = "info") {
   state.log.push({ id: state.log.length + 1, text, kind });
 }
 
+// Combat log variety — different verb per attack so the log doesn't read as
+// "X used Y on Z" line after line. The phrasebook is shallow on purpose so
+// the underlying mechanics (ability name, damage, verdict) remain readable.
+const BASIC_VERBS = ["struck", "tackled", "lunged at", "snapped at", "slammed"];
+const SPECIAL_VERBS = ["unleashed", "channelled", "let loose", "rained down", "called forth"];
+function attackPhrase(attackerCard, ability, defenderName, damage, mult, turn = 0) {
+  const seed = (attackerCard.id + turn) | 0;
+  const pick = (arr) => arr[Math.abs(seed) % arr.length];
+  if (ability.id === "special") {
+    const verb = pick(SPECIAL_VERBS);
+    return `${attackerCard.name} ${verb} ${ability.name} — ${defenderName} took ${damage}`;
+  }
+  const verb = pick(BASIC_VERBS);
+  return `${attackerCard.name} ${verb} ${defenderName} for ${damage}`;
+}
+
 function beginTurn(state) {
   state.turn += 1;
   state.phase = "draw";
@@ -248,7 +264,7 @@ export function attack(
     const base = attackerInst.card.cardAttack + attackBonus;
     const damage = Math.max(1, Math.round(base * (ability.damageMult || 1)));
     o.trainerHp = Math.max(0, o.trainerHp - damage);
-    log(state, `${attackerInst.card.name} used ${ability.name} on ${o.name} for ${damage}!`, "attack");
+    log(state, attackPhrase(attackerInst.card, ability, o.name, damage, 1, state.turn), "attack");
     result = { damage, multiplier: 1, target: "trainer", abilityId, abilityName: ability.name };
   } else {
     const defenderSlot = target;
@@ -262,7 +278,7 @@ export function attack(
     const damage = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);
 
-    let line = `${attackerInst.card.name} used ${ability.name} on ${defenderInst.card.name} for ${damage}`;
+    let line = attackPhrase(attackerInst.card, ability, defenderInst.card.name, damage, calc.multiplier, state.turn);
     if (calc.verdict.text) line += ` — ${calc.verdict.text}`;
     log(state, line, "attack");
 
