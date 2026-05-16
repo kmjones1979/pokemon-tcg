@@ -19,6 +19,12 @@ body {
   background: var(--bg-deep);
   color: var(--ink);
   font-family: "Inter", system-ui, sans-serif;
+  overflow-x: hidden;
+  /* The menu page scrolls vertically on short viewports (landscape phones,
+     small laptops). The arena uses position:fixed so it locks the viewport
+     itself — see body.in-arena below. */
+}
+body.in-arena {
   overflow: hidden;
 }
 
@@ -37,10 +43,13 @@ h1, h2, h3,
 
 /* === Menu === */
 #menu {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px 40px;
+  box-sizing: border-box;
   background:
     radial-gradient(circle at 20% 30%, rgba(120, 60, 220, 0.25), transparent 50%),
     radial-gradient(circle at 80% 70%, rgba(60, 180, 220, 0.2), transparent 50%),
@@ -1533,12 +1542,14 @@ h1, h2, h3,
   font-size: 16px;
 }
 
-/* Portrait-mode prompt (mobile) */
-.landscape-prompt {
+/* Portrait-mode prompt is only useful in-arena — the menu now scrolls so
+   portrait phones can use it. */
+.landscape-prompt { display: none; }
+body.in-arena .landscape-prompt {
   display: none;
 }
 @media (max-width: 900px) and (orientation: portrait) {
-  .landscape-prompt {
+  body.in-arena .landscape-prompt {
     display: grid;
     place-items: center;
     position: fixed;
@@ -1554,7 +1565,7 @@ h1, h2, h3,
   }
 }
 
-/* Tighten for mobile landscape */
+/* Tighten for mobile landscape — applies to arena and menu both. */
 @media (max-width: 900px) {
   .card { width: 110px; }
   .card .card-name { font-size: 11px; }
@@ -1563,4 +1574,46 @@ h1, h2, h3,
   .log-panel { width: 200px; font-size: 10px; }
   .trainer-meta { min-width: 160px; }
   .game-title { font-size: 26px; }
+
+  /* Account panel: stack vertically and shrink so it doesn't dominate. */
+  .account-panel {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .account-actions { flex-wrap: wrap; }
+  .account-actions button {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+}
+
+/* Short height (landscape phones): tighten the menu vertically. */
+@media (max-height: 560px) {
+  #menu { padding: 70px 16px 20px; }
+  .game-title { font-size: 22px; margin-bottom: 6px; }
+  .menu-tagline { font-size: 10px; margin-bottom: 12px; }
+  .trainer-grid { gap: 10px; margin-bottom: 12px; }
+  .trainer-portrait { height: 70px; margin-bottom: 6px; }
+  .trainer-card { padding: 10px; }
+  .trainer-name { font-size: 11px; margin-bottom: 4px; }
+  .trainer-bio { font-size: 10px; line-height: 1.3; }
+  .difficulty-grid { gap: 8px; margin-bottom: 16px; }
+  .diff-card { padding: 8px 10px; }
+  .diff-bio { font-size: 10px; }
+  .section-label { margin: 2px 0 6px; }
+  .play-modes { gap: 6px; }
+  .mode-btn { padding: 6px 12px; font-size: 10px; }
+  .start-btn { padding: 9px 18px; font-size: 11px; }
+}
+
+/* Very narrow / portrait phones: stack the trainer + difficulty grids. */
+@media (max-width: 600px) {
+  .trainer-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .difficulty-grid { grid-template-columns: 1fr; gap: 8px; }
+  .play-modes { flex-direction: column; align-items: stretch; }
+  .game-title { font-size: 22px; }
+  .menu-stage { width: 100%; }
 }

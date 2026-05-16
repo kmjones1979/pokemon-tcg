@@ -83,6 +83,7 @@ function renderMenu() {
   const arena = $("#arena");
   arena.classList.add("hidden");
   menu.classList.remove("hidden");
+  document.body.classList.remove("in-arena");
 
   const trainerEls = Object.values(TRAINERS).map((t) => {
     const c = TYPE_COLORS[t.portrait] || "#888";
@@ -210,6 +211,7 @@ function renderMenu() {
       }
       menu.classList.add("hidden");
       $("#arena").classList.remove("hidden");
+      document.body.classList.add("in-arena");
       render();
     } catch (err) {
       console.error(err);
@@ -1153,6 +1155,7 @@ function handleMpState(serverState) {
   // produces (perspective normalized by the server).
   $("#menu").classList.add("hidden");
   $("#arena").classList.remove("hidden");
+  document.body.classList.add("in-arena");
   render();
 }
 
