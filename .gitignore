@@ -6,3 +6,6 @@ scraper/cache
 *.log
 .vercel
 .env*.local
+
+# Build output (esbuild)
+dist/

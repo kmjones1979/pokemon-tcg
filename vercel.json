@@ -1,11 +1,12 @@
 {
   "version": 2,
+  "buildCommand": "node scripts/build.js",
   "builds": [
     {
       "src": "server.js",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["client/**", "shared/**", "server-modules/**", "index.html"],
+        "includeFiles": ["client/**", "shared/**", "server-modules/**", "dist/**", "index.html", "i18n/**"],
         "maxDuration": 300,
         "memory": 512
       }

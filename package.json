@@ -4,7 +4,8 @@
   "scripts": {
     "start": "node server.js",
     "seed": "node scripts/seed-pokedex.js",
-    "test": "node --test --test-reporter=spec 'test/*.test.js' 'test/*.test.mjs'"
+    "test": "node --test --test-reporter=spec 'test/*.test.js' 'test/*.test.mjs'",
+    "build": "node scripts/build.js"
   },
   "dependencies": {
     "@simplewebauthn/server": "^11.0.0",
@@ -22,5 +23,8 @@
   },
   "optionalDependencies": {
     "playwright": "^1.47.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
   }
 }
