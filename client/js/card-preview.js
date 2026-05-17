@@ -82,6 +82,7 @@ function showPreview(card, anchorEl) {
         <span class="cp-adesc">${escape(a.desc)}</span>
       </div>
     `).join("")}
+    ${renderPassivesSection(card)}
     ${card.flavor_text ? `
       <div class="cp-section">Pokédex entry</div>
       <div class="cp-flavor">${escape(card.flavor_text)}</div>
@@ -114,6 +115,28 @@ export function hidePreview() {
 if (typeof document !== "undefined") {
   document.addEventListener("mousedown", hidePreview, true);
   document.addEventListener("touchstart", hidePreview, { capture: true, passive: true });
+}
+
+const PASSIVE_DESCS = {
+  static: "Static — 25% chance to paralyze the attacker on contact.",
+  levitate: "Levitate — immune to Ground attacks.",
+  intimidate: "Intimidate — on summon, every enemy Pokémon loses 1 ATK.",
+  blaze: "Blaze — +1 ATK to Fire moves when below 1/3 HP.",
+  torrent: "Torrent — +1 ATK to Water moves when below 1/3 HP.",
+  overgrow: "Overgrow — +1 ATK to Grass moves when below 1/3 HP.",
+};
+function renderPassivesSection(card) {
+  if (!Array.isArray(card.abilities) || card.abilities.length === 0) return "";
+  const active = card.abilities.filter((a) => PASSIVE_DESCS[a]);
+  if (!active.length) return "";
+  return `
+    <div class="cp-section">Passive abilities</div>
+    ${active.map((a) => `
+      <div class="cp-ability"><span class="cp-aname">${escape(a)}</span>
+        <span class="cp-adesc">${escape(PASSIVE_DESCS[a])}</span>
+      </div>
+    `).join("")}
+  `;
 }
 
 function escape(s) {

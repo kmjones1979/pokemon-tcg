@@ -43,6 +43,7 @@ function toCard(row) {
     generation: row.generation,
     is_legendary: !!row.is_legendary,
     is_mythical: !!row.is_mythical,
+    abilities: Array.isArray(row.abilities) ? row.abilities : [],
     // raw stats (kept for trainer abilities + Phase 3 server validation)
     raw: {
       hp: row.hp,

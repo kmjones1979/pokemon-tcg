@@ -20,6 +20,10 @@
 
 import { computeDamage, rollStatus, isLockedOut, tickStatus } from "./battle.js";
 import { abilityById } from "./abilities.js";
+import {
+  hasPassive, pinchAttackBonus, levitateBlocks,
+  staticTrigger, intimidateOnSummon,
+} from "./passives.js";
 import { defaultKit, useItem as _useItem } from "./items.js";
 export const useItem = _useItem;
 // _useItem is re-used by the AI item phase below.
@@ -290,6 +294,17 @@ export function playCard(state, side, handIndex, { rand = Math.random, replaceSl
   } else {
     log(state, `${p.name} summoned ${card.name}!`, "summon");
   }
+  // Intimidate passive: enemy field loses 1 attack each.
+  if (hasPassive(card, "intimidate")) {
+    const otherSide = side === "player" ? "ai" : "player";
+    let n = 0;
+    for (const opp of state.players[otherSide].field) {
+      if (!opp) continue;
+      opp.attackBoost = (opp.attackBoost || 0) - 1;
+      n++;
+    }
+    if (n > 0) log(state, `🦁 ${card.name}'s Intimidate lowered ${n} foe${n === 1 ? "'s" : "s'"} attack.`, "status");
+  }
   return { ok: true, slot, instance: inst, sacrificed };
 }
 
@@ -343,12 +358,20 @@ export function attack(
     const defenderInst = o.field[defenderSlot];
     if (!defenderInst) return { ok: false, reason: "no defender in slot" };
     const { defenseBonus } = abilityModifiers(o, defenderInst.card);
+    // Levitate: defender immune to Ground regardless of type chart.
+    const levitated = levitateBlocks(attackerInst.card, defenderInst.card);
+    const pinchBonus = pinchAttackBonus(attackerInst);
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
-      abilityBonus: attackBonus + (attackerInst.attackBoost || 0),
+      abilityBonus: attackBonus + (attackerInst.attackBoost || 0) + pinchBonus,
       ability,
       rand,
       themeType: state.themeType || null,
     });
+    if (levitated) {
+      calc.damage = 0;
+      calc.multiplier = 0;
+      calc.verdict = { text: "Levitate — no effect!", tone: "miss" };
+    }
     const damage = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);
 
@@ -371,6 +394,15 @@ export function attack(
         defenderInst.status = rolled;
         status = rolled;
         log(state, `${defenderInst.card.name} was inflicted with ${rolled.kind}!`, "status");
+      }
+    }
+    // Static counter-passive: if the defender has Static and we made contact,
+    // 25% chance to paralyze the attacker.
+    if (damage > 0 && !attackerInst.status) {
+      const back = staticTrigger(defenderInst.card, rand);
+      if (back) {
+        attackerInst.status = back;
+        log(state, `⚡ ${defenderInst.card.name}'s Static paralyzed ${attackerInst.card.name}!`, "status");
       }
     }
 
