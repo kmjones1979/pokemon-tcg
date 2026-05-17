@@ -819,7 +819,7 @@ function chooseHandIndex(ai, policy, rand, state = null) {
 
 // Weight a hand card by how useful its on-summon / passive / aura would be
 // right now given the board state.  Higher = better drop.
-function scoreCardForSummon(ai, opp, card) {
+export function scoreCardForSummon(ai, opp, card) {
   let score = (card.energyCost || 1) * 3;
   const sig = signatureFor(card);
   const enemyCount = opp ? opp.field.filter(Boolean).length : 0;
@@ -845,7 +845,7 @@ function scoreCardForSummon(ai, opp, card) {
   return score;
 }
 
-function matchupBonus(card, opp) {
+export function matchupBonus(card, opp) {
   if (!opp) return 0;
   let bonus = 0;
   const type = card.types?.[0];

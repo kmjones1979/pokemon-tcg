@@ -111,4 +111,4 @@ function mount(app, supabase, getPokedex) {
   });
 }
 
-module.exports = { mount };
+module.exports = { mount, daysBetween, tierBoostForStreak };
