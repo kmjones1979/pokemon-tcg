@@ -3330,3 +3330,36 @@ html { overscroll-behavior: none; }
 .game-over-cta-row #share-highlight-btn:hover {
   box-shadow: 0 0 18px rgba(140,180,255,0.4);
 }
+
+/* Highlight share — format toggle (Post 4:5 / TikTok 9:16) */
+.hc-format-toggle {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 12px;
+  justify-content: center;
+}
+.hc-format {
+  flex: 1 1 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: #d4e0ff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.hc-format.active {
+  background: linear-gradient(135deg, #ffd166, #ef476f);
+  color: #1a0518;
+  border-color: #ffd166;
+  box-shadow: 0 0 14px rgba(255,209,102,0.4);
+}
+.hc-img-wrap { position: relative; min-height: 200px; }
+.hc-loading {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: rgba(255,255,255,0.6);
+  font-size: 14px;
+  font-style: italic;
+}
