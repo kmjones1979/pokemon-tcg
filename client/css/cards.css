@@ -80,18 +80,61 @@
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
 }
 
-.card.summoning::after,
-.card.spent::after {
-  content: "💤";
+/* Field-card state badges. Summoning sickness shows a sleeping zzz; spent
+   (already attacked this turn) shows a clear "✓ ACTED" pill + dims the
+   card. Ready-to-attack cards get the .can-act pulse defined elsewhere. */
+.card.summoning::after {
+  content: "💤 sleeping";
   position: absolute;
   top: 6px;
-  right: 6px;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 8px;
-  padding: 2px 6px;
-  font-size: 13px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-family: "Press Start 2P", monospace;
+  color: #fff;
 }
-.card.spent::after { content: "✓"; }
+.card.spent {
+  filter: saturate(0.55) brightness(0.85);
+}
+.card.spent::after {
+  content: "✓ ACTED";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  font-family: "Press Start 2P", monospace;
+  color: #999;
+}
+
+/* Critical-hit gold flash for the defender card. */
+@keyframes critFlash {
+  0%, 100% { box-shadow: 0 6px 14px rgba(0,0,0,0.4); }
+  50%      { box-shadow: 0 0 30px #f7d02c, 0 0 60px #ee8130; }
+}
+.card.crit-flash { animation: critFlash 0.55s ease; }
+
+/* Sparkle for legendary / mythical: animated tiny stars circle the card. */
+.card.type-rarity-legendary::before,
+.card .card-rarity::before {
+  content: "";
+}
+@keyframes rarityShine {
+  0%, 100% { opacity: 0.35; transform: scale(0.95); }
+  50%      { opacity: 1;    transform: scale(1.05); }
+}
+.card .card-rarity {
+  animation: rarityShine 1.8s ease-in-out infinite;
+}
 
 .card.selected {
   outline: 2px solid #fff;
@@ -226,6 +269,36 @@
 .card-status.status-burn      { background: #EE8130; color: #fff; }
 .card-status.status-paralyze  { background: #F7D02C; color: #222; }
 .card-status.status-sleep     { background: #735797; color: #fff; }
+
+/* Floating status pictogram above the card so it's readable at a glance. */
+.card .status-icon {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes zzzFloat {
+  0%   { transform: translate(-50%, 0)    rotate(-5deg); opacity: 0.85; }
+  50%  { transform: translate(-50%, -6px) rotate(5deg);  opacity: 1; }
+  100% { transform: translate(-50%, 0)    rotate(-5deg); opacity: 0.85; }
+}
+.card .status-icon.kind-sleep { animation: zzzFloat 1.6s ease-in-out infinite; }
+@keyframes burnFlicker {
+  0%, 100% { transform: translate(-50%, 0)    scale(1);    filter: drop-shadow(0 0 4px #ff6622) hue-rotate(0deg); }
+  50%      { transform: translate(-50%, -3px) scale(1.18); filter: drop-shadow(0 0 8px #ff9c44) hue-rotate(8deg); }
+}
+.card .status-icon.kind-burn  { animation: burnFlicker 0.55s ease-in-out infinite; }
+@keyframes sparkBuzz {
+  0%, 100% { transform: translate(-50%, 0)   scale(1); }
+  25%      { transform: translate(-52%, -2px) scale(1.1); }
+  50%      { transform: translate(-48%, 0)    scale(1.05); }
+  75%      { transform: translate(-52%, -2px) scale(1.12); }
+}
+.card .status-icon.kind-paralyze { animation: sparkBuzz 0.3s linear infinite; }
 
 /* Compact: smaller cards for the field */
 .card.compact {

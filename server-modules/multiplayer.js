@@ -324,6 +324,7 @@ function attach(io, supabase, pokedexOrGetter) {
             multiplier: r.multiplier,
             verdict: r.verdict,
             knockedOut: !!r.knockedOut,
+            critical: !!r.critical,
           });
         }
         broadcast(room);

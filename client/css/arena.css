@@ -1433,6 +1433,11 @@ h1, h2, h3,
 }
 .damage-float.kind-super { color: #f7d02c; font-size: 28px; }
 .damage-float.kind-weak  { color: #6390F0; font-size: 14px; }
+.damage-float.kind-crit  {
+  color: #fff;
+  font-size: 34px;
+  text-shadow: 0 0 8px #f7d02c, 0 0 16px #ee8130, 0 2px 0 rgba(0,0,0,0.6);
+}
 .damage-float.rise {
   transform: translate(-50%, -160%);
   opacity: 0;

@@ -17,7 +17,7 @@ import { renderCard } from "./cards.js";
 import { fireAttackTrail, floatDamage, knockOut, flashVerdict, shakeHit } from "./animations.js";
 import {
   playCry, setMuted, isMuted,
-  sfxAttack, sfxHit, sfxKO, sfxVictory, sfxDefeat, sfxCardPlay,
+  sfxAttack, sfxHit, sfxKO, sfxVictory, sfxDefeat, sfxCardPlay, sfxCrit,
 } from "./audio.js";
 import { TYPE_COLORS } from "./type-chart.js";
 import { computeDamage } from "./battle.js";
@@ -759,13 +759,20 @@ function animateHit(attackerEl, defenderEl, attackerInst, result, done) {
   sfxAttack();
   setTimeout(() => {
     floatDamage(defenderEl, result.multiplier === 0 ? "MISS" : `-${result.damage}`, {
-      kind: result.multiplier >= 2 ? "super" : result.multiplier < 1 ? "weak" : "hit",
+      kind: result.critical ? "crit" : result.multiplier >= 2 ? "super" : result.multiplier < 1 ? "weak" : "hit",
     });
     if (result.multiplier !== 0) {
       shakeHit(defenderEl);
       sfxHit({ supereffective: result.multiplier >= 2 });
     }
-    if (result.verdict?.text) flashVerdict(result.verdict.text, result.verdict.tone);
+    if (result.critical) {
+      sfxCrit();
+      flashVerdict("CRITICAL HIT!", "super");
+      if (defenderEl) defenderEl.classList.add("crit-flash");
+      setTimeout(() => defenderEl?.classList.remove("crit-flash"), 700);
+    } else if (result.verdict?.text) {
+      flashVerdict(result.verdict.text, result.verdict.tone);
+    }
     if (result.knockedOut) {
       sfxKO();
       knockOut(defenderEl).then(() => done && done());
@@ -1175,15 +1182,21 @@ function handleMpAnim(anim) {
     sfxAttack();
     if (defenderEl) {
       floatDamage(defenderEl, anim.multiplier === 0 ? "MISS" : `-${anim.damage}`, {
-        kind: anim.multiplier >= 2 ? "super" : anim.multiplier < 1 ? "weak" : "hit",
+        kind: anim.critical ? "crit" : anim.multiplier >= 2 ? "super" : anim.multiplier < 1 ? "weak" : "hit",
       });
       if (anim.multiplier !== 0) {
         shakeHit(defenderEl);
         sfxHit({ supereffective: anim.multiplier >= 2 });
       }
+      if (anim.critical) {
+        sfxCrit();
+        defenderEl.classList.add("crit-flash");
+        setTimeout(() => defenderEl.classList.remove("crit-flash"), 700);
+      }
     }
     if (anim.knockedOut) sfxKO();
-    if (anim.verdict?.text) flashVerdict(anim.verdict.text, anim.verdict.tone);
+    if (anim.critical) flashVerdict("CRITICAL HIT!", "super");
+    else if (anim.verdict?.text) flashVerdict(anim.verdict.text, anim.verdict.tone);
   } else if (anim.kind === "opponent-disconnected") {
     flashVerdict("Opponent disconnected — 60s grace", "weak");
   }

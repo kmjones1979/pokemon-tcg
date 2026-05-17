@@ -99,6 +99,42 @@ export function sfxAttack(typeColor = "#fff") {
   src.start();
 }
 
+// Critical hit: short ascending chirp + bright cymbal-ish noise.
+export function sfxCrit() {
+  if (_muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  // Bright tone
+  const o = c.createOscillator();
+  o.type = "triangle";
+  o.frequency.setValueAtTime(880, c.currentTime);
+  o.frequency.exponentialRampToValueAtTime(1760, c.currentTime + 0.12);
+  const og = c.createGain();
+  og.gain.setValueAtTime(0.0001, c.currentTime);
+  og.gain.exponentialRampToValueAtTime(0.28, c.currentTime + 0.01);
+  og.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.2);
+  o.connect(og).connect(c.destination);
+  o.start();
+  o.stop(c.currentTime + 0.22);
+  // Plus a quick noise sizzle for cymbal feel.
+  const len = 0.18;
+  const buf = c.createBuffer(1, c.sampleRate * len, c.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 1.5);
+  }
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const filt = c.createBiquadFilter();
+  filt.type = "highpass";
+  filt.frequency.value = 4000;
+  const ng = c.createGain();
+  ng.gain.value = 0.12;
+  src.connect(filt).connect(ng).connect(c.destination);
+  src.start();
+}
+
 // Damage hit: short tonal blip with downward pitch sweep.
 export function sfxHit({ supereffective = false } = {}) {
   if (_muted) return;

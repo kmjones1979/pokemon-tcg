@@ -59,12 +59,22 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
         <div class="card-name">${escape(card.name)}</div>
         <div class="card-attack" title="Attack">⚔ ${card.cardAttack}</div>
       </footer>
-      ${instance && instance.status ? `<div class="card-status status-${instance.status.kind}">${instance.status.kind}</div>` : ""}
-      ${card.is_legendary ? `<div class="card-rarity">LEGENDARY</div>` : card.is_mythical ? `<div class="card-rarity mythical">MYTHICAL</div>` : ""}
+      ${instance && instance.status ? `
+        <div class="card-status status-${instance.status.kind}">${instance.status.kind}</div>
+        <div class="status-icon kind-${instance.status.kind}">${statusGlyph(instance.status.kind)}</div>
+      ` : ""}
+      ${card.is_legendary ? `<div class="card-rarity">★ LEGENDARY ★</div>` : card.is_mythical ? `<div class="card-rarity mythical">✦ MYTHICAL ✦</div>` : ""}
     </div>
   `;
 
   return el;
+}
+
+function statusGlyph(kind) {
+  if (kind === "sleep") return "💤";
+  if (kind === "burn") return "🔥";
+  if (kind === "paralyze") return "⚡";
+  return "✦";
 }
 
 function escape(s) {

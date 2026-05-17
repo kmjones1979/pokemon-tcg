@@ -274,11 +274,13 @@ export function attack(
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
       abilityBonus: attackBonus,
       ability,
+      rand,
     });
     const damage = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);
 
     let line = attackPhrase(attackerInst.card, ability, defenderInst.card.name, damage, calc.multiplier, state.turn);
+    if (calc.critical) line = `💥 CRITICAL! ${line}`;
     if (calc.verdict.text) line += ` — ${calc.verdict.text}`;
     log(state, line, "attack");
 
@@ -317,6 +319,7 @@ export function attack(
       abilityId,
       abilityName: ability.name,
       ignoredDefense: !!calc.ignoredDefense,
+      critical: !!calc.critical,
     };
 
     if (defenderInst.currentHp <= 0) {
