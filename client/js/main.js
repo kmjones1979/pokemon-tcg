@@ -35,6 +35,7 @@ import * as leaderboard from "./leaderboard.js";
 import * as achievements from "./achievements.js";
 import * as pokedex from "./pokedex.js";
 import * as story from "./story.js";
+import * as trading from "./trading.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -178,6 +179,7 @@ function renderMenu() {
           <button class="mode-btn" id="mode-mp-friend" disabled>Play vs friend (code)</button>
           <button class="mode-btn" id="mode-champion" disabled>Fight a Champion</button>
           <button class="mode-btn story-launch" id="mode-story" disabled title="${currentUser ? "Pick a trainer to begin Story Mode" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
+          <button class="mode-btn" id="mode-trade" ${currentUser ? "" : "disabled"} title="${currentUser ? "Trade cards with other trainers" : "Sign in to trade"}">🔄 Trade Cards</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -303,6 +305,7 @@ function renderMenu() {
   $("#mode-mp-friend").addEventListener("click", () => startMultiplayer({ mode: "friend" }));
   $("#mode-champion").addEventListener("click", () => openChampionPicker());
   $("#mode-story")?.addEventListener("click", () => story.openStoryHub({ currentUser }));
+  $("#mode-trade")?.addEventListener("click", () => trading.openTradeMarket({ currentUser }));
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).

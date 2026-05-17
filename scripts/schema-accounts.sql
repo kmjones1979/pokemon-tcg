@@ -113,3 +113,23 @@ alter table users add column if not exists champion_wins text[] default '{}';
 -- counts since the matches table only covers multiplayer. Capped at the
 -- last 14 days by the app layer to keep the row small.
 alter table users add column if not exists quest_progress jsonb default '{}'::jsonb;
+
+-- Player-to-player trading (Wave 25). One row per OPEN offer; closed
+-- offers stay around as history but with status != 'open'. Atomic
+-- accept-and-swap is gated by a SELECT FOR UPDATE in the route handler.
+create table if not exists trade_offers (
+  id                uuid primary key default gen_random_uuid(),
+  offerer_user_id   uuid not null references users(id) on delete cascade,
+  offered_pokemon_id int not null,
+  wanted_pokemon_id  int not null,
+  status            text not null default 'open',  -- open | accepted | cancelled | expired
+  accepter_user_id  uuid references users(id) on delete set null,
+  created_at        timestamptz not null default now(),
+  expires_at        timestamptz not null default now() + interval '24 hours',
+  accepted_at       timestamptz,
+  check (status in ('open', 'accepted', 'cancelled', 'expired')),
+  check (offered_pokemon_id <> wanted_pokemon_id)
+);
+create index if not exists trade_offers_status_idx on trade_offers (status, created_at desc);
+create index if not exists trade_offers_offerer_idx on trade_offers (offerer_user_id);
+create index if not exists trade_offers_wanted_idx on trade_offers (wanted_pokemon_id) where status = 'open';

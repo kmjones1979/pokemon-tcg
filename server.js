@@ -22,6 +22,7 @@ const quests = require("./server-modules/quests");
 const theme = require("./server-modules/theme");
 const champions = require("./server-modules/champions");
 const story = require("./server-modules/story");
+const trading = require("./server-modules/trading");
 
 const app = express();
 // Vercel + most PaaS hosts proxy requests. Trust the proxy headers so
@@ -150,6 +151,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   theme.mount(app);
   champions.mount(app, authSupabase);
   story.mount(app, authSupabase, ensurePokedex);
+  trading.mount(app, authSupabase, ensurePokedex);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {
@@ -188,6 +190,26 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
 app.get("/api/pokedex/size", async (_req, res) => {
   await ensurePokedex();
   res.json({ size: pokedex.length });
+});
+
+// Lightweight Pokédex search — used by the trade UI's "what do you want"
+// picker. Returns up to 50 matches by case-insensitive name substring or
+// by ID. No auth.
+app.get("/api/pokedex/search", async (req, res) => {
+  await ensurePokedex();
+  const q = String(req.query.q || "").trim().toLowerCase();
+  if (!q) return res.json({ results: [] });
+  const asNum = Number(q);
+  const matches = pokedex.filter((c) => {
+    if (Number.isFinite(asNum) && c.id === asNum) return true;
+    return c.name?.toLowerCase().includes(q);
+  }).slice(0, 50).map((c) => ({
+    id: c.id, name: c.name, types: c.types, tier: c.tier,
+    energyCost: c.energyCost, cardHp: c.cardHp, cardAttack: c.cardAttack,
+    sprite_front: c.sprite_front,
+    is_legendary: !!c.is_legendary, is_mythical: !!c.is_mythical,
+  }));
+  res.json({ results: matches });
 });
 
 // Public leaderboard — top players by wins. No auth required (read-only).
