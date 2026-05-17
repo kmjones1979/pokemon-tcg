@@ -70,6 +70,57 @@ try { _handLifted = localStorage.getItem("pokemon-tcg-hand-lifted") === "1"; } c
 // stays unchanged.
 const _isTouch = typeof matchMedia === "function" && matchMedia("(hover: none) and (pointer: coarse)").matches;
 let _peekedHandIdx = null;
+// Local "have I played a match before?" flag — used for first-match
+// auto-tuning + juiced first-win. Stored in localStorage so anonymous
+// users get the same first-match treatment even without an account.
+// Big-deal moment for the player's first-ever win. A burst of confetti
+// + a "WELCOME, TRAINER" banner that sits above the regular game-over
+// recap.  Cleans up after 4 seconds.
+function celebrateFirstWin() {
+  // Banner.
+  const banner = document.createElement("div");
+  banner.className = "first-win-banner";
+  banner.innerHTML = `
+    <div class="fwb-tag">FIRST VICTORY</div>
+    <div class="fwb-msg">You did it. Welcome, Trainer.</div>`;
+  document.body.appendChild(banner);
+  requestAnimationFrame(() => banner.classList.add("show"));
+  setTimeout(() => {
+    banner.classList.remove("show");
+    setTimeout(() => banner.remove(), 400);
+  }, 3500);
+  // Confetti — 80 small div particles falling with random horizontal
+  // drift. Pure CSS animation so we don't lock the main thread.
+  const layer = document.createElement("div");
+  layer.className = "confetti-layer";
+  const colors = ["#ffd166", "#ef476f", "#06d6a0", "#118ab2", "#b388ff", "#ff8a3d"];
+  for (let i = 0; i < 80; i++) {
+    const p = document.createElement("span");
+    p.className = "confetti-piece";
+    p.style.left = (Math.random() * 100) + "vw";
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.animationDelay = (Math.random() * 1.5) + "s";
+    p.style.animationDuration = (2.5 + Math.random() * 2) + "s";
+    p.style.transform = `rotate(${Math.random() * 360}deg)`;
+    layer.appendChild(p);
+  }
+  document.body.appendChild(layer);
+  setTimeout(() => layer.remove(), 6000);
+}
+
+function hasPlayedBefore() {
+  try { return localStorage.getItem("pokemon-tcg-played-once") === "1"; } catch { return false; }
+}
+function markHasPlayed() {
+  try { localStorage.setItem("pokemon-tcg-played-once", "1"); } catch {}
+}
+function hasWonBefore() {
+  try { return localStorage.getItem("pokemon-tcg-won-once") === "1"; } catch { return false; }
+}
+function markHasWon() {
+  try { localStorage.setItem("pokemon-tcg-won-once", "1"); } catch {}
+}
+
 function refreshHandPeek() {
   document.querySelectorAll(".hand .card.peeked").forEach((c) => c.classList.remove("peeked"));
   if (_peekedHandIdx == null) return;
@@ -268,8 +319,20 @@ function renderMenu() {
       if (currentTheme?.type) state.themeType = currentTheme.type;
       _prevHps = { player: null, ai: null };
       _prevEnergy = null;
-      // Pick the AI personality once for this match so it stays consistent.
-      aiPersonality = ["aggressive", "balanced", "tactical"][Math.floor(Math.random() * 3)];
+      // Auto-tune the first-ever match so brand-new players win in 60-90s
+      // and feel clever, not coddled. Detect "never finished a match" via
+      // localStorage. Difficulty drops to Easy + AI gets a passive "newbie"
+      // personality regardless of what the user picked.
+      const isFirstMatch = !hasPlayedBefore();
+      if (isFirstMatch) {
+        aiDifficulty = "easy";
+        aiPersonality = "balanced";
+      } else {
+        // Pick the AI personality once for this match so it stays consistent.
+        aiPersonality = ["aggressive", "balanced", "tactical"][Math.floor(Math.random() * 3)];
+      }
+      state._isFirstMatch = isFirstMatch;
+      trackEvent(isFirstMatch ? "first_match_started" : "match_started", { difficulty: aiDifficulty });
       // Anti-cheat: register the solo session with the server.
       // The reward issued at game-over will require this id and a min duration.
       soloSessionId = null;
@@ -2412,8 +2475,22 @@ function handleMpGameOver(over) {
 function onGameOver() {
   stopBGM();
   stopTurnTimer();
-  if (state.winner === "player") sfxVictory();
-  else sfxDefeat();
+  const wasFirstMatch = !!state._isFirstMatch;
+  const isFirstWin = state.winner === "player" && !hasWonBefore();
+  markHasPlayed();
+  if (state.winner === "player") {
+    markHasWon();
+    sfxVictory();
+    // Juiced first-win moment: extra confetti + bigger fanfare. The
+    // regular game-over overlay still shows below; this is an extra
+    // celebration layer on top.
+    if (isFirstWin || wasFirstMatch) {
+      celebrateFirstWin();
+      trackEvent("first_win");
+    }
+  } else {
+    sfxDefeat();
+  }
   // Grant XP based on outcome (signed-in users only).
   if (currentUser) {
     const myKOs = state.players.ai.discard.length;   // we KO'd these
