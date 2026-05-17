@@ -1,278 +1,148 @@
-# pokemonbattle.xyz — Plan to 1 M Users
-
-**Confirmed design constraint:** the game stays a trading card game. The
-existing 1v1 engine, signature system, items, deck builder, and boss
-phases are the foundation — every phase below preserves the TCG core
-loop and only adds layers.
+# pokemon-tcg — Plan toward 1M users (Pokémon kept as IP)
 
 **North Star (every phase exits against these):**
-- D1 retention ≥ 40 %
+- D1 retention ≥ 40%
 - K-factor ≥ 0.6
 - Time-to-first-win ≤ 90 s
 
-**Velocity contract:** each phase ≤ 2 weeks. Each phase ends with a
-deploy + measured exit. Anything that doesn't move D1, K, or time-to-
-first-win gets cut from the phase and deferred.
+**Velocity contract:** each phase ≤ 2 weeks, ends with deploy + measured
+exit. Anything that doesn't move D1, K, or time-to-first-win gets cut
+or deferred.
 
----
-
-## Phase 0 — Foundations (this work, in flight)
-
-- `AUDIT.md` ✓
-- `PLAN.md` ✓ (this file)
-- Approval gate.
-
----
-
-## Phase 1 — The first 90 seconds + IP rebrand groundwork
-
-**Why first.** Three of the seven biggest risks from the audit (IP,
-sign-in wall, time-to-first-win) all converge here. Until first-win is
-under 90 s, no shareability work matters because the funnel doesn't
-reach it. And anything we ship past Phase 1 with real Pokémon assets is
-work we'd have to redo after the rebrand.
-
-**Scope (TCG-preserving):**
-
-1. **Asset/string indirection layer.** Replace every direct sprite URL,
-   creature name, and type icon with a lookup through a new
-   `client/js/registry.js`. Two implementations behind one
-   `THEME=pokemon|original` env flag — Pokémon stays default in dev,
-   `original` ships to prod. Engine unchanged. Tests unchanged. Same
-   damage math, same signatures (keyed by slug instead of dex id).
-2. **Original creature roster (TCG-sized).** 16 starters split 4-per-
-   type across an original 4-type chart (e.g. Embr / Tidal / Verdant /
-   Volt), each with the same Basic + Special pattern. Placeholder art
-   in a single committed style (one of: cursed-cute, paper-craft,
-   vaporwave — I'll propose 3 mood boards with `ImagePreview` if you
-   want before commit). Cost: ~16 hours of placeholder generation.
-   Roster expands across later phases.
-3. **Anonymous play.** Land → first match in one tap. localStorage-
-   first state; passkey upgrade becomes optional after the first win.
-   Migrate the existing achievement / collection / rewards stack to
-   support guest profiles with merge-on-upgrade.
-4. **Portrait-playable arena.** Stack the field rows vertically: rival
-   top, your hand fan at the bottom, fields in the middle. Hand-lift
-   toggle (already shipped) stays. Landscape can be an "enhanced" mode
-   later; portrait is the source-of-truth layout.
-5. **Auto-tuned first match.** Detect "first-ever match" via local
-   state; the AI plays a slightly weaker policy (Easy-but-no-skip-
-   attacks) and starts with a fixed beatable opening. Target win rate
-   ~85 % within 6–9 turns for fresh accounts.
-6. **Juiced first-win moment.** Screen shake, particle burst, fanfare,
-   over-the-top victory screen, "share your win" CTA visible
-   immediately. Re-use the existing badge + counter system.
-7. **Performance budget.** Code-split: deck-builder, story, trading,
-   daily-boss, achievements panel, leaderboard, mp lazy-loaded on
-   demand. Inline critical CSS for the menu + arena chrome. Target
-   critical JS ≤ 200 KB. Use a minimal esbuild step — still ESM-out,
-   no framework adoption.
-8. **Analytics from day one.** Wire PostHog (or self-host Plausible
-   on the same Vercel project). Funnel events: `land → tap_play →
-   first_turn → first_win → second_match → return_d1 → return_d7`.
-   Plus per-feature events (share clicked, daily attempted, trade
-   created). Feature-flag toggle to disable in dev.
-9. **i18n shell.** All NEW copy lands in `i18n/en.json` from this
-   phase forward. Existing copy migrates in batches as files get
-   touched (no big-bang refactor).
-10. **Open Graph + Twitter card meta tags.** Make the URL look pro
-    on every paste — `og:image` is a static hero card for now,
-    upgraded to per-result in Phase 2.
-
-**Exit criteria (measured via analytics):**
-- ≥ 70 % of new visitors reach their first turn within 30 s
-- ≥ 50 % win their first match within 90 s of landing
-- Critical JS path ≤ 200 KB gzipped
-- Portrait mobile arena renders the full match loop without horizontal
-  scroll or the "rotate your phone" prompt
-- A single env flag swaps every creature asset/string to original IP
-
----
-
-## Phase 2 — Shareability (the K-factor engine)
-
-**Why second.** Phase 1 fixes the floor. Phase 2 turns every match into
-a share artifact. No retention layer matters if there are zero shares.
-
-1. **Wordle-style daily-boss launch.** Server endpoints + share string
-   already deployed (gated). Enable the home-screen card. Localize the
-   share text. Push the daily as the *primary* landing surface for
-   visitors who've already played once.
-2. **Highlight-card image generation.** Client-side canvas/HTMLToImage
-   pipeline that produces a 1080×1350 PNG at end of every match:
-   final board state, MVP card, badges, final HP bars, auto-caption
-   pulled from a 200+ line pool. One-tap copy to clipboard / native
-   share / X-Reddit-WhatsApp-Telegram intent links.
-3. **Replay capture (sub-3 MB GIF/MP4).** Record the last 3–5 turns
-   into an OffscreenCanvas → `mediabunny`-encoded MP4 (modern
-   browsers) with a GIF fallback. Download + share.
-4. **Deck codes.** Compress a 30-card deck into a short base62 string
-   over 6–8 chars (10-bit ids × 30 fits in ~25 chars; with type-tier
-   bucketing we can do better). Routes `/d/<code>` open the deck in
-   the builder. Routes `/v/<code>` start a Friend Battle against that
-   deck.
-5. **OG per-result.** Server-rendered OG image for `/?d=<dayNumber>`
-   and `/v/<code>` so iMessage/Discord previews show the boss/deck.
-6. **TikTok-shaped replay export.** 9:16 portrait MP4 with the
-   highlight card as a header overlay + auto-captions baked in.
-7. **Friend challenge result loop.** When a friend plays your deck
-   code, you get a notification (in-page now, push later in Phase 3).
-   Result page shows you the head-to-head.
-
-**Exit criteria:**
-- ≥ 15 % of completed matches generate a share artifact (highlight or
-  daily share string copied / shared)
-- K-factor ≥ 0.3 (half the North Star — full target by Phase 5)
-- Daily-boss DAU ≥ 30 % of weekly active users
-
----
-
-## Phase 3 — Retention hooks
-
-1. **PWA + offline.** Service worker caches the shell + last-played
-   deck. Installable. Solo matches work without network. Massive
-   D7 boost on mobile.
-2. **Web push (opt-in).** "Your friend beat your deck", "Today's
-   boss is live", "Your streak is about to break". Never aggressive.
-3. **Daily streak with one weekly freeze.** Already partly built;
-   add the forgiveness mechanic + streak counter visible on every
-   screen.
-4. **Battle-pass-style 30-day seasons (free).** Themed cosmetic
-   unlocks per season. No paywall until Phase 7+ (intentional).
-5. **Async PvP.** Snapshot every signed-in user's last 3 decks
-   nightly; serve them as headless AI opponents in matchmaking when
-   no live player is queued. Feels like PvP at 50 concurrent or
-   50,000.
-6. **Comeback mechanic.** Below 25 % trainer HP, your next card
-   played costs −1 energy (floor 0). Tunable.
-7. **Match-length governor.** Escalating fatigue past turn 12;
-   shrinking max-field-size past turn 18. Targets 2–4 minute average.
-
-**Exit criteria:**
-- D1 retention ≥ 40 % (North Star)
-- D7 retention ≥ 18 %
-- Average match length 2.5–4 min
-
----
-
-## Phase 4 — Memeability
-
-1. **Voice/copy pass.** Win/loss/crit/KO/turn-start strings rewritten
-   with attitude. 200+ critical-hit one-liner pool. Localized into
-   en + 2 of {es, pt-br, ja, ko, de} based on Phase 1 analytics.
-2. **Reaction faces.** 4–6 animated reaction faces per creature for
-   key events (smug, devastated, copium, etc.). Frozen-frame
-   exports are the meme payload.
-3. **Cosmetic cards: backs, sleeves, board themes, victory anims.**
-   Unlocked via streak / boss clears / daily completion. Some
-   serious, some absurd (Comic Sans "W" card back).
-4. **Glitch moments.** 1 % chance the screen briefly inverts on a
-   perfect victory. Rainbow lighting on a 3-crit chain. Subtle
-   spawn variations that people screenshot and quote.
-5. **Card mastery tracker.** Each creature gains "mastery XP" as you
-   KO with it; at level 3 it gets a permanent +1 ATK and a unique
-   victory line. Long-tail engagement hook.
-
-**Exit criteria:**
-- Highlight-card share images include reactions ≥ 40 % of the time
-- Cosmetic unlock rate ≥ 25 % of D7-returning users
-
----
-
-## Phase 5 — Growth mechanics
-
-1. **Referral with mutual reward.** Both inviter and invitee earn a
-   cosmetic on the invitee's first win. Tracked via the same short-
-   code system as deck codes.
-2. **Creator mode.** Custom cards within safe templates (constrained
-   HP/ATK + signature pool). Community vote weekly; top card rotates
-   into the live game for 7 days.
-3. **Weekly tournaments.** 64-player single-elim brackets with
-   shareable bracket images. Auto-generated rounds. Optional Discord
-   integration.
-4. **TikTok creator partnership pipeline.** API for content creators
-   to grab pre-formatted match replays.
-
-**Exit criteria:**
-- K-factor ≥ 0.6 (North Star)
-- Creator-mode cards from ≥ 100 unique authors / week
-- Tournament participation ≥ 2 % of WAU
-
----
-
-## Phase 6 — Scale + monetization (only after K ≥ 0.6 sustained)
-
-- Cosmetic-only monetization (cosmetics, season passes). No card
-  power for sale.
-- CDN-served creature assets (currently inlined PNGs).
-- Database read replicas if Supabase read load > 30 % of plan.
-- Anti-cheat hardening (server-authoritative ranked, rate limits,
-  bot detection).
-
----
-
-## Phase 7+ — Long tail
-
-- Multi-card trades (open question from the trade flow — answered
-  here: yes, defer to this phase). Schema swap to `offered_card_ids
-  int[]` + `wanted_card_ids int[]` with same atomic-swap pattern.
-- Card-image generation for individual creatures (shareable
-  "this is my favorite mon" cards).
-- Localized rosters per region.
-- Esports support (replays, brackets, observer mode).
-- Match-3 mini-game between matches (currency-only, no card-power
-  effects). Weakest TCG tie-in of the mini-game set — included only
-  if D7 retention shows a clear gap after Phase 3.
-
----
-
-## Mini-games (slotted across phases)
-
-User approved all four. Each is scoped to the phase where it does
-the most work for the North Star metrics:
-
-| Mini-game                | Phase | Why this phase                                  |
-| ------------------------ | ----- | ----------------------------------------------- |
-| **Daily Puzzle** (Wordle-style — fixed board, fewest-moves-to-KO, shareable result) | 2 | Direct K-factor lift; rides the daily-boss share-string infra already deployed. Single biggest viral lever after daily boss. |
-| **Crit-timing micro-game** (tap-the-sweet-spot bar on big attacks, guarantees crit) | 4 | Skill expression depth — moves time-played, increases match-end "wow" moments worth sharing. Pure client-side, ~1 day of work. |
-| **Booster-pack opening** (tear/scratch/flip card-reveal animation, replaces reward modal) | 4 | Dopamine + memeable screenshots. Plus: cosmetic pack designs are unlockable, doubling as season-pass content. |
-| **Match-3 between matches** (separate loop, earns daily cosmetic currency) | 7+ | Weakest TCG tie-in. Defer until Phase 3 retention data shows a gap that needs filling. Risk of feature dilution if shipped earlier. |
-
----
-
-## Cross-cutting non-negotiables (every phase)
-
-- **No real Pokémon assets after Phase 1.** Hard gate at the deploy
-  stage — CI check that fails the build if `THEME=pokemon` reaches
-  prod after the rebrand ships.
-- **Accessibility.** Each phase adds keyboard nav + screen-reader
-  labels for the surfaces it touches. Reduced-motion respected on
-  every new animation. Colorblind palette tested.
-- **i18n.** All new copy lands in `i18n/en.json`. Localization unblocks
-  once Phase 1 ships the shell.
-- **Feature flags.** Every new mode launches behind a flag so we can
-  A/B test or kill duds without revert PRs.
-- **No dark patterns.** No fake scarcity timers, no forced ads, no
-  predatory monetization.
-
----
+**Confirmed scope:** the game stays a trading card game. **The IP
+rebrand is deferred for now** — Pokémon stays as the working IP. A
+rebrand to original creatures will eventually happen; the registry
+layer (`client/js/registry.js`) is already in place so that swap is
+a one-flag flip when the time comes. The 1M number is the quality
+bar we're building toward.
 
 ## Phase 1 decisions (approved 2026-05-17)
 
-1. **Art direction:** Cursed-cute (Yume Nikki / Frieren / Owl House).
-   Off-kilter pastels, slightly creepy edges. Distinct on TikTok,
-   hard to copy, screenshot-friendly. High memeability ceiling.
+1. **Art direction:** Pokémon stays. Cursed-cute remains the option
+   for a future flip if circumstances change; registry.js is in place
+   to make that swap one-flag if it ever happens.
 2. **Analytics:** Vercel Analytics (zero-config). Free pageviews +
-   Web Vitals via their built-in product. Custom events stay on
-   the existing `/api/track` beacon for now — easy to swap in
-   PostHog later if event volume justifies the paid tier.
-3. **Build step:** Minimal esbuild. ESM output preserved, no
-   framework. Enables code-splitting (lazy-load story / trading /
-   deck-builder / puzzle / daily on demand) + minification.
-4. **Guest merge:** Existing `users` schema is the merge target.
-   On signup-from-guest, the client's localStorage state
-   (collection, deck draft, achievements progress) gets posted to
-   a new `/me/migrate-guest` endpoint and merged into the freshly-
-   created user row + related tables.
+   Web Vitals auto-tracked. Custom events ride `/api/track` beacon.
+3. **Build step:** Minimal esbuild — ESM out, no framework. Enables
+   code-splitting (lazy-load story / trading / deck-builder / puzzle /
+   daily) + minification. (Not yet implemented — queued.)
+4. **Guest merge:** Existing `users` schema is the merge target. On
+   signup-from-guest, the client's localStorage state migrates into a
+   new user row via `/me/migrate-guest`.
 
-Phase 1 work starts immediately under these constraints.
+## Phase 1 — First 90 seconds (in flight)
+
+✅ Shipped this session:
+- Auto-tuned first match (forces Easy + balanced AI, skips mulligan,
+  shows welcome hint).
+- Juiced first-win moment (rainbow banner + 80-piece confetti).
+- VS pre-match cinematic.
+- i18n shell (`i18n/en.json` + `client/js/i18n.js`).
+- Vercel Analytics + custom-event beacon (`/api/track`).
+- OG + Twitter card meta on every shared URL.
+- Hand auto-lowers when no card is affordable.
+- Touch-friendly tap-to-peek for hand cards on mobile.
+- Sticky damage previews on every enemy slot when an attacker is
+  selected (touch-friendly).
+
+🟡 Still to do for Phase 1:
+- **esbuild pipeline** — code-split, lazy-load on demand, target ≤200KB
+  critical JS. Smallest of the remaining items.
+- **Portrait-playable arena** — drop the "rotate your phone" prompt;
+  stack field rows vertically.
+- **Anonymous play** — localStorage state model + `/me/migrate-guest`
+  endpoint. Lets visitors play their first match without a passkey.
+
+Exit criteria:
+- ≥70% of new visitors reach first turn within 30s
+- ≥50% win their first match within 90s of landing
+- Critical JS path ≤200KB gzipped
+- Portrait mobile arena renders full match loop without horizontal
+  scroll or "rotate your phone" prompt
+
+## Phase 2 — Shareability (K-factor engine)
+
+✅ Daily Boss + Daily Puzzle shipped this session. Both have
+Wordle-style share strings and leaderboards.
+
+🟡 Still to do:
+- **Highlight-card image generation** (1080×1350 PNG at end of every
+  match — final board, MVP card, badges, auto-caption pulled from a
+  200+ line pool).
+- **Replay capture** (sub-3 MB GIF/MP4 of last 3-5 turns).
+- **Deck codes** (`/d/<code>` opens a shared deck, `/v/<code>` runs
+  Friend Battle against it).
+- **TikTok 9:16 export** for the replay.
+
+Exit: K-factor ≥ 0.3.
+
+## Phase 3 — Retention hooks
+
+- **PWA + offline.** Service worker caches shell + last deck.
+- **Web push (opt-in).** "Today's boss is live", "Your friend beat
+  your deck."
+- **Daily streak with one weekly freeze.**
+- **Battle-pass-style 30-day seasons (free).** Themed cosmetic unlocks.
+- **Async PvP.** Snapshot every signed-in user's last 3 decks nightly;
+  serve them as headless AI when no live player is queued.
+- **Comeback mechanic.** Below 25% trainer HP, your next card play
+  costs −1 energy.
+- **Match-length governor.** Escalating fatigue past turn 12,
+  shrinking max-field-size past turn 18. Target 2.5–4 min average.
+
+Exit: D1 ≥ 40%, D7 ≥ 18%.
+
+## Phase 4 — Memeability + mini-games
+
+✅ Tier system + earned badges + rival taunts already in.
+
+🟡 Coming:
+- **Voice/copy pass.** Win/loss/crit/KO strings rewritten with
+  attitude. 200+ critical-hit one-liner pool.
+- **Reaction faces.** 4-6 animated frames per creature triggered by
+  game events.
+- **Cosmetics:** card backs / sleeves / board themes / victory
+  animations.
+- **Glitch moments.** 1% chance screen briefly inverts on perfect
+  victory; rainbow lighting on 3-crit chains.
+- **Card mastery tracker.** Each creature gains mastery XP as you
+  KO with it; level 3 = +1 ATK + unique victory line.
+- **Mini-games (approved):**
+  - **Crit-timing micro-game** — sweet-spot tap bar on Special
+    attacks. Pure client, ~1 day of work.
+  - **Booster-pack opening** — tear/scratch/flip card-reveal
+    animation replacing the reward modal.
+
+## Phase 5 — Growth mechanics
+
+- **Referrals.** Both inviter and invitee earn a cosmetic on the
+  invitee's first win.
+- **Creator mode.** Custom cards within safe templates; community
+  vote weekly; top card rotates into live game for 7 days.
+- **Weekly tournaments.** 64-player single-elim brackets with
+  shareable bracket images.
+- **TikTok creator pipeline.** API for content creators to grab
+  pre-formatted match replays.
+
+Exit: K-factor ≥ 0.6.
+
+## Phase 7+ — Long tail
+
+- **Multi-card trades** (deferred since trading shipped 1-for-1).
+  Schema swap to `offered_card_ids int[]` + `wanted_card_ids int[]`
+  with same atomic-swap pattern. Slot into a later wave.
+- **Random match modifiers** (Fog, High Tide, Reverse, etc.).
+- **Endless mode** + **Draft mode** for match variety.
+- **Match-3 between matches** (deferred — weakest TCG tie-in).
+- **Localized rosters per region** once growth markets warrant.
+
+## Cross-cutting non-negotiables
+
+- **Accessibility per phase.** Keyboard nav + screen-reader labels +
+  reduced-motion respected on every new surface.
+- **i18n.** All new copy lands in `i18n/en.json`. Migration of legacy
+  hardcoded strings is incremental, file-by-file.
+- **Feature flags.** New modes launch behind a flag so we can A/B
+  test or kill duds without revert PRs.
+- **No dark patterns.** No fake scarcity, forced ads, predatory
+  monetization. The game wins on being fun.

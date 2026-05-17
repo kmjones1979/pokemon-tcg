@@ -26,6 +26,7 @@ const trading = require("./server-modules/trading");
 const dailyBoss = require("./server-modules/daily-boss");
 const dailyPuzzle = require("./server-modules/daily-puzzle");
 const analytics = require("./server-modules/analytics");
+const siteGate = require("./server-modules/site-gate");
 
 const app = express();
 // Vercel + most PaaS hosts proxy requests. Trust the proxy headers so
@@ -64,6 +65,13 @@ const PORT = Number(process.env.PORT) || 3000;
 
 // Generate server URL (still needed for console output)
 const serverUrl = `http://${localIp}:${PORT}`;
+
+// Site-password gate — soft gate over the landing page. Static assets
+// + API routes stay open so the gate form itself can submit, and so
+// that any signed-in user keeps working. Cookie-based, 30-day TTL.
+siteGate.parseFormBody(app);
+siteGate.mount(app);
+app.use(siteGate.gateMiddleware);
 
 // Serve static files from the current directory
 app.use(express.static(path.join(__dirname)));
