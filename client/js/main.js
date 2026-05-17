@@ -76,6 +76,40 @@ let _peekedHandIdx = null;
 // Big-deal moment for the player's first-ever win. A burst of confetti
 // + a "WELCOME, TRAINER" banner that sits above the regular game-over
 // recap.  Cleans up after 4 seconds.
+// Big-deal momentum banner for win-streak milestones (3 / 5 / 10).
+// Intensity drives the glow + particle count. Stays on-screen ~2.4s
+// before fading; respects prefers-reduced-motion via CSS.
+function flashStreakBanner(label, streakCount, intensity = "fire") {
+  document.querySelectorAll(".streak-banner").forEach((b) => b.remove());
+  const banner = document.createElement("div");
+  banner.className = `streak-banner intensity-${intensity}`;
+  banner.innerHTML = `
+    <div class="sb-tag">${label}</div>
+    <div class="sb-msg">${streakCount} WINS IN A ROW</div>`;
+  document.body.appendChild(banner);
+  requestAnimationFrame(() => banner.classList.add("show"));
+  setTimeout(() => {
+    banner.classList.remove("show");
+    setTimeout(() => banner.remove(), 400);
+  }, 2400);
+  // Legendary tier gets a particle burst layered behind the banner.
+  if (intensity === "legendary") {
+    const layer = document.createElement("div");
+    layer.className = "streak-particles";
+    const colors = ["#ffd166", "#ef476f", "#06d6a0", "#118ab2", "#b388ff"];
+    for (let i = 0; i < 40; i++) {
+      const p = document.createElement("span");
+      p.style.left = (Math.random() * 100) + "vw";
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.animationDelay = (Math.random() * 1.2) + "s";
+      p.style.animationDuration = (2.2 + Math.random() * 1.4) + "s";
+      layer.appendChild(p);
+    }
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 4500);
+  }
+}
+
 function celebrateFirstWin() {
   // Banner.
   const banner = document.createElement("div");
@@ -2744,6 +2778,41 @@ function onGameOver() {
       }),
     }).then((r) => r.ok && trackEvent("versus_result_posted", { won: state.winner === "player" }))
       .catch(() => {});
+  }
+  // Win-streak tracking for solo / champion / story matches.  MP skips
+  // (server-authoritative + would let one player tank a streak rival).
+  if (currentUser && (gameMode === "solo" || gameMode === "story")) {
+    const result = state.winner === "player" ? "win" : "loss";
+    fetch("/me/winstreak/result", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ result }),
+    }).then((r) => r.ok ? r.json() : null).then((data) => {
+      if (!data) return;
+      // Surface the new streak number + label.  Crossing a milestone
+      // gets a big banner; non-milestone wins get a quieter pip update.
+      if (data.milestoneLabel && data.previousStreak < data.streak) {
+        const intensity = data.milestone === "legendary" ? "legendary"
+                       : data.milestone === "blazing" ? "blazing"
+                       : "fire";
+        flashStreakBanner(data.milestoneLabel, data.streak, intensity);
+        trackEvent("winstreak_milestone", { streak: data.streak, tag: data.milestone });
+      } else if (data.streak >= 2) {
+        flashVerdict(`🔥 Streak ${data.streak}`, "super");
+      }
+      // Bonus card drop on threshold cross.
+      if (data.bonus) {
+        setTimeout(() => {
+          rewards.showOffer({
+            offerId: data.bonus.offerId,
+            picks: data.bonus.picks,
+          }, {
+            didWin: true,
+            onClaim: (card) => { if (card) flashVerdict(`+${card.name}! (streak bonus)`, "super"); },
+          });
+        }, 1800); // let the milestone banner play first
+      }
+    }).catch(() => {});
   }
   // Daily boss outcome → finishDaily + share dialog (highest viral leverage).
   if (gameMode === "story" && _storyContext?.daily) {

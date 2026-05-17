@@ -80,6 +80,7 @@ before(async () => {
   const deckShare = require("../server-modules/deck-share");
   const friendChallenge = require("../server-modules/friend-challenge");
   const mastery = require("../server-modules/mastery");
+  const winstreak = require("../server-modules/winstreak");
   const multiplayerHttp = require("../server-modules/multiplayer-http");
 
   // None of these should throw at mount time.
@@ -103,6 +104,7 @@ before(async () => {
   deckShare.mount(app, supabaseStub, getPokedex);
   friendChallenge.mount(app, supabaseStub);
   mastery.mount(app, supabaseStub);
+  winstreak.mount(app, supabaseStub, getPokedex);
   multiplayerHttp.mount(app, supabaseStub, getPokedex);
 
   await new Promise((resolve) => {

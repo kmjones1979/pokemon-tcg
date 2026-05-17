@@ -36,6 +36,7 @@ const MODULES = [
   ["../server-modules/deck-share",     ["mount"]],
   ["../server-modules/friend-challenge", ["mount"]],
   ["../server-modules/mastery",        ["mount", "levelFor", "LEVELS"]],
+  ["../server-modules/winstreak",      ["mount", "milestoneFor", "crossedMilestone", "MILESTONES"]],
   ["../server-modules/analytics",      ["mount"]],
   ["../server-modules/multiplayer",    ["attach"]],
   ["../server-modules/multiplayer-http", ["mount", "viewFor"]],
