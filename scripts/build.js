@@ -26,7 +26,10 @@ async function build() {
     target: ["es2022", "chrome108", "safari16", "firefox110"],
     outdir: outDir,
     entryNames: "main.bundle",
-    chunkNames: "chunks/[name]-[hash]",
+    // Flat output (no chunks/ subdir) so Vercel's includeFiles glob
+    // can't miss recursive paths. Every emitted file lands directly
+    // in /dist.
+    chunkNames: "[name]-[hash]",
     metafile: true,
     legalComments: "none",
     treeShaking: true,

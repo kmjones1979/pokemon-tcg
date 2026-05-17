@@ -6,7 +6,7 @@
       "src": "server.js",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["client/**", "shared/**", "server-modules/**", "dist/**", "index.html", "i18n/**"],
+        "includeFiles": ["client/**", "shared/**", "server-modules/**", "dist/**", "dist/**/*", "index.html", "i18n/**"],
         "maxDuration": 300,
         "memory": 512
       }
