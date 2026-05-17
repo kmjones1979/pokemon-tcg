@@ -34,6 +34,7 @@ import * as rewards from "./rewards.js";
 import * as leaderboard from "./leaderboard.js";
 import * as achievements from "./achievements.js";
 import * as pokedex from "./pokedex.js";
+import * as story from "./story.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -151,6 +152,7 @@ function renderMenu() {
           <button class="mode-btn" id="mode-mp-match" disabled>Find online match</button>
           <button class="mode-btn" id="mode-mp-friend" disabled>Play vs friend (code)</button>
           <button class="mode-btn" id="mode-champion" disabled>Fight a Champion</button>
+          <button class="mode-btn story-launch" id="mode-story" ${currentUser ? "" : "disabled"} title="${currentUser ? "Begin the co-op story campaign" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -264,6 +266,7 @@ function renderMenu() {
   $("#mode-mp-match").addEventListener("click", () => startMultiplayer({ mode: "queue" }));
   $("#mode-mp-friend").addEventListener("click", () => startMultiplayer({ mode: "friend" }));
   $("#mode-champion").addEventListener("click", () => openChampionPicker());
+  $("#mode-story")?.addEventListener("click", () => story.openStoryHub({ currentUser }));
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).

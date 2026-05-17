@@ -98,3 +98,8 @@ create or replace view user_stats as
     select user_id, count(*)::int as cnt
       from owned_cards group by user_id
   ) owned on owned.user_id = u.id;
+
+-- Story-mode progress (Wave 20) -------------------------------------------
+-- Tracks completed story chapters per user. Safe to add to existing users:
+-- the column is nullable and defaults handled at app layer.
+alter table users add column if not exists story_progress jsonb default '{"completed": []}'::jsonb;

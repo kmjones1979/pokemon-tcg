@@ -21,6 +21,7 @@ const xpModule = require("./server-modules/xp");
 const quests = require("./server-modules/quests");
 const theme = require("./server-modules/theme");
 const champions = require("./server-modules/champions");
+const story = require("./server-modules/story");
 
 const app = express();
 // Vercel + most PaaS hosts proxy requests. Trust the proxy headers so
@@ -148,6 +149,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   quests.mount(app, authSupabase, ensurePokedex);
   theme.mount(app);
   champions.mount(app, authSupabase);
+  story.mount(app, authSupabase, ensurePokedex);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {
