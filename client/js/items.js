@@ -29,6 +29,22 @@ export const ITEM_DEFS = {
     cost: 0,
     target: "ownField",
   },
+  revive: {
+    id: "revive",
+    name: "Revive",
+    desc: "Bring back your most recently KO'd Pokémon at 50% HP.",
+    icon: "✨",
+    cost: 3,
+    target: "none",
+  },
+  luckyDraw: {
+    id: "luckyDraw",
+    name: "Lucky Draw",
+    desc: "Draw 2 cards from your deck.",
+    icon: "🎴",
+    cost: 1,
+    target: "none",
+  },
 };
 
 export function defaultKit() {
@@ -36,6 +52,8 @@ export function defaultKit() {
     { id: "potion", uses: 1 },
     { id: "energy", uses: 1 },
     { id: "switch", uses: 1 },
+    { id: "revive", uses: 1 },
+    { id: "luckyDraw", uses: 1 },
   ];
 }
 
@@ -87,6 +105,47 @@ export function useItem(state, side, itemId, target) {
       result.recalled = inst.card.name;
       result.targetSlot = target;
       state.log.push({ id: state.log.length + 1, text: `🔄 Recalled ${inst.card.name} to hand.`, kind: "summon" });
+      break;
+    }
+    case "revive": {
+      // Bring back the most-recently-discarded Pokémon at 50% max HP.
+      const lastIdx = p.discard.length - 1;
+      if (lastIdx < 0) return { ok: false, reason: "No Pokémon to revive" };
+      const emptyIdx = p.field.findIndex((s) => s == null);
+      if (emptyIdx < 0) return { ok: false, reason: "Field is full" };
+      const card = p.discard.pop();
+      const reviveHp = Math.max(1, Math.round(card.cardHp / 2));
+      const inst = {
+        instanceId: "revive-" + Date.now(),
+        card,
+        currentHp: reviveHp,
+        maxHp: card.cardHp,
+        summoningSickness: true,
+        status: null,
+        attackBoost: card.shinyLevel || 0,
+        level: card.shinyLevel || 0,
+      };
+      p.field[emptyIdx] = inst;
+      result.revivedCard = card.name;
+      result.targetSlot = emptyIdx;
+      state.log.push({ id: state.log.length + 1, text: `✨ ${card.name} revived at ${reviveHp} HP!`, kind: "summon" });
+      break;
+    }
+    case "luckyDraw": {
+      let drew = 0;
+      const drawn = [];
+      for (let i = 0; i < 2; i++) {
+        if (p.deck.length === 0) break;
+        if (p.hand.length >= 10) break;
+        const c = p.deck.shift();
+        p.hand.push(c);
+        drawn.push(c.name);
+        drew++;
+      }
+      if (drew === 0) return { ok: false, reason: "Hand full or deck empty" };
+      result.drew = drew;
+      result.drawnNames = drawn;
+      state.log.push({ id: state.log.length + 1, text: `🎴 Lucky Draw: drew ${drawn.join(", ")}.`, kind: "summon" });
       break;
     }
   }

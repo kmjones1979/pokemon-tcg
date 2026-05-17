@@ -20,6 +20,7 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.waitForSelector("#account-logout-btn", { timeout: 15000 });
   await page.click(".trainer-card");
   await page.click("#start-btn");
+  try { await page.waitForSelector(".mulligan-confirm", { timeout: 12000 }); await page.click(".mulligan-confirm"); } catch {}
   await page.waitForSelector("#hand .card", { timeout: 12000 });
   await page.waitForTimeout(500);
   // Hover a card to trigger preview

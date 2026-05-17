@@ -100,6 +100,29 @@ export function sfxAttack(typeColor = "#fff") {
   src.start();
 }
 
+// "Your turn" — bright two-note chime so the player can't miss the
+// transition (especially during multiplayer waits).
+export function sfxYourTurn() {
+  if (_muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const notes = [659.25, 880]; // E5, A5 — bright ping
+  notes.forEach((freq, i) => {
+    const o = c.createOscillator();
+    o.type = "triangle";
+    o.frequency.value = freq;
+    const g = c.createGain();
+    const start = c.currentTime + i * 0.09;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(0.28, start + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
+    o.connect(g).connect(c.destination);
+    o.start(start);
+    o.stop(start + 0.34);
+  });
+}
+
 // Critical hit: short ascending chirp + bright cymbal-ish noise.
 export function sfxCrit() {
   if (_muted) return;

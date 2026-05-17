@@ -9,6 +9,7 @@ import {
   endTurn,
   aiTakeTurn,
   effectiveCost,
+  mulliganHand,
   TRAINERS,
   FIELD_SIZE,
   TRAINER_START_HP,
@@ -18,7 +19,7 @@ import { renderCard } from "./cards.js";
 import { fireAttackTrail, floatDamage, knockOut, flashVerdict, shakeHit } from "./animations.js";
 import {
   playCry, setMuted, isMuted,
-  sfxAttack, sfxHit, sfxKO, sfxVictory, sfxDefeat, sfxCardPlay, sfxCrit,
+  sfxAttack, sfxHit, sfxKO, sfxVictory, sfxDefeat, sfxCardPlay, sfxCrit, sfxYourTurn,
   startBGM, stopBGM,
 } from "./audio.js";
 import { TYPE_COLORS } from "./type-chart.js";
@@ -50,6 +51,7 @@ let pendingReplace = null;     // { handIndex } — next own-field click sacrifi
 let currentTheme = null;       // { type, endsAt } — theme of the week
 let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
 let _prevEnergy = null; // tracks your energy across renders so we can pip-refill the new ones
+let _prevActivePlayer = null; // tracks active player so we can fire a turn-start cue
 
 // --- Boot ------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
@@ -239,6 +241,7 @@ function renderMenu() {
       $("#arena").classList.remove("hidden");
       document.body.classList.add("in-arena");
       startBGM();
+      await openMulliganModal();
       render();
     } catch (err) {
       console.error(err);
@@ -539,6 +542,20 @@ function render() {
 
   // Long-hover preview anywhere a card is rendered in-arena.
   attachPreviewHandlers($("#arena"), cardLookup);
+
+  // Turn-start cue: when the active player flips to "player" (and it's a
+  // real turn, not the initial render or a spectator view), pop the
+  // "Your turn" banner + ping.
+  if (
+    state.youAre !== "spectator" &&
+    !state.winner &&
+    _prevActivePlayer != null &&
+    _prevActivePlayer !== state.activePlayer &&
+    state.activePlayer === "player"
+  ) {
+    showYourTurnBanner();
+  }
+  _prevActivePlayer = state.activePlayer;
 
   // Trainer HP flash: if either side's HP dropped vs the previous render,
   // run the damage animation on that bar.
@@ -1141,12 +1158,21 @@ async function onEndTurn() {
     onAction: handleAiAction,
   });
   render();
+  // After AI's turn ends, control is back to us — render() picks up the
+  // activePlayer flip and fires the banner via the _prevActivePlayer hook.
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function handleAiAction(action) {
   if (state.winner) return;
+  if (action.kind === "item") {
+    render();
+    const icon = ({ potion: "🧪", energy: "💎", switch: "🔄", revive: "✨", luckyDraw: "🎴" })[action.itemId] || "🎁";
+    flashVerdict(`Rival used ${icon}`, "weak");
+    await sleep(700);
+    return;
+  }
   if (action.kind === "summon") {
     render();
     // Flash the freshly-summoned slot + play the cry so it feels like a move
@@ -1415,6 +1441,64 @@ function teardownMpListeners() {
   mpUnsubs = [];
 }
 
+// Mulligan modal — opens at the start of a solo match. Lets the player pick
+// up to 3 starting-hand cards to swap back into the deck. Returns a promise
+// that resolves when the user confirms.
+function openMulliganModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "mulligan-overlay";
+    const hand = state.players.player.hand;
+    overlay.innerHTML = `
+      <div class="mulligan-card">
+        <div class="mulligan-title">Mulligan</div>
+        <div class="mulligan-sub">Tap up to 3 cards to swap back into the deck. They'll be replaced with random draws.</div>
+        <div class="mulligan-hand"></div>
+        <div class="mulligan-row">
+          <span class="mulligan-count">0 / 3 selected</span>
+          <button class="mulligan-confirm primary">Keep this hand</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const handEl = overlay.querySelector(".mulligan-hand");
+    const countEl = overlay.querySelector(".mulligan-count");
+    const confirm = overlay.querySelector(".mulligan-confirm");
+    const selected = new Set();
+    hand.forEach((card, idx) => {
+      const wrap = document.createElement("div");
+      wrap.className = "mulligan-pick";
+      const cardEl = renderCard(card);
+      wrap.appendChild(cardEl);
+      const cross = document.createElement("div");
+      cross.className = "mulligan-x";
+      cross.textContent = "✕";
+      wrap.appendChild(cross);
+      wrap.addEventListener("click", () => {
+        if (selected.has(idx)) {
+          selected.delete(idx);
+          wrap.classList.remove("selected");
+        } else {
+          if (selected.size >= 3) {
+            flashVerdict("Max 3 swaps", "weak");
+            return;
+          }
+          selected.add(idx);
+          wrap.classList.add("selected");
+        }
+        countEl.textContent = `${selected.size} / 3 selected`;
+        confirm.textContent = selected.size === 0 ? "Keep this hand" : `Swap ${selected.size} and play`;
+      });
+      handEl.appendChild(wrap);
+    });
+    confirm.addEventListener("click", () => {
+      if (selected.size > 0) mulliganHand(state, "player", [...selected]);
+      overlay.remove();
+      resolve();
+    });
+  });
+}
+
 // Spectator mode — read-only watch of any match by id. Polls /api/mp/spectate.
 let _spectatorTimer = null;
 let _spectatorVersion = 0;
@@ -1621,18 +1705,34 @@ function handleMpState(serverState) {
 }
 
 function handleMpAnim(anim) {
-  // Best-effort visual hooks for opponent actions. Our own actions already
-  // played their own animation locally on click.
-  if (anim.kind === "attack" && anim.fromSide === "ai") {
-    const attackerEl = $(`.ai-field .field-slot[data-slot="${anim.fromSlot}"] .card`);
+  // Drives visuals for any action — yours or your opponent's. The server
+  // ships anim.side flipped into our POV: "player" = us, "ai" = them.
+  const isOpp = anim.side === "ai";
+  if (anim.kind === "summon") {
+    const sel = isOpp ? ".ai-field" : ".player-field";
+    const slotEl = $(`${sel} .field-slot[data-slot="${anim.slot}"] .card`);
+    if (slotEl) {
+      slotEl.classList.add("ai-just-summoned");
+      setTimeout(() => slotEl.classList.remove("ai-just-summoned"), 900);
+    }
+    if (isOpp) sfxCardPlay(); // local already played its own
+    return;
+  }
+  if (anim.kind === "attack") {
+    const attackerEl = isOpp
+      ? $(`.ai-field .field-slot[data-slot="${anim.fromSlot}"] .card`)
+      : $(`.player-field .field-slot[data-slot="${anim.fromSlot}"] .card`);
     let defenderEl;
     if (anim.target === "trainer") {
-      defenderEl = $(".trainer-row.bottom .trainer-block.player") || $(".trainer-row.bottom .trainer-block");
+      defenderEl = isOpp
+        ? ($(".trainer-row.bottom .trainer-block.player") || $(".trainer-row.bottom .trainer-block"))
+        : $(".trainer-block.ai");
     } else {
-      defenderEl = $(`.player-field .field-slot[data-slot="${anim.target}"] .card`);
+      defenderEl = isOpp
+        ? $(`.player-field .field-slot[data-slot="${anim.target}"] .card`)
+        : $(`.ai-field .field-slot[data-slot="${anim.target}"] .card`);
     }
-    const attackerType = (state?.players?.ai?.field?.[anim.fromSlot]?.card?.types?.[0]) || "normal";
-    fireAttackTrail(attackerEl, defenderEl, attackerType);
+    fireAttackTrail(attackerEl, defenderEl, anim.attackerType || "normal");
     sfxAttack();
     if (defenderEl) {
       floatDamage(defenderEl, anim.multiplier === 0 ? "MISS" : `-${anim.damage}`, {
@@ -1651,9 +1751,33 @@ function handleMpAnim(anim) {
     if (anim.knockedOut) sfxKO();
     if (anim.critical) flashVerdict("CRITICAL HIT!", "super");
     else if (anim.verdict?.text) flashVerdict(anim.verdict.text, anim.verdict.tone);
-  } else if (anim.kind === "opponent-disconnected") {
-    flashVerdict("Opponent disconnected — 60s grace", "weak");
+    if (anim.attackerLeveled && attackerEl) {
+      attackerEl.classList.add("leveled-up");
+      flashVerdict(isOpp ? "Rival's Pokémon evolved!" : `Evolved! L${anim.attackerLeveled}`, isOpp ? "weak" : "super");
+      setTimeout(() => attackerEl.classList.remove("leveled-up"), 850);
+    }
+    return;
   }
+  if (anim.kind === "item") {
+    const icon = ({ potion: "🧪", energy: "💎", switch: "🔄", revive: "✨", luckyDraw: "🎴" })[anim.itemId] || "🎁";
+    flashVerdict(`${isOpp ? "Rival used" : "Used"} ${icon}`, isOpp ? "weak" : "super");
+    return;
+  }
+}
+
+// "Your turn" cue — large banner + chime when control flips back to you.
+function showYourTurnBanner() {
+  sfxYourTurn();
+  document.querySelector(".your-turn-banner")?.remove();
+  const el = document.createElement("div");
+  el.className = "your-turn-banner";
+  el.textContent = "YOUR TURN";
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 350);
+  }, 1100);
 }
 
 function handleMpGameOver(over) {

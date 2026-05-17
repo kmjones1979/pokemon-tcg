@@ -27,6 +27,9 @@ async function main() {
   await page.click(".trainer-card");
   await page.click("#start-btn");
   console.log("→ starting match");
+  // Mulligan: keep starting hand
+  await page.waitForSelector(".mulligan-confirm", { timeout: 12000 });
+  await page.click(".mulligan-confirm");
 
   await page.waitForSelector("#hand .card", { timeout: 12000 });
   const handSize = await page.$$eval("#hand .card", (els) => els.length);

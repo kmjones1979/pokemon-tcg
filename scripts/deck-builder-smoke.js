@@ -76,6 +76,7 @@ async function main() {
   await page.click(".cb-x");
   await page.click(".trainer-card");
   await page.click("#start-btn");
+  try { await page.waitForSelector(".mulligan-confirm", { timeout: 12000 }); await page.click(".mulligan-confirm"); } catch {}
   await page.waitForSelector("#hand .card", { timeout: 15000 });
   const handCount = await page.$$eval("#hand .card", (els) => els.length);
   console.log(`✓ match started using saved deck — hand: ${handCount}`);

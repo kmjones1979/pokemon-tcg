@@ -45,6 +45,14 @@ function randCode() {
 function viewFor(match, mySide) {
   const oppSide = mySide === "player" ? "ai" : "player";
   const s = match.state;
+  // Translate match.lastAnim's `side` into recipient POV so client-side
+  // animation code can treat "player" as "us" and "ai" as the opponent.
+  let lastAnim = null;
+  if (match.lastAnim) {
+    const a = match.lastAnim;
+    const flip = (sd) => sd === mySide ? "player" : "ai";
+    lastAnim = { ...a, side: flip(a.side), v: match.lastAnimV };
+  }
   return {
     v: match.v,
     matchId: match.id,
@@ -66,6 +74,7 @@ function viewFor(match, mySide) {
       displayName: match.players[oppSide].displayName,
       ability: match.players[oppSide].ability,
     },
+    lastAnim,
   };
 }
 
@@ -317,17 +326,35 @@ function mount(app, supabase, getPokedex) {
       switch (action) {
         case "play-card":
           r = engine.playCard(m.state, side, payload.handIndex, { replaceSlot: payload.replaceSlot });
+          if (r?.ok) m.lastAnim = { kind: "summon", side, slot: r.slot, cardName: r.instance?.card?.name, type: r.instance?.card?.types?.[0] };
           break;
         case "attack":
           r = engine.attack(m.state, side, payload.fromSlot, payload.target, { abilityId: payload.abilityId });
+          if (r?.ok) m.lastAnim = {
+            kind: "attack",
+            side,
+            fromSlot: payload.fromSlot,
+            target: payload.target,
+            damage: r.damage,
+            multiplier: r.multiplier,
+            verdict: r.verdict,
+            critical: !!r.critical,
+            knockedOut: !!r.knockedOut,
+            attackerLeveled: r.attackerLeveled || 0,
+            attackerType: m.state.players[side].field[payload.fromSlot]?.card?.types?.[0]
+              || (m.state.discard?.[m.state.discard.length-1]?.types?.[0])
+              || "normal",
+          };
           break;
         case "end-turn":
           if (m.state.activePlayer !== side) { outErr = "Not your turn."; return; }
           engine.endTurn(m.state);
           r = { ok: true };
+          m.lastAnim = { kind: "end-turn", side };
           break;
         case "use-item":
           r = engine.useItem(m.state, side, payload.itemId, payload.target);
+          if (r?.ok) m.lastAnim = { kind: "item", side, itemId: payload.itemId, slot: payload.target };
           break;
         case "concede": {
           const other = side === "player" ? "ai" : "player";
@@ -349,6 +376,7 @@ function mount(app, supabase, getPokedex) {
         outErr = r?.reason || "Action rejected.";
         return;
       }
+      m.lastAnimV = m.v + 1;
       m.v += 1;
       if (m.state.winner) {
         outOver = true;

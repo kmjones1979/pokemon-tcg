@@ -26,6 +26,7 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.click(".trainer-card");           // pick first trainer
   await page.click('[data-difficulty="medium"]');
   await page.click("#start-btn");
+  try { await page.waitForSelector(".mulligan-confirm", { timeout: 12000 }); await page.click(".mulligan-confirm"); } catch {}
   await page.waitForSelector("#hand .card", { timeout: 15000 });
 
   // Play 2 cards on turn 1+3. End turns to advance state.

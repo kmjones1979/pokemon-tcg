@@ -31,6 +31,7 @@ const listeners = {
 
 let _matchId = null;
 let _version = 0;
+let _animVersion = 0;
 let _opts = null;
 let _pollHandle = null;
 let _statusHandle = null;
@@ -83,6 +84,18 @@ async function startMatchPoll() {
   _pollHandle = setInterval(pollMatchOnce, 1200);
 }
 
+function deliverView(view) {
+  if (!view) return;
+  _version = view.v;
+  // Fire an anim event if there's a fresh action attached to this view.
+  if (view.lastAnim && view.lastAnim.v && view.lastAnim.v > _animVersion) {
+    _animVersion = view.lastAnim.v;
+    emit("anim", view.lastAnim);
+  }
+  emit("state", view);
+  if (view.winner) stopMatchPoll();
+}
+
 async function pollMatchOnce() {
   if (!_matchId) return;
   try {
@@ -90,12 +103,7 @@ async function pollMatchOnce() {
     if (r.status === 204) return;
     if (!r.ok) return;
     const data = await r.json();
-    if (!data.view) return;
-    _version = data.view.v;
-    emit("state", data.view);
-    if (data.view.winner) {
-      stopMatchPoll();
-    }
+    deliverView(data.view);
   } catch {}
 }
 
@@ -138,9 +146,8 @@ export async function findMatch(opts) {
     if (!r.ok) return emit("err", { error: data.error || "queue failed" });
     if (data.state === "matched" && data.view) {
       _matchId = data.view.matchId;
-      _version = data.view.v;
       emit("match", { roomId: _matchId, opponent: data.view.opponent, state: data.view });
-      emit("state", data.view);
+      deliverView(data.view);
       startMatchPoll();
     } else {
       // Waiting — start status polling.
@@ -187,9 +194,8 @@ export async function joinPrivateRoom(code, opts) {
     const data = await r.json();
     if (!r.ok) return emit("err", { error: data.error || "join failed" });
     _matchId = data.view.matchId;
-    _version = data.view.v;
     emit("match", { roomId: _matchId, opponent: data.view.opponent, state: data.view });
-    emit("state", data.view);
+    deliverView(data.view);
     startMatchPoll();
   } catch (err) {
     emit("err", { error: err.message || "join failed" });
@@ -209,10 +215,7 @@ async function postAction(action, payload) {
       emit("err", { error: data.error || "action rejected" });
       return;
     }
-    if (data.view) {
-      _version = data.view.v;
-      emit("state", data.view);
-    }
+    if (data.view) deliverView(data.view);
     if (data.gameOver) {
       emit("over", {
         winner: data.view?.winner,

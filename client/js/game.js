@@ -259,6 +259,28 @@ function beginTurn(state) {
   if (checkWinner(state)) return;
 }
 
+// Pre-game mulligan: swap up to N starting cards back into the deck and
+// draw replacements. Returns nothing — mutates state.
+export function mulliganHand(state, side, indices = [], { rand = Math.random } = {}) {
+  const p = state.players[side];
+  const sorted = [...new Set(indices)].sort((a, b) => b - a);
+  const returned = [];
+  for (const i of sorted) {
+    if (i < 0 || i >= p.hand.length) continue;
+    returned.push(p.hand.splice(i, 1)[0]);
+  }
+  if (returned.length === 0) return;
+  p.deck = [...p.deck, ...returned];
+  for (let i = p.deck.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [p.deck[i], p.deck[j]] = [p.deck[j], p.deck[i]];
+  }
+  for (let i = 0; i < returned.length; i++) {
+    if (p.deck.length === 0) break;
+    p.hand.push(p.deck.shift());
+  }
+}
+
 export function playCard(state, side, handIndex, { rand = Math.random, replaceSlot = null } = {}) {
   if (state.winner) return { ok: false, reason: "game over" };
   if (state.activePlayer !== side) return { ok: false, reason: "not your turn" };
@@ -587,6 +609,14 @@ export async function aiTakeTurn(state, { rand = Math.random, difficulty = "medi
 
   // Item phase — opportunistic use of the AI's starter kit.
   if (ai.items?.length) {
+    // Revive: if we have a KO'd Pokémon and an open slot, bring it back.
+    {
+      const item = ai.items.find((i) => i.id === "revive" && i.uses > 0);
+      if (item && ai.energy >= 3 && ai.discard.length > 0 && ai.field.includes(null)) {
+        const r = _useItem(state, "ai", "revive", null);
+        if (r.ok && onAction) await onAction({ kind: "item", itemId: "revive" });
+      }
+    }
     // Potion: heal a Pokémon below 50% HP (tactical/balanced).
     if (mood !== "aggressive") {
       const item = ai.items.find((i) => i.id === "potion" && i.uses > 0);
@@ -612,6 +642,14 @@ export async function aiTakeTurn(state, { rand = Math.random, difficulty = "medi
           const r = _useItem(state, "ai", "energy", null);
           if (r.ok && onAction) await onAction({ kind: "item", itemId: "energy" });
         }
+      }
+    }
+    // Lucky Draw: when hand is small + lots of deck left.
+    {
+      const item = ai.items.find((i) => i.id === "luckyDraw" && i.uses > 0);
+      if (item && ai.energy >= 1 && ai.hand.length <= 3 && ai.deck.length >= 4) {
+        const r = _useItem(state, "ai", "luckyDraw", null);
+        if (r.ok && onAction) await onAction({ kind: "item", itemId: "luckyDraw" });
       }
     }
   }

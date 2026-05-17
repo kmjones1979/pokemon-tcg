@@ -50,6 +50,7 @@ async function main() {
 
   // Arena turn hint
   await page.click("#start-btn");
+  try { await page.waitForSelector(".mulligan-confirm", { timeout: 12000 }); await page.click(".mulligan-confirm"); } catch {}
   await page.waitForSelector("#hand .card", { timeout: 12000 });
   await page.waitForTimeout(700);
   await page.screenshot({ path: path.join(OUT, "polish-arena-turn1.png") });

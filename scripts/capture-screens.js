@@ -25,6 +25,7 @@ async function main() {
   await page.click(".trainer-card");
   await page.waitForTimeout(200);
   await page.click("#start-btn");
+  try { await page.waitForSelector(".mulligan-confirm", { timeout: 12000 }); await page.click(".mulligan-confirm"); } catch {}
 
   await page.waitForSelector("#hand .card", { timeout: 15000 });
   // Wait for hand to settle / sprites to load
