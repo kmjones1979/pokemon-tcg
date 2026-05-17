@@ -2081,14 +2081,39 @@ h1, h2, h3,
 .dmg-preview.tone-super { color: #f7d02c; border: 1px solid #f7d02c; }
 .dmg-preview.tone-weak  { color: #6390F0; }
 .dmg-preview.tone-miss  { color: #888; }
-.dmg-preview::after {
-  content: attr(data-verdict);
+.dmg-preview .dmg-num { display: block; }
+.dmg-preview .dmg-verdict {
   display: block;
   font-size: 8px;
   color: var(--muted);
   font-family: "Inter", system-ui, sans-serif;
   margin-top: 2px;
   letter-spacing: 0.5px;
+}
+.dmg-preview .dmg-ko {
+  display: block;
+  font-size: 9px;
+  margin-top: 2px;
+  color: #ef476f;
+  text-shadow: 0 0 6px #ef476f99;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+}
+/* Sticky previews (shown for every enemy slot on attacker selection) are
+   slightly more compact and stay put without hover. */
+.dmg-preview.sticky {
+  top: -28px;
+  background: rgba(0, 0, 0, 0.92);
+  border: 1px solid rgba(255,255,255,0.18);
+  animation: dmg-preview-pop 0.18s ease-out;
+}
+@keyframes dmg-preview-pop {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.field-slot.hover-target {
+  background: rgba(255, 209, 102, 0.12);
+  box-shadow: 0 0 16px rgba(255, 209, 102, 0.35) inset;
 }
 .field-slot { position: relative; }
 
@@ -2395,13 +2420,28 @@ body.in-arena .landscape-prompt {
 
 /* Tighten for mobile landscape — applies to arena and menu both. */
 @media (max-width: 900px) {
-  .card { width: 90px; }
-  .card .card-name { font-size: 10px; max-width: 60px; }
-  .card-hp { font-size: 9px; }
-  .card-attack { font-size: 9px; }
-  .cost-gem { width: 20px; height: 20px; font-size: 10px; }
-  .field-slot { width: 90px; height: 128px; }
+  /* Bigger field cards on mobile — the previous 90px width made stats
+     illegible.  Bumped to 108px so the HP/ATK numbers and types read
+     across the board. */
+  .card { width: 108px; }
+  .card .card-name { font-size: 11px; max-width: 78px; }
+  .card-hp { font-size: 11px; }
+  .card-attack { font-size: 11px; }
+  .cost-gem { width: 24px; height: 24px; font-size: 12px; }
+  .field-slot { width: 108px; height: 156px; }
   .hand .card { margin: 0 -40px; }
+  /* Thumb-friendly action bar — bigger End Turn so it can't be missed. */
+  .action-bar button {
+    padding: 11px 18px;
+    font-size: 13px;
+    min-height: 44px; /* iOS recommended touch target */
+  }
+  /* Type badges + status icons need to be readable, not pixel-perfect. */
+  .type-badge { width: 18px; height: 18px; font-size: 10px; }
+  .status-icon { font-size: 18px; }
+  /* Boss HP / trainer HP bar — beefier so it reads across the arena. */
+  .hp-bar { height: 10px; }
+  .hp-text { font-size: 11px; min-width: 56px; }
   .log-panel {
     width: 160px;
     font-size: 9px;

@@ -152,6 +152,7 @@ function render() {
           <div class="cb-deck-list"></div>
           <div class="cb-deck-actions">
             <button class="cb-auto">Auto-fill</button>
+            <button class="cb-preset" title="Suggested deck archetypes">Recipes ▾</button>
             <button class="cb-clear">Clear</button>
             <button class="cb-save primary" ${_editorIds.length === DECK_SIZE ? "" : "disabled"}>
               ${_editingDeckId ? "Save" : "Save deck"}
@@ -259,6 +260,7 @@ function render() {
     render();
   });
   overlay.querySelector(".cb-auto").addEventListener("click", autoFill);
+  overlay.querySelector(".cb-preset")?.addEventListener("click", openPresetMenu);
   overlay.querySelector(".cb-clear").addEventListener("click", () => { _editorIds = []; render(); });
   overlay.querySelector(".cb-save").addEventListener("click", saveDeck);
   overlay.querySelector(".cb-deck-select")?.addEventListener("change", onSwitchDeck);
@@ -350,6 +352,116 @@ function summarize(ids, ownedById) {
 function deckHint(summary, total) {
   if (total < DECK_SIZE) return `Add ${DECK_SIZE - total} more card${DECK_SIZE - total === 1 ? "" : "s"}.`;
   return "Ready to save.";
+}
+
+// --- Preset deck "recipes" -----------------------------------------------
+// Each recipe is a filter+priority function — the builder picks owned cards
+// matching the filter, preferring those scored highest, until the deck is
+// full. Falls back to autoFill afterward if the recipe can't supply 30.
+const PRESETS = [
+  {
+    id: "mono-fire", label: "🔥 Mono Fire", hint: "Aggressive fire-only deck.",
+    pref: (c) => (c.types || []).includes("fire") ? 100 : 0,
+  },
+  {
+    id: "mono-water", label: "💧 Mono Water", hint: "Disrupt with water + heals.",
+    pref: (c) => (c.types || []).includes("water") ? 100 : 0,
+  },
+  {
+    id: "mono-grass", label: "🌿 Mono Grass", hint: "Sustain — heal over time.",
+    pref: (c) => (c.types || []).includes("grass") ? 100 : 0,
+  },
+  {
+    id: "mono-psychic", label: "🌀 Mono Psychic", hint: "Status effects + bursts.",
+    pref: (c) => (c.types || []).includes("psychic") ? 100 : 0,
+  },
+  {
+    id: "balanced", label: "⚖ Balanced", hint: "Mix of types — adapts to any matchup.",
+    pref: (c) => 10 + Math.random() * 5,
+  },
+  {
+    id: "tank", label: "🛡 Defender", hint: "Steel / rock walls, plus tank Pokémon.",
+    pref: (c) => {
+      const t = c.types || [];
+      let s = 0;
+      if (t.includes("steel") || t.includes("rock") || t.includes("ground")) s += 50;
+      if (t.includes("fighting")) s += 20;
+      // Bias toward higher HP cards.
+      s += (c.cardHp || 0) * 2;
+      return s;
+    },
+  },
+  {
+    id: "aggro", label: "⚡ Aggro", hint: "Cheap attackers — flood the field fast.",
+    pref: (c) => {
+      let s = 0;
+      if (c.tier <= 2) s += 60;
+      s += (c.cardAttack || 0) * 5;
+      return s;
+    },
+  },
+  {
+    id: "legendary", label: "✨ Legendary", hint: "Heavy on legendaries + mythicals.",
+    pref: (c) => {
+      let s = 5;
+      if (c.is_legendary) s += 200;
+      if (c.is_mythical) s += 220;
+      if (c.tier >= 4) s += 30;
+      return s;
+    },
+  },
+];
+
+function openPresetMenu(e) {
+  document.querySelector(".cb-preset-menu")?.remove();
+  const menu = document.createElement("div");
+  menu.className = "cb-preset-menu";
+  menu.innerHTML = `
+    <div class="cb-preset-title">Pick a deck recipe</div>
+    ${PRESETS.map((p) => `
+      <button class="cb-preset-row" data-preset="${p.id}">
+        <div class="cb-preset-label">${p.label}</div>
+        <div class="cb-preset-hint">${escape(p.hint)}</div>
+      </button>
+    `).join("")}
+    <button class="cb-preset-cancel">Cancel</button>
+  `;
+  document.body.appendChild(menu);
+  menu.querySelectorAll(".cb-preset-row").forEach((row) => {
+    row.addEventListener("click", () => {
+      applyPreset(row.dataset.preset);
+      menu.remove();
+    });
+  });
+  menu.querySelector(".cb-preset-cancel").addEventListener("click", () => menu.remove());
+}
+
+function applyPreset(presetId) {
+  const preset = PRESETS.find((p) => p.id === presetId);
+  if (!preset) return;
+  // Start from scratch — applying a preset replaces the current draft.
+  _editorIds = [];
+  const used = new Map();
+  // Score every owned card; sort desc.
+  const scored = _collection
+    .map((c) => ({ c, score: preset.pref(c) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+  // Take up to 2 of each, prefer high-score, target 30 cards.
+  for (const { c } of scored) {
+    if (_editorIds.length >= DECK_SIZE) break;
+    const inDeck = used.get(c.id) || 0;
+    const cap = Math.min(c.quantity, MAX_COPIES);
+    if (inDeck >= cap) continue;
+    _editorIds.push(c.id);
+    used.set(c.id, inDeck + 1);
+  }
+  // If the preset couldn't fill 30 (small collection / narrow filter),
+  // top up with autoFill.
+  if (_editorIds.length < DECK_SIZE) {
+    autoFill();
+  }
+  render();
 }
 
 function autoFill() {

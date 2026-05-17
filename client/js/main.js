@@ -1113,11 +1113,15 @@ function renderFields() {
           !selectedAttacker;
         if (canActNow) card.classList.add("can-act");
         slot.appendChild(card);
-        // Damage preview: when an enemy card is hovered AND we have an
-        // attacker selected, show predicted -dmg above the target.
+        // Damage preview: when an attacker is selected, show predicted -dmg
+        // and matchup verdict on EVERY enemy target so the player can
+        // compare options without hovering each one (touch-friendly).
         if (side === "ai" && selectedAttacker) {
-          slot.addEventListener("mouseenter", () => showDamagePreview(slot, inst));
-          slot.addEventListener("mouseleave", () => clearDamagePreview(slot));
+          showDamagePreview(slot, inst, { sticky: true });
+          // Desktop hover still gets a slight emphasis so it's clear which
+          // target is currently focused.
+          slot.addEventListener("mouseenter", () => slot.classList.add("hover-target"));
+          slot.addEventListener("mouseleave", () => slot.classList.remove("hover-target"));
         }
       } else {
         slot.innerHTML = `<div class="slot-empty">empty</div>`;
@@ -1223,18 +1227,20 @@ function hideAbilityPopover() {
   }
 }
 
-function showDamagePreview(slotEl, defenderInst) {
+function showDamagePreview(slotEl, defenderInst, { sticky = false } = {}) {
   if (!selectedAttacker) return;
+  // Don't double-render if we already have a sticky preview here.
+  if (slotEl.querySelector(".dmg-preview")) return;
   const attackerInst = state.players.player.field[selectedAttacker.slot];
   if (!attackerInst) return;
   const ability = abilityById(attackerInst.card, chosenAbilityId);
-  const result = computeDamage(attackerInst.card, defenderInst.card, { ability });
+  const result = computeDamage(attackerInst.card, defenderInst.card, { ability, preview: true });
   const el = document.createElement("div");
-  el.className = `dmg-preview tone-${result.verdict?.tone || "normal"}`;
-  el.textContent = result.multiplier === 0 ? "MISS" : `-${result.damage}`;
-  if (result.verdict?.text) {
-    el.dataset.verdict = result.verdict.text;
-  }
+  el.className = `dmg-preview tone-${result.verdict?.tone || "normal"}${sticky ? " sticky" : ""}`;
+  const willKO = result.multiplier > 0 && result.damage >= defenderInst.currentHp;
+  el.innerHTML = result.multiplier === 0
+    ? `<span class="dmg-num">MISS</span>`
+    : `<span class="dmg-num">-${result.damage}</span>${result.verdict?.text ? `<span class="dmg-verdict">${escape(result.verdict.text)}</span>` : ""}${willKO ? `<span class="dmg-ko">KO</span>` : ""}`;
   slotEl.appendChild(el);
 }
 function clearDamagePreview(slotEl) {

@@ -19,6 +19,7 @@
 // optional `status` ({ kind, turnsLeft }).
 
 import { computeDamage, rollStatus, isLockedOut, tickStatus } from "./battle.js";
+import { getMultiplier } from "./type-chart.js";
 import { abilityById } from "./abilities.js";
 import {
   hasPassive, pinchAttackBonus, levitateBlocks,
@@ -732,10 +733,10 @@ import { basicAbility, specialAbility } from "./abilities.js";
 const POLICIES = {
   easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false, useSpecial: false },
   medium: { pickCard: "smart",     pickTarget: "lowestHp", passPlayChance: 0.06, skipAttackChance: 0.04, useTypeEff: true,  useSpecial: "sometimes" },
-  hard:   { pickCard: "expensive", pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart" },
+  hard:   { pickCard: "smartSig",  pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart" },
 };
 
-function chooseHandIndex(ai, policy, rand) {
+function chooseHandIndex(ai, policy, rand, state = null) {
   const candidates = ai.hand
     .map((c, idx) => ({ c, idx, cost: effectiveCost(ai, c) }))
     .filter((x) => x.cost <= ai.energy);
@@ -747,10 +748,70 @@ function chooseHandIndex(ai, policy, rand) {
     case "expensive":
       candidates.sort((a, b) => b.cost - a.cost);
       return candidates[0].idx;
+    case "smartSig": {
+      // Hard AI: score each playable card by its signature/passive value
+      // against the current board state.  Higher score wins.
+      const opp = state?.players?.player;
+      candidates.sort((a, b) => scoreCardForSummon(ai, opp, b.c) - scoreCardForSummon(ai, opp, a.c));
+      return candidates[0].idx;
+    }
+    case "smart": {
+    // Medium: similar but lighter weights — picks expensive most of the
+      // time, with a small situational tilt toward useful signatures.
+      const oppM = state?.players?.player;
+      candidates.sort((a, b) => {
+        const scoreA = (a.cost * 2) + (signatureFor(a.c) ? 2 : 0) + matchupBonus(a.c, oppM);
+        const scoreB = (b.cost * 2) + (signatureFor(b.c) ? 2 : 0) + matchupBonus(b.c, oppM);
+        return scoreB - scoreA;
+      });
+      return candidates[0].idx;
+    }
     case "random":
     default:
       return candidates[Math.floor(rand() * candidates.length)].idx;
   }
+}
+
+// Weight a hand card by how useful its on-summon / passive / aura would be
+// right now given the board state.  Higher = better drop.
+function scoreCardForSummon(ai, opp, card) {
+  let score = (card.energyCost || 1) * 3;
+  const sig = signatureFor(card);
+  const enemyCount = opp ? opp.field.filter(Boolean).length : 0;
+  const allyCount  = ai.field.filter(Boolean).length;
+  const damagedAllies = ai.field.filter((a) => a && a.currentHp < (a.maxHp ?? a.card.cardHp)).length;
+
+  if (sig) {
+    score += 4; // baseline "has a signature"
+    const desc = (sig.desc || "").toLowerCase();
+    const name = (sig.name || "").toLowerCase();
+    if (sig.onSummon) {
+      if (/damage|hit|deal|strike|psychic|shock|hex|hydro|pulse|force|sight|sandstorm/.test(desc)) score += enemyCount * 5;
+      if (/heal|restore|recover|moonlight|aurora|soft.?boiled|continent/.test(desc + " " + name)) score += damagedAllies * 5;
+      if (/sleep|paralyze|burn|curse|veil|kiss/.test(desc + " " + name)) score += enemyCount * 3;
+      if (/grants|buff|max hp|\+\d+\s*atk|geomancy|mimicry|charge/.test(desc + " " + name)) score += allyCount * 3;
+    }
+    if (sig.passive) score += 5;       // Multiscale / Iron Defense / etc.
+    if (sig.fieldAura) score += 4;     // Drizzle / Drought / aura buffs
+    if (sig.onTurnStart) score += 4;   // Recover / Ascent / Sandstorm tick
+  }
+  // Type matchup vs current enemies on field — drop type-effective cards.
+  score += matchupBonus(card, opp);
+  return score;
+}
+
+function matchupBonus(card, opp) {
+  if (!opp) return 0;
+  let bonus = 0;
+  const type = card.types?.[0];
+  for (const e of opp.field) {
+    if (!e) continue;
+    const m = getMultiplier(type, e.card?.types || []);
+    if (m >= 2) bonus += 3;
+    else if (m === 0) bonus += 4;
+    else if (m < 1) bonus -= 1;
+  }
+  return bonus;
 }
 
 function chooseTarget(state, attackerInst, policy, rand) {
@@ -956,7 +1017,7 @@ async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality 
     if (state.phase !== "main") break;
     if (emptySlot(ai.field) === -1) break;
     if (rand() < policy.passPlayChance) break; // sometimes just pass
-    const idx = chooseHandIndex(ai, policy, rand);
+    const idx = chooseHandIndex(ai, policy, rand, state);
     if (idx === -1) break;
     const r = playCard(state, "ai", idx, { rand });
     if (!r.ok) break;
