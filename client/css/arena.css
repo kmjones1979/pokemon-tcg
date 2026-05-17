@@ -2871,6 +2871,13 @@ body.in-arena .landscape-prompt {
 }
 .hand-toggle:hover { background: linear-gradient(135deg, #2a3565, #3a4585); }
 .hand-toggle:active { transform: translateY(1px); }
+/* Auto-lowered: user pref is "lifted" but we suppressed it because no card
+   is affordable right now. Subtle dim + tooltip explains. */
+.hand-toggle.auto-lowered {
+  opacity: 0.6;
+  filter: saturate(0.6);
+  border-style: dashed;
+}
 .hand-toggle.is-lifted {
   background: linear-gradient(135deg, #2d4a6a, #1a3550);
   border-color: rgba(180, 220, 255, 0.7);

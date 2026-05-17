@@ -742,8 +742,10 @@ function render() {
 
   $("#end-turn-btn").addEventListener("click", onEndTurn);
   $("#hand-toggle-btn")?.addEventListener("click", toggleHandLift);
-  // Apply persisted hand-lift state to the freshly-rendered hand element.
-  if (_handLifted) $("#hand")?.classList.add("lifted");
+  // Apply hand-lift class. We honor the user's persisted preference, BUT
+  // auto-suppress it when there's nothing playable in hand — no reason to
+  // keep the fan covering the field once energy can't afford anything.
+  applyHandLiftState();
   $("#concede-btn").addEventListener("click", () => {
     if (!confirm("Concede this match?")) return;
     if (gameMode === "mp") {
@@ -1572,12 +1574,30 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 function toggleHandLift() {
   _handLifted = !_handLifted;
   try { localStorage.setItem("pokemon-tcg-hand-lifted", _handLifted ? "1" : "0"); } catch {}
+  applyHandLiftState();
+}
+
+// Honor the user's lift preference UNLESS the player can't afford any card
+// in their hand right now — in which case the hand lowers automatically so
+// the field stays visible. State is refreshed every render() + after each
+// successful card play.
+function applyHandLiftState() {
   const hand = $("#hand");
-  if (hand) hand.classList.toggle("lifted", _handLifted);
   const btn = $("#hand-toggle-btn");
+  if (!hand || !state || !state.players?.player) return;
+  const p = state.players.player;
+  const noPlayable = p.hand.length === 0 || !p.hand.some((c) => effectiveCost(p, c) <= p.energy);
+  const shouldLift = _handLifted && !noPlayable;
+  hand.classList.toggle("lifted", shouldLift);
   if (btn) {
+    // The label reflects the user's *preference*, not the auto-suppress
+    // state — tapping it still toggles the intent.
     btn.textContent = _handLifted ? "▼ Lower hand" : "▲ Show hand";
     btn.classList.toggle("is-lifted", _handLifted);
+    btn.classList.toggle("auto-lowered", _handLifted && noPlayable);
+    btn.title = _handLifted && noPlayable
+      ? "Hand auto-lowered — no card you can afford with current energy"
+      : "Lift / lower your hand (tap to see full cards)";
   }
 }
 
