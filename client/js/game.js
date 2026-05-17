@@ -480,7 +480,7 @@ export function attack(
     const pinchBonus = pinchAttackBonus(attackerInst);
     // Giratina Shadow Force — phase out one attack per match.
     const defSig = signatureFor(defenderInst.card);
-    if (defSig?.onPreHit && defSig.onPreHit(state, opponentSide, defenderInst)) {
+    if (defSig?.onPreHit && defSig.onPreHit(state, opponentSide, defenderInst, attackerInst)) {
       attackerInst.attackedThisTurn = true;
       p.energy -= 0; // no charge — attack was phased out
       return { ok: true, damage: 0, multiplier: 0, verdict: { text: "Shadow Force!", tone: "miss" }, abilityId, abilityName: ability.name, target: defenderSlot };
@@ -528,9 +528,16 @@ export function attack(
         multiscaleApplied = true;
       }
     }
+    // Solid Rock (Rhyperior): super-effective hits deal half damage.
+    let solidRockApplied = false;
+    if (defSig?.passive?.resistSuperEffective && calc.multiplier >= 2) {
+      damageBase = Math.max(1, Math.round(damageBase / 2));
+      solidRockApplied = true;
+    }
     const damage = Math.max(calc.multiplier === 0 ? 0 : 1, damageBase - defReduction);
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);
     if (multiscaleApplied) log(state, `🐉 ${defenderInst.card.name}'s Multiscale halved the blow.`, "status");
+    if (solidRockApplied) log(state, `🪨 ${defenderInst.card.name}'s Solid Rock weakened the super-effective hit.`, "status");
     if (defReduction > 0 && damageBase > damage) {
       log(state, `🛡 ${defenderInst.card.name}'s Iron Defense softened ${defReduction} damage.`, "status");
     }

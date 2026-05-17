@@ -31,6 +31,8 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
   el.className = `card type-${card.types?.[0] || "normal"}${compact ? " compact" : ""}`;
   if (instance) el.dataset.instanceId = instance.instanceId;
   el.dataset.cardId = card.id;
+  if (card.is_mythical) el.dataset.cardRare = "mythical";
+  else if (card.is_legendary) el.dataset.cardRare = "legendary";
 
   const primary = card.types?.[0] || "normal";
   const secondary = card.types?.[1];

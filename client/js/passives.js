@@ -18,14 +18,36 @@ export function hasPassive(card, abilityName) {
 }
 
 // Guardian — opposing attackers MUST target this card before any other on
-// the field. Granted to legendaries and to high-tier (≥ 4) Steel/Rock/Fighting
-// types that have the "sturdy" PokeAPI passive. Visualised as a 🛡 shield.
+// the field. Visualised as a 🛡 shield + glowing ring around the card.
+//
+// Granted to:
+//   - All legendaries (they're rare enough to be team anchors)
+//   - All mythicals
+//   - Tier ≥ 3 Steel / Rock / Fighting / Ground tanks (broader than before)
+//   - Cards explicitly tagged via TANK_PASSIVES (PokeAPI ability names that
+//     thematically scream "I block for the team")
+const TANK_PASSIVES = new Set(["sturdy", "rough-skin", "iron-barbs", "stamina", "bulletproof", "rock-head"]);
+const TANK_IDS = new Set([
+  143, // Snorlax — the iconic wall
+  131, // Lapras — chunky water tank
+  208, // Steelix
+  306, // Aggron
+  411, // Bastiodon
+  213, // Shuckle — the ultimate defender
+  464, // Rhyperior
+  248, // Tyranitar (already has Sandstorm, also a wall)
+  389, // Torterra
+  376, // Metagross (already Iron Defense, also Guardian)
+]);
 export function isGuardian(card) {
   if (!card) return false;
-  if (card.is_legendary) return true;
+  if (card.is_legendary || card.is_mythical) return true;
+  if (TANK_IDS.has(card.id)) return true;
   const t = card.types?.[0];
-  if (card.tier >= 4 && (t === "steel" || t === "rock" || t === "fighting") && hasPassive(card, "sturdy")) {
-    return true;
+  if (card.tier >= 3 && (t === "steel" || t === "rock" || t === "fighting" || t === "ground")) {
+    if (Array.isArray(card.abilities)) {
+      for (const ab of card.abilities) if (TANK_PASSIVES.has(ab)) return true;
+    }
   }
   return false;
 }
@@ -433,6 +455,133 @@ export const SIGNATURE_ABILITIES = {
       return true;
     },
   },
+  // --- Crowd-control / board-clear signatures --------------------------
+  // These shine when the OPPONENT has filled their field. The more of them
+  // there are, the harder these hit — keeps a wide board from snowballing.
+  130: {
+    // Gyarados — Tsunami
+    name: "Tsunami",
+    desc: "On summon, deals 2 + (1 per enemy on field) damage to every enemy.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const enemies = state.players[otherSide].field.filter(Boolean);
+      if (!enemies.length) return;
+      const dmg = 2 + enemies.length;
+      let hits = 0, kos = 0;
+      for (let i = 0; i < state.players[otherSide].field.length; i++) {
+        const e = state.players[otherSide].field[i];
+        if (!e) continue;
+        e.currentHp = Math.max(0, e.currentHp - dmg);
+        hits++;
+        if (e.currentHp <= 0) {
+          state.players[otherSide].discard.push(e.card);
+          state.players[otherSide].field[i] = null;
+          kos++;
+        }
+      }
+      state.log.push({ id: state.log.length + 1, text: `🌊 Gyarados' Tsunami struck ${hits} foe${hits === 1 ? "" : "s"} for ${dmg}${kos ? `; ${kos} KO'd` : ""}.`, kind: "attack" });
+    },
+  },
+  186: {
+    // Politoed — Drizzle / Rain Storm
+    name: "Rain Storm",
+    desc: "On summon, deals 1 damage to every enemy AND heals every ally for 1.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      let hits = 0, healed = 0;
+      for (let i = 0; i < state.players[otherSide].field.length; i++) {
+        const e = state.players[otherSide].field[i];
+        if (!e) continue;
+        e.currentHp = Math.max(0, e.currentHp - 1);
+        hits++;
+        if (e.currentHp <= 0) {
+          state.players[otherSide].discard.push(e.card);
+          state.players[otherSide].field[i] = null;
+        }
+      }
+      for (const ally of state.players[side].field) {
+        if (!ally || ally === inst) continue;
+        const cap = ally.maxHp ?? ally.card.cardHp;
+        const before = ally.currentHp;
+        ally.currentHp = Math.min(cap, ally.currentHp + 1);
+        healed += ally.currentHp - before;
+      }
+      if (hits || healed) {
+        state.log.push({ id: state.log.length + 1, text: `🌧 Politoed's Rain Storm — ${hits} enemies hit, ${healed} HP healed.`, kind: "attack" });
+      }
+    },
+  },
+  9: {
+    // Blastoise — already has Hydro Cannon aura; add a wide attack pattern too
+    name: "Hydro Pump",
+    desc: "Your Water specials hit for +1 ATK. On summon, deals 3 damage to a random enemy.",
+    fieldAura: { type: "water", attackBonus: 1 },
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const targets = state.players[otherSide].field
+        .map((c, i) => ({ c, i }))
+        .filter((x) => x.c != null);
+      if (!targets.length) return;
+      const t = targets[Math.floor(Math.random() * targets.length)];
+      t.c.currentHp = Math.max(0, t.c.currentHp - 3);
+      state.log.push({ id: state.log.length + 1, text: `💧 Blastoise's Hydro Pump hit ${t.c.card.name} for 3.`, kind: "attack" });
+      if (t.c.currentHp <= 0) {
+        state.players[otherSide].discard.push(t.c.card);
+        state.players[otherSide].field[t.i] = null;
+        state.log.push({ id: state.log.length + 1, text: `${t.c.card.name} fainted!`, kind: "ko" });
+      }
+    },
+  },
+
+  // --- New explicit "defender" signatures: bulwark + retribution -------
+  143: {
+    // Snorlax — Bulwark
+    name: "Bulwark",
+    desc: "Taunts opponents (must attack first) and takes 2 less damage from non-Fighting attacks.",
+    passive: { damageReduction: 2 },
+  },
+  131: {
+    // Lapras — Frozen Wall
+    name: "Frozen Wall",
+    desc: "Taunts opponents. Whenever it's attacked, the attacker is paralyzed for 1 turn.",
+    onPreHit(state, side, inst, attackerInst) {
+      // Apply a paralyze status to the attacker; do NOT block the hit.
+      if (attackerInst && !attackerInst.status) {
+        attackerInst.status = { kind: "paralyze", turnsLeft: 1 };
+        state.log.push({ id: state.log.length + 1, text: `❄ Lapras' Frozen Wall paralyzed ${attackerInst.card.name}!`, kind: "status" });
+      }
+      return false; // don't cancel
+    },
+  },
+  213: {
+    // Shuckle — Living Fortress
+    name: "Living Fortress",
+    desc: "Takes a flat 3 less damage from every attack (minimum 1) and taunts.",
+    passive: { damageReduction: 3 },
+  },
+  464: {
+    // Rhyperior — Solid Rock
+    name: "Solid Rock",
+    desc: "Taunts opponents. Super-effective hits deal half their normal damage.",
+    passive: { resistSuperEffective: true },
+  },
+  389: {
+    // Torterra — Continent
+    name: "Continent",
+    desc: "Taunts. On summon, heals each ally for 2.",
+    onSummon(state, side, inst) {
+      let healed = 0;
+      for (const ally of state.players[side].field) {
+        if (!ally || ally === inst) continue;
+        const cap = ally.maxHp ?? ally.card.cardHp;
+        const before = ally.currentHp;
+        ally.currentHp = Math.min(cap, ally.currentHp + 2);
+        healed += ally.currentHp - before;
+      }
+      if (healed) state.log.push({ id: state.log.length + 1, text: `🌳 Torterra's Continent healed ${healed} HP across the field.`, kind: "summon" });
+    },
+  },
+
   887: {
     // Dragapult
     name: "Phantom Force",

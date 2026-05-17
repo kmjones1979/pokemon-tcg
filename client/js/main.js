@@ -251,6 +251,15 @@ function renderMenu() {
       $("#arena").classList.remove("hidden");
       document.body.classList.add("in-arena");
       startBGM();
+      await playVsCinematic({
+        playerName: TRAINERS[chosen].name,
+        playerSprite: trainerMascotUrl(chosen),
+        playerColor: TYPE_COLORS[TRAINERS[chosen].portrait] || "#888",
+        aiName: TRAINERS[aiTrainer].name,
+        aiSprite: trainerMascotUrl(aiTrainer),
+        aiColor: TYPE_COLORS[TRAINERS[aiTrainer].portrait] || "#888",
+        subtitle: `${({ aggressive: "Aggressive", balanced: "Balanced", tactical: "Tactical" })[aiPersonality]} Rival`,
+      });
       await openMulliganModal();
       render();
       // Reveal the rival's personality.
@@ -1453,6 +1462,82 @@ async function onEndTurn() {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+// VS cinematic: two trainer portraits slam in from opposite sides, "VS"
+// flashes between them, then fade out. ~2s total, async so callers can
+// await before showing the mulligan modal.
+async function playVsCinematic({ playerName, playerSprite, playerColor, aiName, aiSprite, aiColor, subtitle }) {
+  return new Promise((resolve) => {
+    const el = document.createElement("div");
+    el.className = "vs-cinematic";
+    el.innerHTML = `
+      <div class="vs-half left" style="--accent:${playerColor}">
+        <div class="vs-portrait">${playerSprite ? `<img src="${playerSprite}" alt="">` : ""}</div>
+        <div class="vs-name">${escape(playerName)}</div>
+      </div>
+      <div class="vs-half right" style="--accent:${aiColor}">
+        <div class="vs-portrait">${aiSprite ? `<img src="${aiSprite}" alt="">` : ""}</div>
+        <div class="vs-name">${escape(aiName)}</div>
+        ${subtitle ? `<div class="vs-sub">${escape(subtitle)}</div>` : ""}
+      </div>
+      <div class="vs-logo">VS</div>
+    `;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add("show"));
+    setTimeout(() => {
+      el.classList.add("fade-out");
+      setTimeout(() => { el.remove(); resolve(); }, 400);
+    }, 1900);
+  });
+}
+
+// Rival quip system. Each AI turn has a chance to pop a short text bubble
+// near the rival's avatar, themed to their personality. Lightweight — just
+// flavor; no gameplay effect.
+const RIVAL_TAUNTS = {
+  aggressive: ["Crush them!", "More damage!", "Hesitation is defeat.", "Burn it all down."],
+  balanced:   ["Calculated.", "A measured response.", "Let's see…", "Patience wins fights."],
+  tactical:   ["Predictable.", "I planned for this.", "Three moves ahead.", "Your tempo is off."],
+  victorious: ["Was that all?", "You played well — but not well enough.", "GG."],
+  losing:     ["Not yet!", "Lucky shot.", "I won't fall here.", "Recovering…"],
+};
+let _lastTauntTurn = -10;
+function maybeShowRivalTaunt() {
+  if (!state || state.winner) return;
+  if (state.turn - _lastTauntTurn < 3) return;
+  if (Math.random() < 0.35) return; // don't spam
+  _lastTauntTurn = state.turn;
+  let bank = aiPersonality && RIVAL_TAUNTS[aiPersonality] || RIVAL_TAUNTS.balanced;
+  const aiHp = state.players.ai.trainerHp;
+  const playerHp = state.players.player.trainerHp;
+  if (aiHp > 0 && playerHp / Math.max(1, aiHp) < 0.5) bank = RIVAL_TAUNTS.victorious;
+  else if (aiHp / Math.max(1, playerHp) < 0.4) bank = RIVAL_TAUNTS.losing;
+  const line = bank[Math.floor(Math.random() * bank.length)];
+  showRivalBubble(line);
+}
+function showRivalBubble(text) {
+  const anchor = document.querySelector(".trainer-row.top .trainer-block.ai")
+              || document.querySelector(".trainer-row.top .trainer-block")
+              || document.querySelector(".ai-field");
+  document.querySelectorAll(".rival-bubble").forEach((b) => b.remove());
+  const el = document.createElement("div");
+  el.className = "rival-bubble";
+  el.textContent = text;
+  if (anchor) {
+    const rect = anchor.getBoundingClientRect();
+    el.style.top = `${rect.bottom + 8}px`;
+    el.style.left = `${rect.left + rect.width / 2}px`;
+    el.style.transform = `translateX(-50%)`;
+  } else {
+    el.style.top = "80px"; el.style.left = "50%"; el.style.transform = "translateX(-50%)";
+  }
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 350);
+  }, 1800);
+}
+
 async function handleAiAction(action) {
   try {
     await handleAiActionInner(action);
@@ -1464,6 +1549,8 @@ async function handleAiAction(action) {
 }
 async function handleAiActionInner(action) {
   if (state.winner) return;
+  // Surface a personality quip occasionally — once per turn at most.
+  if (action.kind === "summon" || action.kind === "attack") maybeShowRivalTaunt();
   if (action.kind === "item") {
     render();
     const icon = ({ potion: "🧪", energy: "💎", switch: "🔄", revive: "✨", luckyDraw: "🎴" })[action.itemId] || "🎁";

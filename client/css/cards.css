@@ -197,27 +197,89 @@ body.dragging-attack .trainer-block.ai {
   box-shadow: 0 0 22px rgba(255, 92, 99, 0.55) inset;
 }
 
-/* Guardian badge — top-right shield. Pulses subtly so it's noticeable. */
+/* Guardian badge — top-right shield. Pulses prominently so it's
+   immediately recognisable from across the screen. */
 .card .card-guardian {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 26px;
-  height: 26px;
+  top: -10px;
+  right: -10px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #c2d4ff, #4a6fc4);
+  background: radial-gradient(circle at 30% 30%, #e5edff, #4a6fc4 60%, #1f3982);
   color: #0a1430;
-  font-size: 14px;
+  font-size: 18px;
   display: grid;
   place-items: center;
-  box-shadow: 0 0 12px rgba(99, 144, 240, 0.7), 0 2px 4px rgba(0,0,0,0.5);
+  box-shadow:
+    0 0 16px rgba(120, 165, 255, 0.85),
+    0 0 28px rgba(120, 165, 255, 0.4),
+    0 2px 4px rgba(0,0,0,0.5),
+    inset 0 0 4px rgba(255,255,255,0.6);
   z-index: 4;
   pointer-events: none;
-  animation: guardianPulse 2.2s ease-in-out infinite;
+  animation: guardianPulse 1.8s ease-in-out infinite;
 }
 @keyframes guardianPulse {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.1); }
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 16px rgba(120, 165, 255, 0.85), 0 0 28px rgba(120, 165, 255, 0.4), 0 2px 4px rgba(0,0,0,0.5), inset 0 0 4px rgba(255,255,255,0.6);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 24px rgba(120, 165, 255, 1), 0 0 44px rgba(120, 165, 255, 0.55), 0 2px 4px rgba(0,0,0,0.5), inset 0 0 4px rgba(255,255,255,0.7);
+  }
+}
+/* When a Guardian is on the field, give it a defensive aura ring around the
+   whole card so the "must attack me first" rule reads at a glance. */
+.field-slot .card[data-card-id]:has(.card-guardian)::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 14px;
+  border: 2px solid rgba(120,165,255,0.5);
+  box-shadow: 0 0 24px rgba(120,165,255,0.45);
+  pointer-events: none;
+  animation: guardianRing 2.4s ease-in-out infinite;
+}
+@keyframes guardianRing {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.03); }
+}
+
+/* Legendary holo: animated rainbow shimmer on cards flagged is_legendary. */
+.card[data-card-rare="legendary"] .card-inner,
+.card[data-card-rare="mythical"] .card-inner {
+  position: relative;
+}
+.card[data-card-rare="legendary"] .card-inner::before,
+.card[data-card-rare="mythical"] .card-inner::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(120deg,
+    rgba(255,180,200,0) 30%,
+    rgba(255,180,200,0.25) 40%,
+    rgba(180,225,255,0.3) 50%,
+    rgba(255,255,180,0.25) 60%,
+    rgba(255,180,200,0) 70%);
+  background-size: 200% 100%;
+  animation: legendaryHolo 3.8s linear infinite;
+  border-radius: inherit;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  z-index: 2;
+}
+@keyframes legendaryHolo {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.card[data-card-rare="mythical"] {
+  border-color: #ffb3ff !important;
+  box-shadow: 0 0 20px rgba(255, 179, 255, 0.35) !important;
+}
+.card[data-card-rare="legendary"] {
+  border-color: #ffd166 !important;
+  box-shadow: 0 0 18px rgba(255, 209, 102, 0.28) !important;
 }
 
 /* Shiny tier — additional rainbow shimmer behind the holo sheen so shiny
