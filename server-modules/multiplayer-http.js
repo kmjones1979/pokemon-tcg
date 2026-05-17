@@ -396,10 +396,10 @@ function mount(app, supabase, getPokedex) {
         const winnerSide = m.state.winner;
         if (dex?.length) {
           if (m.players.player.userId) {
-            m.rewardForPlayer = offerForOutcome(m.players.player.userId, dex, winnerSide === "player");
+            m.rewardForPlayer = await offerForOutcome(m.players.player.userId, dex, winnerSide === "player");
           }
           if (m.players.ai.userId) {
-            m.rewardForAi = offerForOutcome(m.players.ai.userId, dex, winnerSide === "ai");
+            m.rewardForAi = await offerForOutcome(m.players.ai.userId, dex, winnerSide === "ai");
           }
         }
       }

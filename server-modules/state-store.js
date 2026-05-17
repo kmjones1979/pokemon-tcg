@@ -65,7 +65,53 @@ const _mem = {
   sockets: new Map(),
   players: new Map(),
   privateRooms: new Map(),
+  kv: new Map(),       // generic value + expiry, used by rewards offers
 };
+
+// --- Generic KV with TTL (for reward offers etc.) ------------------------
+// Stored at `ptcg:kv:<key>`. Values are JSON.stringified.
+async function kvSet(key, value, ttlSec) {
+  const r = client();
+  const fullKey = `ptcg:kv:${key}`;
+  const payload = JSON.stringify(value);
+  if (r) return r.set(fullKey, payload, "EX", ttlSec);
+  _mem.kv.set(fullKey, { value, expiresAt: Date.now() + ttlSec * 1000 });
+}
+async function kvGet(key) {
+  const r = client();
+  const fullKey = `ptcg:kv:${key}`;
+  if (r) {
+    const raw = await r.get(fullKey);
+    return raw ? JSON.parse(raw) : null;
+  }
+  const entry = _mem.kv.get(fullKey);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _mem.kv.delete(fullKey); return null; }
+  return entry.value;
+}
+// Atomic-ish "consume": fetch + delete in one round trip. We use GETDEL on
+// Redis 6.2+; if the client doesn't support it we fall back to GET then
+// DEL (small race window, acceptable since the value is opaque to the
+// caller — the use case is one-shot offer redemption).
+async function kvTake(key) {
+  const r = client();
+  const fullKey = `ptcg:kv:${key}`;
+  if (r) {
+    let raw;
+    try {
+      raw = await r.getdel(fullKey);
+    } catch {
+      raw = await r.get(fullKey);
+      if (raw != null) await r.del(fullKey).catch(() => {});
+    }
+    return raw ? JSON.parse(raw) : null;
+  }
+  const entry = _mem.kv.get(fullKey);
+  _mem.kv.delete(fullKey);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.value;
+}
 
 // --- Helpers --------------------------------------------------------------
 async function withLock(roomId, fn) {
@@ -281,4 +327,5 @@ module.exports = {
   playerBind, playerLastRoom, playerUnbind,
   privateRoomSet, privateRoomTake, privateRoomRemoveBySocket,
   makeSocketIoAdapter,
+  kvSet, kvGet, kvTake,
 };

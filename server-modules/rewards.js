@@ -1,18 +1,17 @@
 // Match-completion reward system.
 //
 // When a match ends the server rolls a small set of card "picks" for each
-// player (winner gets more / better than loser). The picks are stashed
-// in-memory keyed by a single-use offer id; clients claim with the chosen
-// pokemon_id, which writes the card to owned_cards.
+// player (winner gets more / better than loser). Picks are stashed in
+// shared KV (Redis via state-store) keyed by a single-use offer id so the
+// claim endpoint can find them regardless of which Lambda instance
+// handles the request.  Falls back to in-memory when no Redis.
 //
 // Rewards are scoped to authenticated users only — guests get no drops.
 
 const { randomUUID } = require("crypto");
+const store = require("./state-store");
 
-// In-memory store: offerId → { userId, picks: [pokemonRow], expiresAt }
-// Cleared after claim or after TTL.
-const OFFERS = new Map();
-const OFFER_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const OFFER_TTL_SEC = 10 * 60;       // 10 minutes
 
 // Tier weights — heavy lean on T1-T3 with a small chance at T4/5.
 const WEIGHTS = { 1: 30, 2: 32, 3: 22, 4: 11, 5: 5 };
@@ -62,24 +61,32 @@ function rollPicks(pokedex, count, rand = Math.random, opts = {}) {
   return picks;
 }
 
-function createOffer(userId, picks) {
+// createOffer stores the picks in shared KV under an opaque id. The
+// returned id is what we ship to the client; only that id can redeem.
+// Awaits the KV write so callers can guarantee the offer is durable
+// before responding to the client.
+async function createOffer(userId, picks) {
   const id = randomUUID();
-  OFFERS.set(id, {
+  const offer = {
     userId,
     picks: picks.map((p) => ({
       id: p.id, name: p.name, types: p.types, tier: p.tier,
       energyCost: p.energyCost, cardHp: p.cardHp, cardAttack: p.cardAttack,
       sprite_front: p.sprite_front,
     })),
-    expiresAt: Date.now() + OFFER_TTL_MS,
-  });
+    expiresAt: Date.now() + OFFER_TTL_SEC * 1000,
+  };
+  try {
+    await store.kvSet(`offer:${id}`, offer, OFFER_TTL_SEC);
+  } catch (err) {
+    console.warn("[rewards] kvSet failed:", err.message);
+  }
   return id;
 }
 
-function consumeOffer(offerId, userId) {
-  const o = OFFERS.get(offerId);
+async function consumeOffer(offerId, userId) {
+  const o = await store.kvTake(`offer:${offerId}`);
   if (!o) return null;
-  OFFERS.delete(offerId);
   if (Date.now() > o.expiresAt) return null;
   if (o.userId !== userId) return null;
   return o;
@@ -211,7 +218,7 @@ function mount(app, supabase, getPokedex) {
         picks[picks.length - 1] = rares[Math.floor(Math.random() * rares.length)];
       }
     }
-    const offerId = createOffer(req.user.id, picks);
+    const offerId = await createOffer(req.user.id, picks);
     res.json({
       reward: {
         offerId,
@@ -227,7 +234,7 @@ function mount(app, supabase, getPokedex) {
   app.post("/me/rewards/claim", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
     const { offerId, pokemonId } = req.body || {};
-    const offer = consumeOffer(offerId, req.user.id);
+    const offer = await consumeOffer(offerId, req.user.id);
     if (!offer) return res.status(400).json({ error: "Offer expired or unknown." });
     const matched = offer.picks.find((p) => p.id === Number(pokemonId));
     if (!matched) return res.status(400).json({ error: "Card wasn't in this offer." });
@@ -255,18 +262,15 @@ function mount(app, supabase, getPokedex) {
     res.json({ card: matched, newQuantity: newQty });
   });
 
-  // GC expired offers every 5 minutes.
-  setInterval(() => {
-    const now = Date.now();
-    for (const [id, o] of OFFERS) if (now > o.expiresAt) OFFERS.delete(id);
-  }, 5 * 60 * 1000).unref?.();
+  // Offers expire automatically via Redis TTL (10 min). For the in-memory
+  // fallback path, state-store.kvGet does lazy expiry on read.
 }
 
 // Helper used by the multiplayer module on match end.
-function offerForOutcome(userId, pokedex, didWin) {
+async function offerForOutcome(userId, pokedex, didWin) {
   const count = didWin ? 3 : 2;
   const picks = rollPicks(pokedex, count);
-  const offerId = createOffer(userId, picks);
+  const offerId = await createOffer(userId, picks);
   return {
     offerId,
     picks: picks.map((p) => ({

@@ -282,7 +282,7 @@ function mount(app, supabase, getPokedex) {
       const rares = pokedex.filter((p) => p.is_legendary || p.is_mythical);
       if (rares.length) picks[picks.length - 1] = rares[Math.floor(Math.random() * rares.length)];
     }
-    const offerId = createOffer(req.user.id, picks);
+    const offerId = await createOffer(req.user.id, picks);
     await recordChapterCompletion(supabase, req.user.id, session.chapterId);
     res.json({
       reward: {

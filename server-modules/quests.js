@@ -160,7 +160,7 @@ function mount(app, supabase, getPokedex) {
     // Roll picks and create an offer.
     const eligible = pokedex.filter((c) => c.tier >= q.minTier);
     const picks = rollPicks(eligible.length >= q.rewardCount ? eligible : pokedex, q.rewardCount);
-    const offerId = createOffer(req.user.id, picks);
+    const offerId = await createOffer(req.user.id, picks);
 
     await supabase.from("quest_claims").insert({
       user_id: req.user.id,

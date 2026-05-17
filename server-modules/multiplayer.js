@@ -196,10 +196,10 @@ function attach(io, supabase, pokedexOrGetter) {
     const dex = getPokedex();
     if (dex.length > 0) {
       if (room.players.player.userId) {
-        pOffer = offerForOutcome(room.players.player.userId, dex, winnerSide === "player");
+        pOffer = await offerForOutcome(room.players.player.userId, dex, winnerSide === "player");
       }
       if (room.players.ai.userId) {
-        aOffer = offerForOutcome(room.players.ai.userId, dex, winnerSide === "ai");
+        aOffer = await offerForOutcome(room.players.ai.userId, dex, winnerSide === "ai");
       }
     }
 
