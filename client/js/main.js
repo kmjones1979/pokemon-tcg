@@ -19,6 +19,7 @@ import { fireAttackTrail, floatDamage, knockOut, flashVerdict, shakeHit } from "
 import {
   playCry, setMuted, isMuted,
   sfxAttack, sfxHit, sfxKO, sfxVictory, sfxDefeat, sfxCardPlay, sfxCrit,
+  startBGM, stopBGM,
 } from "./audio.js";
 import { TYPE_COLORS } from "./type-chart.js";
 import { computeDamage } from "./battle.js";
@@ -59,6 +60,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("#mute-toggle").addEventListener("click", () => {
     setMuted(!isMuted());
     refreshMuteIcon();
+    if (!isMuted() && state && !state.winner) startBGM();
   });
   refreshMuteIcon();
 
@@ -119,6 +121,7 @@ function renderMenu() {
       <h1 class="game-title">Pokémon TCG</h1>
       <div class="menu-tagline">Pick your trainer. First to drop the opposing trainer to 0 HP wins.</div>
       <div id="daily-streak-banner"></div>
+      <div id="daily-quests-panel"></div>
       <div class="trainer-grid">${trainerEls.join("")}</div>
       <div class="section-label">Solo vs. AI difficulty</div>
       <div class="difficulty-grid">${difficultyEls.join("")}</div>
@@ -219,6 +222,7 @@ function renderMenu() {
       menu.classList.add("hidden");
       $("#arena").classList.remove("hidden");
       document.body.classList.add("in-arena");
+      startBGM();
       render();
     } catch (err) {
       console.error(err);
@@ -231,8 +235,12 @@ function renderMenu() {
   $("#mode-mp-friend").addEventListener("click", () => startMultiplayer({ mode: "friend" }));
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
-  // Daily streak banner (signed-in users only).
-  if (currentUser) loadAndRenderStreak();
+  // Daily streak banner + trainer level chip + daily quests (signed-in only).
+  if (currentUser) {
+    loadAndRenderStreak();
+    loadAndRenderTrainerLevel();
+    loadAndRenderQuests();
+  }
 
   // First-time helper: nudge new visitors who haven't started a game yet.
   if (!localStorage.getItem("pokemon-tcg-seen-howto")) {
@@ -242,6 +250,93 @@ function renderMenu() {
       }
     }, 800);
   }
+}
+
+async function loadAndRenderQuests() {
+  const panel = $("#daily-quests-panel");
+  if (!panel) return;
+  try {
+    const r = await fetch("/me/quests");
+    if (!r.ok) return;
+    const { quests } = await r.json();
+    if (!quests?.length) return;
+    panel.innerHTML = `
+      <div class="quests-panel">
+        <div class="quests-title">Daily quests</div>
+        <div class="quests-list">
+          ${quests.map((q) => {
+            const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
+            return `
+              <div class="quest-row ${q.claimed ? "claimed" : q.canClaim ? "ready" : ""}">
+                <div class="quest-label">${escape(q.label)}</div>
+                <div class="quest-bar"><div class="quest-bar-fill" style="width:${pct}%"></div></div>
+                <div class="quest-prog">${q.progress}/${q.target}</div>
+                ${q.claimed
+                  ? `<span class="quest-status">✓ Claimed</span>`
+                  : q.canClaim
+                    ? `<button class="quest-claim primary" data-quest="${q.id}">Claim ${q.reward.count} card${q.reward.count > 1 ? "s" : ""}</button>`
+                    : `<span class="quest-status">+${q.reward.count} card${q.reward.count > 1 ? "s" : ""}</span>`}
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+    panel.querySelectorAll(".quest-claim").forEach((btn) => {
+      btn.addEventListener("click", () => claimQuest(btn.dataset.quest));
+    });
+  } catch {}
+}
+
+async function claimQuest(id) {
+  try {
+    const r = await fetch(`/me/quests/${id}/claim`, { method: "POST" });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "claim failed");
+    rewards.showOffer(data.reward, {
+      didWin: true,
+      onClaim: (card) => {
+        if (card) flashVerdict(`+${card.name}!`, "super");
+        loadAndRenderQuests();
+      },
+    });
+  } catch (err) {
+    alert("Couldn't claim: " + (err.message || "unknown"));
+  }
+}
+
+async function loadAndRenderTrainerLevel() {
+  const chip = $("#trainer-level-chip");
+  if (!chip) return;
+  try {
+    const r = await fetch("/me/xp");
+    if (!r.ok) return;
+    const x = await r.json();
+    const pct = Math.min(100, Math.round((x.progressInLevel / x.spanForLevel) * 100));
+    chip.innerHTML = `
+      <span class="tl-level">L${x.level}</span>
+      <span class="tl-bar"><span class="tl-bar-fill" style="width:${pct}%"></span></span>
+      <span class="tl-xp">${x.xp} XP</span>
+    `;
+  } catch {}
+}
+
+async function grantXp({ won, kos, crits }) {
+  try {
+    const res = await fetch("/me/xp/grant", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ won, kos, crits }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setTimeout(() => {
+      flashVerdict(`+${data.gained} XP`, "super");
+      if (data.leveledUp) {
+        setTimeout(() => flashVerdict(`Trainer Level ${data.level}!`, "super"), 900);
+      }
+    }, 600);
+  } catch {}
 }
 
 async function loadAndRenderStreak() {
@@ -1075,6 +1170,7 @@ function renderAccountPanel() {
         <div class="account-id">
           <span class="account-greeting">Signed in as</span>
           <strong>${escape(currentUser.display_name)}</strong>
+          <div class="trainer-level-chip" id="trainer-level-chip"></div>
         </div>
         <div class="account-actions">
           <button id="account-collection-btn">Collection</button>
@@ -1411,6 +1507,7 @@ function handleMpState(serverState) {
   $("#menu").classList.add("hidden");
   $("#arena").classList.remove("hidden");
   document.body.classList.add("in-arena");
+  startBGM();
   render();
 }
 
@@ -1466,10 +1563,17 @@ function handleMpGameOver(over) {
 }
 
 function onGameOver() {
+  stopBGM();
   if (state.winner === "player") sfxVictory();
   else sfxDefeat();
-  // Post-match achievement check (fires toasts for newly-unlocked ones).
+  // Grant XP based on outcome (signed-in users only).
   if (currentUser) {
+    const myKOs = state.players.ai.discard.length;   // we KO'd these
+    grantXp({
+      won: state.winner === "player",
+      kos: myKOs,
+      crits: 0, // not currently tracked per-match; approx via kos
+    });
     setTimeout(() => achievements.checkForNewUnlocks(), 1500);
   }
   // In solo mode, finalise the server-tracked session and ask for a reward.

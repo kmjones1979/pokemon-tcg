@@ -162,13 +162,35 @@ function render() {
     const used = usedById.get(c.id) || 0;
     const remaining = c.quantity - used;
     if (remaining <= 0) wrapper.classList.add("exhausted");
+    if (c.shinyLevel > 0) wrapper.classList.add("is-shiny");
     const card = renderCard(c, { compact: true });
     card.classList.add("cb-collection-card");
+    if (c.shinyLevel > 0) card.classList.add(`shiny-${c.shinyLevel}`);
     wrapper.appendChild(card);
     const tag = document.createElement("div");
     tag.className = "cb-qty";
     tag.textContent = `${remaining}/${c.quantity}`;
     wrapper.appendChild(tag);
+    // Upgrade button: when the user owns ≥3 copies and isn't maxed.
+    if (c.quantity >= 3 && (c.shinyLevel || 0) < 3) {
+      const up = document.createElement("button");
+      up.className = "cb-upgrade";
+      up.title = `Fuse 3 copies to upgrade to shiny L${(c.shinyLevel || 0) + 1} (+1 HP, +1 ATK)`;
+      up.innerHTML = `★ Fuse → L${(c.shinyLevel || 0) + 1}`;
+      up.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Fuse 3 copies of ${c.name} into a shiny L${(c.shinyLevel || 0) + 1}?`)) return;
+        try {
+          const res = await fetch(`/me/cards/${c.id}/upgrade`, { method: "POST" });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "upgrade failed");
+          await refresh();
+        } catch (err) {
+          alert(err.message || "Upgrade failed");
+        }
+      });
+      wrapper.appendChild(up);
+    }
     wrapper.addEventListener("click", () => {
       if (_editorIds.length >= DECK_SIZE) return;
       const used = usedById.get(c.id) || 0;

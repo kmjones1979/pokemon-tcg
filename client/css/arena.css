@@ -129,6 +129,75 @@ h1, h2, h3,
   line-height: 1.45;
 }
 
+/* === Daily quests panel === */
+.quests-panel {
+  background: rgba(20, 23, 44, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 10px 16px 12px;
+  margin: 0 auto 22px;
+  max-width: 560px;
+}
+.quests-title {
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.quests-list { display: flex; flex-direction: column; gap: 6px; }
+.quest-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 50px auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.quest-row.ready {
+  background: rgba(247, 208, 44, 0.14);
+  border: 1px solid rgba(247, 208, 44, 0.35);
+}
+.quest-row.claimed { opacity: 0.55; }
+.quest-label { font-weight: 600; color: var(--ink); }
+.quest-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.quest-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6cd97c, #4eb159);
+  transition: width 0.4s ease;
+}
+.quest-row.ready .quest-bar-fill { background: linear-gradient(90deg, #f7d02c, #ee8130); }
+.quest-prog {
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  color: var(--muted);
+  text-align: right;
+}
+.quest-status {
+  font-size: 11px;
+  color: var(--muted);
+}
+.quest-claim {
+  background: linear-gradient(90deg, #f7d02c, #ee8130);
+  color: #1a0a00;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.quest-claim:hover { filter: brightness(1.05); }
+
 /* === Daily streak banner === */
 .streak-banner {
   display: flex;
@@ -203,6 +272,39 @@ h1, h2, h3,
 .account-id strong {
   font-size: 13px;
 }
+.trainer-level-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 10px;
+}
+.tl-level {
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  background: linear-gradient(90deg, #f7d02c, #ee8130);
+  color: #1a0a00;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 700;
+}
+.tl-bar {
+  display: inline-block;
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 70px;
+  max-width: 110px;
+}
+.tl-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f7d02c, #ee8130);
+  transition: width 0.4s ease;
+}
+.tl-xp { color: var(--muted); font-size: 9.5px; }
 .account-sub {
   color: var(--muted);
   font-size: 10.5px;
@@ -654,11 +756,21 @@ h1, h2, h3,
 }
 .lb-row {
   display: grid;
-  grid-template-columns: 50px 1fr 70px 70px 70px 70px;
+  grid-template-columns: 48px 1fr 56px 60px 60px 64px 60px;
   align-items: center;
   padding: 8px 14px;
   font-size: 12px;
   border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.lb-level-chip {
+  display: inline-block;
+  background: linear-gradient(90deg, #f7d02c, #ee8130);
+  color: #1a0a00;
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-weight: 700;
 }
 .lb-row.lb-head {
   background: rgba(255,255,255,0.04);

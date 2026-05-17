@@ -25,6 +25,17 @@ export function attachPreviewHandlers(rootEl, lookup) {
     cardEl.addEventListener("mouseenter", (e) => {
       if (_hoverTimer) clearTimeout(_hoverTimer);
       _hoverTimer = setTimeout(() => {
+        // Never show the preview while another higher-priority overlay is
+        // up — the ability popover, the reward modal, the deck builder, etc.
+        if (
+          document.querySelector(".ability-popover") ||
+          document.querySelector(".reward-overlay") ||
+          document.querySelector(".collection-overlay:not(.hidden)") ||
+          document.querySelector(".mm-overlay") ||
+          document.querySelector(".howto-overlay") ||
+          document.querySelector(".auth-modal") ||
+          document.querySelector(".game-over")
+        ) return;
         const id = Number(cardEl.dataset.cardId);
         const card = lookup ? lookup(id) : null;
         if (!card) return;

@@ -139,6 +139,29 @@
   border-radius: 8px;
 }
 
+.cb-upgrade {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, #f7d02c, #ee8130);
+  color: #1a0a00;
+  border: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  z-index: 5;
+  box-shadow: 0 2px 6px rgba(247, 208, 44, 0.5);
+}
+.cb-upgrade:hover { transform: translateX(-50%) translateY(-1px); }
+.cb-card-wrapper.is-shiny .cb-collection-card {
+  filter: drop-shadow(0 0 8px rgba(247, 208, 44, 0.5));
+}
+
 .cb-deck {
   display: flex;
   flex-direction: column;

@@ -57,6 +57,7 @@ export async function playCry(url, { volume = 0.3 } = {}) {
 export function setMuted(m) {
   _muted = !!m;
   localStorage.setItem("pokemon-tcg-muted", _muted ? "1" : "0");
+  if (_muted) stopBGM();
 }
 
 export function isMuted() {
@@ -219,6 +220,91 @@ export function sfxDefeat() {
     osc.start(start);
     osc.stop(start + 0.45);
   });
+}
+
+// --- Ambient BGM ----------------------------------------------------------
+// A slow, very soft chord that cycles through a 4-chord pad. Web Audio only,
+// no assets. Stops when muted, fades out cleanly on stop.
+let _bgmNodes = null;
+let _bgmInterval = null;
+const CHORDS = [
+  // D minor / F maj / A minor / C maj — calm modal feel
+  [146.83, 220.00, 293.66, 349.23],
+  [174.61, 220.00, 261.63, 349.23],
+  [220.00, 261.63, 329.63, 440.00],
+  [196.00, 261.63, 329.63, 392.00],
+];
+const BGM_VOLUME = 0.035;
+
+export function startBGM() {
+  if (_bgmNodes || _muted) return;
+  const c = ctx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+
+  const master = c.createGain();
+  master.gain.value = 0;
+  master.connect(c.destination);
+  master.gain.linearRampToValueAtTime(BGM_VOLUME, c.currentTime + 2.5);
+
+  const filter = c.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 1600;
+  filter.Q.value = 0.7;
+  filter.connect(master);
+
+  // Slow LFO on the filter for breathing motion.
+  const lfo = c.createOscillator();
+  lfo.frequency.value = 0.07;
+  const lfoGain = c.createGain();
+  lfoGain.gain.value = 400;
+  lfo.connect(lfoGain).connect(filter.frequency);
+  lfo.start();
+
+  // 4 sustained oscillators per chord, retuned on each chord change.
+  const oscs = [];
+  const gains = [];
+  for (let i = 0; i < 4; i++) {
+    const o = c.createOscillator();
+    o.type = i === 0 ? "sine" : i === 3 ? "triangle" : "sine";
+    o.frequency.value = CHORDS[0][i];
+    const g = c.createGain();
+    g.gain.value = i === 0 ? 0.5 : 0.3;
+    o.connect(g).connect(filter);
+    o.start();
+    oscs.push(o);
+    gains.push(g);
+  }
+
+  _bgmNodes = { master, filter, lfo, oscs, gains, ctx: c };
+
+  // Cycle through chords every 8 seconds.
+  let chordIdx = 0;
+  const stepChord = () => {
+    if (!_bgmNodes) return;
+    chordIdx = (chordIdx + 1) % CHORDS.length;
+    const t = c.currentTime;
+    for (let i = 0; i < 4; i++) {
+      oscs[i].frequency.linearRampToValueAtTime(CHORDS[chordIdx][i], t + 1.5);
+    }
+  };
+  _bgmInterval = setInterval(stepChord, 8000);
+}
+
+export function stopBGM() {
+  if (!_bgmNodes) return;
+  const { master, oscs, lfo, ctx: c } = _bgmNodes;
+  master.gain.cancelScheduledValues(c.currentTime);
+  master.gain.linearRampToValueAtTime(0, c.currentTime + 0.8);
+  setTimeout(() => {
+    try {
+      oscs.forEach((o) => o.stop());
+      lfo.stop();
+    } catch {}
+  }, 900);
+  clearInterval(_bgmInterval);
+  _bgmInterval = null;
+  _bgmNodes = null;
 }
 
 // Card play "thud" — a low percussive blip.

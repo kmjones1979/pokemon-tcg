@@ -16,6 +16,8 @@ const multiplayer = require("./server-modules/multiplayer");
 const rewards = require("./server-modules/rewards");
 const achievements = require("./server-modules/achievements");
 const dailyStreak = require("./server-modules/daily-streak");
+const xpModule = require("./server-modules/xp");
+const quests = require("./server-modules/quests");
 
 const app = express();
 const server = http.createServer(app);
@@ -134,6 +136,8 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   rewards.mount(app, authSupabase, ensurePokedex);
   achievements.mount(app, authSupabase);
   dailyStreak.mount(app, authSupabase, ensurePokedex);
+  xpModule.mount(app, authSupabase);
+  quests.mount(app, authSupabase, ensurePokedex);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {
@@ -180,8 +184,9 @@ app.get("/api/leaderboard", async (req, res) => {
   const limit = Math.min(50, Math.max(5, Number(req.query.limit) || 25));
   const { data, error } = await authSupabase
     .from("user_stats")
-    .select("user_id, display_name, matches_played, wins, losses, win_pct, cards_owned")
+    .select("user_id, display_name, matches_played, wins, losses, win_pct, cards_owned, trainer_xp, trainer_level")
     .gt("matches_played", 0)
+    .order("trainer_level", { ascending: false })
     .order("wins", { ascending: false })
     .order("win_pct", { ascending: false })
     .limit(limit);

@@ -62,13 +62,14 @@ function mount(app, supabase) {
     if (!requireAuth(req, res)) return;
     const { data, error } = await supabase
       .from("owned_cards")
-      .select("pokemon_id, quantity, acquired_at, pokemon:pokemon_id(*)")
+      .select("pokemon_id, quantity, shiny_level, acquired_at, pokemon:pokemon_id(*)")
       .eq("user_id", req.user.id)
       .order("acquired_at", { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     const cards = data.map((row) => ({
       ...toCard(row.pokemon),
       quantity: row.quantity,
+      shinyLevel: row.shiny_level || 0,
       acquired_at: row.acquired_at,
     }));
     const total = cards.reduce((sum, c) => sum + c.quantity, 0);
@@ -179,6 +180,37 @@ function mount(app, supabase) {
     res.json({ ok: true });
   });
 
+  // Upgrade a card by consuming 3 duplicate copies — increments shiny_level.
+  // Each shiny level grants +1 max HP and +1 attack when that card is
+  // instantiated in a match (see engine instantiate()).
+  app.post("/me/cards/:pokemonId/upgrade", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const pokemonId = Number(req.params.pokemonId);
+    if (!Number.isInteger(pokemonId)) return res.status(400).json({ error: "bad id" });
+
+    const { data: row, error } = await supabase
+      .from("owned_cards")
+      .select("quantity, shiny_level")
+      .eq("user_id", req.user.id)
+      .eq("pokemon_id", pokemonId)
+      .maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!row) return res.status(404).json({ error: "You don't own this card." });
+    if (row.quantity < 3) return res.status(400).json({ error: "Need 3 copies to upgrade." });
+    if (row.shiny_level >= 3) return res.status(400).json({ error: "Already max-level shiny." });
+
+    const newQty = row.quantity - 3;
+    const newShiny = (row.shiny_level || 0) + 1;
+    const { error: upErr } = await supabase
+      .from("owned_cards")
+      .update({ quantity: Math.max(1, newQty + 1), shiny_level: newShiny })
+      .eq("user_id", req.user.id)
+      .eq("pokemon_id", pokemonId);
+    // We keep 1 instance of the upgraded card after consuming 3 → so newQty + 1
+    if (upErr) return res.status(500).json({ error: upErr.message });
+    res.json({ ok: true, shinyLevel: newShiny, quantity: Math.max(1, newQty + 1) });
+  });
+
   // Hydrate a deck's card_ids[] back into full card objects (used by the
   // matchmaker / single-player launcher when a user wants to play with their
   // saved deck).
@@ -195,13 +227,19 @@ function mount(app, supabase) {
     if (!deck) return res.status(404).json({ error: "Deck not found." });
 
     const uniqueIds = [...new Set(deck.card_ids)];
-    const { data: rows, error: pErr } = await supabase
-      .from("pokemon")
-      .select("*")
-      .in("id", uniqueIds);
+    const [{ data: rows, error: pErr }, { data: shinies }] = await Promise.all([
+      supabase.from("pokemon").select("*").in("id", uniqueIds),
+      supabase.from("owned_cards").select("pokemon_id, shiny_level")
+        .eq("user_id", req.user.id).in("pokemon_id", uniqueIds),
+    ]);
     if (pErr) return res.status(500).json({ error: pErr.message });
     const byId = new Map(rows.map((r) => [r.id, toCard(r)]));
-    const cards = deck.card_ids.map((id) => byId.get(id)).filter(Boolean);
+    const shinyMap = new Map((shinies || []).map((s) => [s.pokemon_id, s.shiny_level || 0]));
+    const cards = deck.card_ids.map((id) => {
+      const c = byId.get(id);
+      if (!c) return null;
+      return { ...c, shinyLevel: shinyMap.get(id) || 0 };
+    }).filter(Boolean);
     res.json({ deck: { ...deck, cards } });
   });
 }

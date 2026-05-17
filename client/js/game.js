@@ -70,7 +70,8 @@ function shuffle(arr, rand = Math.random) {
 
 function instantiate(card, playerState) {
   const { hpBonus } = playerState ? abilityModifiers(playerState, card) : { hpBonus: 0 };
-  const cardHp = (card.cardHp || 1) + hpBonus;
+  const shiny = card.shinyLevel || 0;
+  const cardHp = (card.cardHp || 1) + hpBonus + shiny;
   return {
     instanceId: nextInstanceId(),
     card,
@@ -78,6 +79,10 @@ function instantiate(card, playerState) {
     maxHp: cardHp,
     summoningSickness: !hasQuickTrait(card),
     status: null,
+    // Shiny copies enter the field with a baseline attackBoost; the
+    // KO-level-up system adds to this further.
+    attackBoost: shiny,
+    level: shiny,
   };
 }
 
@@ -195,6 +200,20 @@ function beginTurn(state) {
   state.turn += 1;
   state.phase = "draw";
   const p = state.players[state.activePlayer];
+
+  // Auto-loss: a player who has nothing left to do (no deck, no hand, no
+  // field) can't recover, so we end the game immediately rather than
+  // grinding through fatigue. This also fixes the "opponent has 0 cards
+  // but I still have to play it out" case.
+  const fieldCount = p.field.filter(Boolean).length;
+  if (p.deck.length === 0 && p.hand.length === 0 && fieldCount === 0) {
+    const winnerSide = state.activePlayer === "player" ? "ai" : "player";
+    state.winner = winnerSide;
+    state.phase = "over";
+    log(state, `${p.name} has no cards left — ${state.players[winnerSide].name} wins!`, "win");
+    return;
+  }
+
   // Draw 1 (or 2 if this is the first time the second-mover plays — fairness)
   const isFirstSecondMoverTurn =
     state.activePlayer !== state.firstSide &&
@@ -204,8 +223,12 @@ function beginTurn(state) {
     if (p.deck.length > 0) {
       p.hand.push(p.deck.shift());
     } else {
-      log(state, `${p.name} is out of cards! Trainer takes 1 fatigue.`, "warn");
-      p.trainerHp = Math.max(0, p.trainerHp - 1);
+      // Fatigue scales each turn an empty-deck player draws — Hearthstone-
+      // style — so decking out is decisive instead of dragging on forever.
+      p.fatigueTicks = (p.fatigueTicks || 0) + 1;
+      const dmg = Math.min(8, p.fatigueTicks * 2);
+      log(state, `${p.name} is out of cards! Trainer takes ${dmg} fatigue.`, "warn");
+      p.trainerHp = Math.max(0, p.trainerHp - dmg);
     }
   }
   if (isFirstSecondMoverTurn) {
