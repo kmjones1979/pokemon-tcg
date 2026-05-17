@@ -6,6 +6,7 @@
 // multiplayer matchmaking.
 
 import { renderCard } from "./cards.js";
+import { encodeDeckIds } from "./deck-codes-client.js";
 
 const DECK_SIZE = 30;
 const MAX_COPIES = 2;
@@ -26,9 +27,68 @@ export async function open({ onClose }) {
   await refresh();
 }
 
+// Convenience used by the ?d=<code> URL handler: open the builder and
+// preload the shared deck.
+export async function openWithCode(code) {
+  const overlay = ensureOverlay();
+  overlay.classList.remove("hidden");
+  await refresh();
+  await loadFromCode(code);
+}
+
 export function close() {
   document.querySelector(".collection-overlay")?.classList.add("hidden");
   _onClose?.();
+}
+
+// Copy a /d/<code> URL for the currently-edited 30-card deck to the
+// clipboard. Opened from the deck-builder's "🔗 Share" button.
+async function shareDeckCode() {
+  if (_editorIds.length !== 30) return;
+  try {
+    const code = encodeDeckIds(_editorIds);
+    const url = `${location.origin}/d/${code}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch {}
+      ta.remove();
+    }
+    // Brief visual confirmation on the button.
+    const btn = document.querySelector(".cb-share");
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = "✓ Copied!";
+      setTimeout(() => { btn.textContent = orig; }, 1600);
+    }
+    // Best-effort native share too.
+    if (navigator.share) {
+      navigator.share({ title: "My Pokémon TCG deck", url }).catch(() => {});
+    }
+  } catch (err) {
+    alert("Couldn't build a deck code: " + (err.message || "unknown"));
+  }
+}
+
+// Load a deck-code's cards into the editor draft. Called from main.js
+// when the URL is ?d=<code>. Resolves once the editor reflects the
+// loaded ids (it stays in "unsaved draft" state — the user can press
+// Save to persist).
+export async function loadFromCode(code) {
+  try {
+    const r = await fetch(`/api/deck-code/${encodeURIComponent(code)}`);
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+    const { ids } = await r.json();
+    _editorIds = ids.slice();
+    _editingDeckId = null;
+    _editingDeckName = `Shared deck (${code.slice(0, 6)}…)`;
+    render();
+  } catch (err) {
+    alert("Couldn't load shared deck: " + (err.message || "unknown"));
+  }
 }
 
 function ensureOverlay() {
@@ -153,6 +213,7 @@ function render() {
           <div class="cb-deck-actions">
             <button class="cb-auto">Auto-fill</button>
             <button class="cb-preset" title="Suggested deck archetypes">Recipes ▾</button>
+            <button class="cb-share" ${_editorIds.length === DECK_SIZE ? "" : "disabled"} title="${_editorIds.length === DECK_SIZE ? "Copy a shareable deck-code link" : "Build a full 30-card deck first"}">🔗 Share</button>
             <button class="cb-clear">Clear</button>
             <button class="cb-save primary" ${_editorIds.length === DECK_SIZE ? "" : "disabled"}>
               ${_editingDeckId ? "Save" : "Save deck"}
@@ -261,6 +322,7 @@ function render() {
   });
   overlay.querySelector(".cb-auto").addEventListener("click", autoFill);
   overlay.querySelector(".cb-preset")?.addEventListener("click", openPresetMenu);
+  overlay.querySelector(".cb-share")?.addEventListener("click", shareDeckCode);
   overlay.querySelector(".cb-clear").addEventListener("click", () => { _editorIds = []; render(); });
   overlay.querySelector(".cb-save").addEventListener("click", saveDeck);
   overlay.querySelector(".cb-deck-select")?.addEventListener("change", onSwitchDeck);

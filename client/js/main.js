@@ -173,6 +173,36 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (spectateId) {
     startSpectator(spectateId);
   }
+  // Deck-code deep-link: ?d=<code> opens the deck-builder pre-loaded
+  // with the shared deck; ?v=<code> queues a Friend Battle against
+  // that deck (AI pilots it).
+  const sharedDeck = urlParams.get("d");
+  const versusDeck = urlParams.get("v");
+  if (sharedDeck) {
+    setTimeout(async () => {
+      try {
+        const db = await import("./deck-builder.js");
+        await db.openWithCode?.(sharedDeck);
+        flashVerdict("Shared deck loaded — save it to your library.", "super");
+      } catch {
+        flashVerdict("Couldn't open shared deck.", "weak");
+      }
+    }, 300);
+    history.replaceState({}, "", location.pathname);
+  } else if (versusDeck) {
+    setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/deck-code/${encodeURIComponent(versusDeck)}`);
+        const { cards } = await r.json();
+        if (!r.ok || !cards) throw new Error("bad code");
+        window.__versusDeck = cards;
+        flashVerdict("Tap a trainer to battle the shared deck.", "super");
+      } catch {
+        flashVerdict("Couldn't load battle deck.", "weak");
+      }
+    }, 300);
+    history.replaceState({}, "", location.pathname);
+  }
 });
 
 function refreshMuteIcon() {
@@ -308,7 +338,17 @@ function renderMenu() {
       const trainerIds = Object.keys(TRAINERS);
       const otherTrainers = trainerIds.filter((id) => id !== chosen);
       const aiTrainer = otherTrainers[Math.floor(Math.random() * otherTrainers.length)];
-      const [playerDeck, aiDeck] = await Promise.all([loadPlayerDeck(), fetchDeck()]);
+      // If the visitor arrived via a /?v=<code> Friend Battle link, the
+      // AI plays that deck instead of a random roll.
+      let [playerDeck, aiDeck] = await Promise.all([
+        loadPlayerDeck(),
+        window.__versusDeck ? Promise.resolve(window.__versusDeck) : fetchDeck(),
+      ]);
+      const isVersusShared = !!window.__versusDeck;
+      if (isVersusShared) {
+        trackEvent("versus_deck_loaded");
+        window.__versusDeck = null;
+      }
       state = createGame({
         playerDeck,
         aiDeck,
@@ -2494,6 +2534,23 @@ function onGameOver() {
     if (isFirstWin || wasFirstMatch) {
       celebrateFirstWin();
       trackEvent("first_win");
+    }
+    // Anonymous players accumulate a small collection in localStorage
+    // — one random Pokémon from the rival's deck per win. On signup
+    // this state migrates into their real account via the existing
+    // /me/migrate-guest endpoint.
+    if (!currentUser) {
+      try {
+        import("./guest-state.js").then((g) => {
+          const aiDeck = state.players?.ai?.discard || [];
+          const allCards = aiDeck.concat(state.players.ai?.field?.filter(Boolean).map((i) => i?.card) || []);
+          const winFromDeck = allCards.filter(Boolean);
+          if (winFromDeck.length) {
+            const pick = winFromDeck[Math.floor(Math.random() * winFromDeck.length)];
+            if (pick?.id) g.addCard(pick.id);
+          }
+        }).catch(() => {});
+      } catch {}
     }
   } else {
     sfxDefeat();

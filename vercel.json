@@ -18,6 +18,8 @@
     { "src": "/api/(.*)", "dest": "/server.js" },
     { "src": "/auth/(.*)", "dest": "/server.js" },
     { "src": "/me/(.*)", "dest": "/server.js" },
+    { "src": "/d/(.*)", "dest": "/server.js" },
+    { "src": "/v/(.*)", "dest": "/server.js" },
     { "src": "/(.*)", "dest": "/server.js" }
   ]
 }

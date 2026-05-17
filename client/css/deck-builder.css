@@ -401,3 +401,25 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+/* Share-deck button (Wave 29 / Phase 2) */
+.cb-share {
+  background: linear-gradient(135deg, #2a3a5a, #1a2540);
+  color: #d4e0ff;
+  border: 1px solid rgba(140, 180, 255, 0.45);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.cb-share:not(:disabled):hover {
+  background: linear-gradient(135deg, #3a4a6a, #2a3550);
+  box-shadow: 0 0 14px rgba(140, 180, 255, 0.4);
+}
+.cb-share:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-style: dashed;
+}
