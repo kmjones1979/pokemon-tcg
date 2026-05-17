@@ -55,7 +55,19 @@ async function main() {
 
   // Register
   await page.click("#account-register-btn");
-  await page.waitForSelector("#account-logout-btn", { timeout: 12000 });
+  try {
+    await page.waitForSelector("#account-logout-btn", { timeout: 12000 });
+  } catch (e) {
+    console.error("REG TIMEOUT — errors so far:", errs);
+    const modal = await page.$(".auth-modal");
+    if (modal) {
+      const errEl = await modal.$(".auth-err");
+      if (errEl) console.error("  auth-err:", await errEl.textContent());
+      const submit = await modal.$(".auth-submit");
+      if (submit) console.error("  submit text:", await submit.textContent(), "disabled:", await submit.isDisabled());
+    } else console.error("  no .auth-modal in DOM");
+    throw e;
+  }
   console.log(`✓ registered as ${DISPLAY}`);
 
   // Reload — session cookie should keep us signed in.

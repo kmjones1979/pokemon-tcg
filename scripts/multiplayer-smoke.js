@@ -42,8 +42,9 @@ async function ready(page) {
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#account-register-btn");
   await page.click("#account-register-btn");
-  await page.waitForSelector("#account-logout-btn", { timeout: 15000 });
-  await page.click(".trainer-card"); // pick the first trainer (Brock)
+  // Vercel cold-starts can push registration past 15s — bump the budget.
+  await page.waitForSelector("#account-logout-btn", { timeout: 25000 });
+  await page.click(".trainer-card");
 }
 
 async function main() {

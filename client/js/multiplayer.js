@@ -1,36 +1,39 @@
-// Client-side multiplayer adapter. Wraps the Socket.IO transport into a
-// declarative API the main.js render loop can use the same way it uses the
-// single-player engine.
+// HTTP-polling multiplayer client. Drop-in replacement for the old
+// Socket.IO version with the same public surface — main.js doesn't need
+// to know that the transport changed.
 //
-// Public:
-//   connect()              -> Promise<void>  // establish socket + ensure playerId
-//   findMatch(opts)        -> emits queue:join, resolves on match:found
+//   connect()              -> Promise<void> (no-op for compatibility)
+//   findMatch(opts)
 //   cancelMatch()
-//   createPrivateRoom(opts)-> Promise<{code}>
+//   createPrivateRoom(opts)
 //   joinPrivateRoom(code, opts)
-//   playCard(handIndex)
-//   attack(fromSlot, target)
+//   playCard(handIndex, replaceSlot?)
+//   attack(fromSlot, target, abilityId)
 //   endTurn()
 //   concede()
-//   onStateUpdate(fn)
-//   onAnimation(fn)
-//   onGameOver(fn)
-//   onError(fn)
-//   onQueueWaiting(fn)
-//   onRoomCreated(fn)
-//   isConnected()
+//   useItem(itemId, target)
+//   onStateUpdate(fn) / onAnimation(fn) / onGameOver(fn) / onError(fn)
+//   onQueueWaiting(fn) / onRoomCreated(fn) / onMatchFound(fn) / onReconnected(fn)
+//   disconnect()
+//
+// Polling cadence:
+//   while in queue / waiting:   GET /api/mp/match-status  every 2s
+//   while in a match:           GET /api/mp/match/:id?since=v  every 1.2s
+//
+// Actions are POSTed and the response carries the new view, so the active
+// player sees instant updates; the opponent picks up the change on their
+// next poll tick.
 
-let socket = null;
 const listeners = {
-  state: [],
-  anim: [],
-  over: [],
-  err: [],
-  queue: [],
-  roomCreated: [],
-  reconnected: [],
-  match: [],
+  state: [], anim: [], over: [], err: [],
+  queue: [], roomCreated: [], reconnected: [], match: [],
 };
+
+let _matchId = null;
+let _version = 0;
+let _opts = null;
+let _pollHandle = null;
+let _statusHandle = null;
 
 function playerId() {
   let id = localStorage.getItem("pokemon-tcg-player-id");
@@ -41,65 +44,202 @@ function playerId() {
   return id;
 }
 
-export async function connect() {
-  if (socket && socket.connected) return socket;
-  // The slop-computer base socket is already constructed inline in index.html
-  // for auto-reload. We open a fresh dedicated socket here so we can pass
-  // auth.playerId. Multiple sockets to the same server are fine.
-  if (typeof window.io !== "function") throw new Error("socket.io client not loaded");
-  socket = window.io({
-    auth: { playerId: playerId() },
-    autoConnect: true,
-    forceNew: true,
-  });
-  socket.on("state:update", (s) => listeners.state.forEach((fn) => fn(s)));
-  socket.on("state:animation", (a) => listeners.anim.forEach((fn) => fn(a)));
-  socket.on("game:over", (g) => listeners.over.forEach((fn) => fn(g)));
-  socket.on("error", (e) => listeners.err.forEach((fn) => fn(e)));
-  socket.on("queue:waiting", (w) => listeners.queue.forEach((fn) => fn(w)));
-  socket.on("room:created", (r) => listeners.roomCreated.forEach((fn) => fn(r)));
-  socket.on("match:found", (m) => {
-    // route match:found into both opponent + state listeners
-    listeners.match.forEach((fn) => fn(m));
-    listeners.state.forEach((fn) => fn(m.state));
-    if (m.reconnected) listeners.reconnected.forEach((fn) => fn(m));
-  });
-  return new Promise((res) => {
-    if (socket.connected) return res();
-    socket.once("connect", () => res());
-  });
+function emit(name, payload) {
+  for (const fn of listeners[name]) {
+    try { fn(payload); } catch (e) { console.error("[mp]", name, e); }
+  }
 }
 
-export function isConnected() { return !!socket?.connected; }
-export function findMatch(opts) { socket?.emit("queue:join", opts); }
-export function cancelMatch() { socket?.emit("queue:cancel"); }
-export function createPrivateRoom(opts) { socket?.emit("room:create", opts); }
-export function joinPrivateRoom(code, opts) { socket?.emit("room:join", { code, ...opts }); }
-export function playCard(handIndex, replaceSlot = null) { socket?.emit("game:play-card", { handIndex, replaceSlot }); }
-export function attack(fromSlot, target, abilityId = "basic") { socket?.emit("game:attack", { fromSlot, target, abilityId }); }
-export function endTurn() { socket?.emit("game:end-turn"); }
-export function concede() { socket?.emit("game:concede"); }
-export function useItem(itemId, target) { socket?.emit("game:use-item", { itemId, target }); }
-
-export function onStateUpdate(fn) { listeners.state.push(fn); return () => detach("state", fn); }
-export function onAnimation(fn) { listeners.anim.push(fn); return () => detach("anim", fn); }
-export function onGameOver(fn) { listeners.over.push(fn); return () => detach("over", fn); }
-export function onError(fn) { listeners.err.push(fn); return () => detach("err", fn); }
-export function onQueueWaiting(fn) { listeners.queue.push(fn); return () => detach("queue", fn); }
-export function onRoomCreated(fn) { listeners.roomCreated.push(fn); return () => detach("roomCreated", fn); }
-export function onReconnected(fn) { listeners.reconnected.push(fn); return () => detach("reconnected", fn); }
-export function onMatchFound(fn) { listeners.match.push(fn); return () => detach("match", fn); }
-
-function detach(name, fn) {
-  const arr = listeners[name];
-  const i = arr.indexOf(fn);
-  if (i >= 0) arr.splice(i, 1);
+function on(name) {
+  return (fn) => {
+    listeners[name].push(fn);
+    return () => {
+      const i = listeners[name].indexOf(fn);
+      if (i >= 0) listeners[name].splice(i, 1);
+    };
+  };
 }
+
+export const onStateUpdate = on("state");
+export const onAnimation = on("anim");
+export const onGameOver = on("over");
+export const onError = on("err");
+export const onQueueWaiting = on("queue");
+export const onRoomCreated = on("roomCreated");
+export const onReconnected = on("reconnected");
+export const onMatchFound = on("match");
+
+// Polling helpers
+function stopStatusPoll() {
+  if (_statusHandle) { clearInterval(_statusHandle); _statusHandle = null; }
+}
+function stopMatchPoll() {
+  if (_pollHandle) { clearInterval(_pollHandle); _pollHandle = null; }
+}
+
+async function startMatchPoll() {
+  stopMatchPoll();
+  stopStatusPoll();
+  _pollHandle = setInterval(pollMatchOnce, 1200);
+}
+
+async function pollMatchOnce() {
+  if (!_matchId) return;
+  try {
+    const r = await fetch(`/api/mp/match/${_matchId}?playerId=${encodeURIComponent(playerId())}&since=${_version}`);
+    if (r.status === 204) return;
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data.view) return;
+    _version = data.view.v;
+    emit("state", data.view);
+    if (data.view.winner) {
+      stopMatchPoll();
+    }
+  } catch {}
+}
+
+async function startStatusPoll() {
+  stopStatusPoll();
+  _statusHandle = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/mp/match-status?playerId=${encodeURIComponent(playerId())}`);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data.state === "matched" && data.view) {
+        _matchId = data.view.matchId;
+        _version = data.view.v;
+        emit("match", {
+          roomId: _matchId,
+          opponent: data.view.opponent,
+          state: data.view,
+        });
+        emit("state", data.view);
+        startMatchPoll();
+      }
+    } catch {}
+  }, 2000);
+}
+
+// ---- Public API ----------------------------------------------------------
+export async function connect() { /* no-op for compat */ }
+export function isConnected() { return true; }
+
+export async function findMatch(opts) {
+  _opts = opts;
+  emit("queue", { position: 1 });
+  try {
+    const r = await fetch("/api/mp/queue", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...opts, playerId: playerId() }),
+    });
+    const data = await r.json();
+    if (!r.ok) return emit("err", { error: data.error || "queue failed" });
+    if (data.state === "matched" && data.view) {
+      _matchId = data.view.matchId;
+      _version = data.view.v;
+      emit("match", { roomId: _matchId, opponent: data.view.opponent, state: data.view });
+      emit("state", data.view);
+      startMatchPoll();
+    } else {
+      // Waiting — start status polling.
+      startStatusPoll();
+    }
+  } catch (err) {
+    emit("err", { error: err.message || "queue failed" });
+  }
+}
+
+export async function cancelMatch() {
+  stopStatusPoll();
+  try {
+    await fetch(`/api/mp/queue?playerId=${encodeURIComponent(playerId())}`, { method: "DELETE" });
+  } catch {}
+}
+
+export async function createPrivateRoom(opts) {
+  _opts = opts;
+  try {
+    const r = await fetch("/api/mp/host", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...opts, playerId: playerId() }),
+    });
+    const data = await r.json();
+    if (!r.ok) return emit("err", { error: data.error || "host failed" });
+    emit("roomCreated", { code: data.code });
+    // Start polling status — when the joiner connects, we'll see the match.
+    startStatusPoll();
+  } catch (err) {
+    emit("err", { error: err.message || "host failed" });
+  }
+}
+
+export async function joinPrivateRoom(code, opts) {
+  _opts = opts;
+  try {
+    const r = await fetch("/api/mp/join", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...opts, code, playerId: playerId() }),
+    });
+    const data = await r.json();
+    if (!r.ok) return emit("err", { error: data.error || "join failed" });
+    _matchId = data.view.matchId;
+    _version = data.view.v;
+    emit("match", { roomId: _matchId, opponent: data.view.opponent, state: data.view });
+    emit("state", data.view);
+    startMatchPoll();
+  } catch (err) {
+    emit("err", { error: err.message || "join failed" });
+  }
+}
+
+async function postAction(action, payload) {
+  if (!_matchId) return;
+  try {
+    const r = await fetch(`/api/mp/match/${_matchId}/action`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ playerId: playerId(), action, payload }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      emit("err", { error: data.error || "action rejected" });
+      return;
+    }
+    if (data.view) {
+      _version = data.view.v;
+      emit("state", data.view);
+    }
+    if (data.gameOver) {
+      emit("over", {
+        winner: data.view?.winner,
+        youWin: data.view?.winner === "player",
+        reward: data.reward || null,
+      });
+      stopMatchPoll();
+    }
+  } catch (err) {
+    emit("err", { error: err.message || "network error" });
+  }
+}
+
+export function playCard(handIndex, replaceSlot = null) {
+  postAction("play-card", { handIndex, replaceSlot });
+}
+export function attack(fromSlot, target, abilityId = "basic") {
+  postAction("attack", { fromSlot, target, abilityId });
+}
+export function endTurn()       { postAction("end-turn"); }
+export function concede()       { postAction("concede"); }
+export function useItem(itemId, target) { postAction("use-item", { itemId, target }); }
 
 export function disconnect() {
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
+  stopMatchPoll();
+  stopStatusPoll();
+  _matchId = null;
+  _version = 0;
   for (const k of Object.keys(listeners)) listeners[k] = [];
 }

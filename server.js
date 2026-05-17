@@ -13,6 +13,7 @@ const { buildDeck, toCard } = require("./shared/deck-builder");
 const auth = require("./server-modules/auth");
 const collection = require("./server-modules/collection");
 const multiplayer = require("./server-modules/multiplayer");
+const multiplayerHttp = require("./server-modules/multiplayer-http");
 const rewards = require("./server-modules/rewards");
 const achievements = require("./server-modules/achievements");
 const dailyStreak = require("./server-modules/daily-streak");
@@ -134,6 +135,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   auth.mount(app, authSupabase);
   collection.mount(app, authSupabase);
   rewards.mount(app, authSupabase, ensurePokedex);
+  multiplayerHttp.mount(app, authSupabase, ensurePokedex);
   achievements.mount(app, authSupabase);
   dailyStreak.mount(app, authSupabase, ensurePokedex);
   xpModule.mount(app, authSupabase);

@@ -108,20 +108,24 @@ async function queuePopFifo() {
   return _mem.queue.shift() || null;
 }
 
-async function queueRemove(socketId) {
+// Remove from queue by socketId OR playerId (whichever matches).
+async function queueRemove(id) {
+  const matches = (s) => {
+    try {
+      const v = JSON.parse(s);
+      return v.socketId === id || v.playerId === id;
+    } catch { return false; }
+  };
   const r = client();
   if (r) {
-    // List rebuild: read all, filter, replace. Tiny lists so this is fine.
     const all = await r.lrange(QUEUE_KEY, 0, -1);
-    const keep = all.filter((s) => {
-      try { return JSON.parse(s).socketId !== socketId; } catch { return true; }
-    });
+    const keep = all.filter((s) => !matches(s));
     const pipeline = r.multi().del(QUEUE_KEY);
     for (const s of keep) pipeline.rpush(QUEUE_KEY, s);
     await pipeline.exec();
     return;
   }
-  const i = _mem.queue.findIndex((s) => s.socketId === socketId);
+  const i = _mem.queue.findIndex((s) => s.socketId === id || s.playerId === id);
   if (i >= 0) _mem.queue.splice(i, 1);
 }
 
