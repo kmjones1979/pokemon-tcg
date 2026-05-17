@@ -5,9 +5,21 @@
 
 function b64urlToBuf(s) {
   if (s instanceof ArrayBuffer) return s;
+  if (typeof s !== "string") {
+    throw new Error("passkey: expected base64url string, got " + typeof s);
+  }
   s = s.replace(/-/g, "+").replace(/_/g, "/");
   while (s.length % 4) s += "=";
-  const bin = atob(s);
+  // Strip any whitespace + filter to the base64 alphabet so iOS Safari's
+  // strict atob() doesn't throw "The string did not match the expected
+  // pattern." on edge-case payloads.
+  s = s.replace(/[^A-Za-z0-9+/=]/g, "");
+  let bin;
+  try {
+    bin = atob(s);
+  } catch (err) {
+    throw new Error(`passkey: failed to decode base64url payload (${err?.name || "error"})`);
+  }
   const buf = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   return buf.buffer;

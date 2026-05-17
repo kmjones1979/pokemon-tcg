@@ -369,6 +369,7 @@ function renderMenu() {
           if (mr.ok) masteryById = (await mr.json()).mastery || null;
         } catch {}
       }
+      _gameOverFired = false;
       state = createGame({
         playerDeck,
         aiDeck,
@@ -547,8 +548,14 @@ async function loadAndRenderQuests() {
 async function claimQuest(id) {
   try {
     const r = await fetch(`/me/quests/${id}/claim`, { method: "POST" });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || "claim failed");
+    // Defensive JSON parse — if the server returned HTML (e.g. a 502
+    // from an edge layer) we want a useful error, not a SyntaxError.
+    let data = {};
+    try { data = await r.json(); }
+    catch (parseErr) {
+      throw new Error(`server returned non-JSON (status ${r.status})`);
+    }
+    if (!r.ok) throw new Error(data.error || `claim failed (status ${r.status})`);
     rewards.showOffer(data.reward, {
       didWin: true,
       onClaim: (card) => {
@@ -557,7 +564,21 @@ async function claimQuest(id) {
       },
     });
   } catch (err) {
-    alert("Couldn't claim: " + (err.message || "unknown"));
+    // Capture the error name + message so iOS Safari's
+    // "The string did not match the expected pattern." gives us
+    // a diagnostic hint instead of just a vague string.
+    console.error("[claimQuest] failed:", err);
+    const tag = err?.name && err.name !== "Error" ? `[${err.name}] ` : "";
+    alert(`Couldn't claim: ${tag}${err?.message || "unknown error"}`);
+    // Best-effort report to server logs so we can diagnose without
+    // waiting for the user to paste back.
+    try {
+      trackEvent("claim_error", {
+        kind: "quest",
+        name: err?.name || "Error",
+        message: (err?.message || "").slice(0, 200),
+      });
+    } catch {}
   }
 }
 
@@ -730,6 +751,7 @@ async function startBossFight({ chapterId, sessionId, chapter, boss, deck, phase
   const playerDeck = await loadPlayerDeck();
   gameMode = "story";
   _storyContext = { chapterId, sessionId, chapter };
+  _gameOverFired = false;
   state = createGame({
     playerDeck,
     aiDeck: deck,
@@ -773,6 +795,7 @@ async function startChampionFight(championId) {
     const playerDeck = await loadPlayerDeck();
     gameMode = "solo";
     _championId = championId;
+    _gameOverFired = false;
     state = createGame({
       playerDeck,
       aiDeck,
@@ -2610,7 +2633,15 @@ function handleMpGameOver(over) {
   }
 }
 
+// One-shot guard. render() calls onGameOver() every time it sees a
+// state.winner, but the game-over overlay (with the Play Again button)
+// must mount only once — otherwise repeated calls stack overlays and
+// the Play Again click hits a buried (older) button instead of the
+// visible one. Reset to false at every match start via createGame.
+let _gameOverFired = false;
 function onGameOver() {
+  if (_gameOverFired) return;
+  _gameOverFired = true;
   stopBGM();
   stopTurnTimer();
   const wasFirstMatch = !!state._isFirstMatch;

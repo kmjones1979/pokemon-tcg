@@ -41,7 +41,13 @@ export function decodeDeckCode(code) {
   if (typeof code !== "string" || !code) throw new Error("code must be non-empty");
   let s = code.replace(/-/g, "+").replace(/_/g, "/");
   while (s.length % 4) s += "=";
-  const bin = atob(s);
+  // iOS Safari's atob() is strict; sanitize to the base64 alphabet so
+  // a stray character doesn't surface as "The string did not match
+  // the expected pattern."
+  s = s.replace(/[^A-Za-z0-9+/=]/g, "");
+  let bin;
+  try { bin = atob(s); }
+  catch (err) { throw new Error(`deck-code decode failed (${err?.name || "atob error"})`); }
   const buf = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   if (buf.length < 1 + 45) throw new Error("code truncated");
