@@ -21,16 +21,17 @@ export const CRIT_CHANCE = 0.1;
 export const CRIT_MULT = 1.5;
 
 export function computeDamage(attacker, defender, opts = {}) {
-  const { abilityBonus = 0, ability = null, rand = null, preview = false, themeType = null } = opts;
+  const { abilityBonus = 0, ability = null, rand = null, preview = false, themeType = null, ignoreDefense: forceIgnore = false } = opts;
   const attackerType = attacker.types?.[0];
   const mult = getMultiplier(attackerType, defender.types || []);
   // Theme-of-the-week bonus: +1 flat ATK if the attacker is the themed type.
   const themeBonus = themeType && attacker.types?.includes(themeType) ? 1 : 0;
   const base = (attacker.cardAttack || 0) + abilityBonus + themeBonus;
   const abilityMult = ability?.damageMult ?? 1;
-  const ignoreDefense =
+  const ignoreDefenseFromAbility =
     ability?.id === "special" &&
     (attackerType === "flying" || attackerType === "ghost");
+  const ignoreDefense = forceIgnore || ignoreDefenseFromAbility;
   const defenseTerm = ignoreDefense ? 0 : effectiveDefense(defender) / 2;
 
   // Crit roll. Skip in preview mode so hover-damage stays stable.

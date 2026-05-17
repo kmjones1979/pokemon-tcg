@@ -53,6 +53,107 @@ export function entranceAbility(card) {
   return null;
 }
 
+// --- Signature abilities ---------------------------------------------------
+// Per-Pokémon flavor that overrides or augments the generic Roar/Aurora.
+// Each entry defines optional hook points the engine wires into game.js.
+//
+// Hook shapes:
+//   onSummon(state, side, inst)     — at end of playCard
+//   onTurnStart(state, side, inst)  — at start of this player's turn,
+//                                     for each field Pokémon they own
+//   onKO(state, side, inst)         — when this Pokémon would faint;
+//                                     return true to cancel the KO
+//   passive                         — descriptor used elsewhere (e.g.
+//                                     `ignoreDefense` flag read in attack)
+export const SIGNATURE_ABILITIES = {
+  150: {
+    // Mewtwo
+    name: "Recover",
+    desc: "Restores 3 HP at the start of each of your turns.",
+    onTurnStart(state, side, inst) {
+      const cap = inst.maxHp ?? inst.card.cardHp;
+      const before = inst.currentHp;
+      inst.currentHp = Math.min(cap, inst.currentHp + 3);
+      if (inst.currentHp > before) {
+        state.log.push({ id: state.log.length + 1, text: `🌀 ${inst.card.name} recovered ${inst.currentHp - before} HP.`, kind: "summon" });
+      }
+    },
+  },
+  151: {
+    // Mew
+    name: "Mimicry",
+    desc: "On summon, copies the highest Attack stat on the enemy field as an attack boost.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      let best = 0;
+      for (const enemy of state.players[otherSide].field) {
+        if (!enemy) continue;
+        const enemyAtk = (enemy.card.cardAttack || 0) + (enemy.attackBoost || 0);
+        if (enemyAtk > best) best = enemyAtk;
+      }
+      if (best > 0) {
+        inst.attackBoost = (inst.attackBoost || 0) + Math.min(3, best);
+        state.log.push({ id: state.log.length + 1, text: `🔮 Mew mimicked +${Math.min(3, best)} ATK.`, kind: "summon" });
+      }
+    },
+  },
+  249: {
+    // Lugia
+    name: "Aeroblast",
+    desc: "All of its attacks ignore defender's defense.",
+    passive: { ignoreDefense: true },
+  },
+  250: {
+    // Ho-Oh
+    name: "Phoenix Down",
+    desc: "The first time it would faint, it survives at 50% HP instead. Once per match.",
+    onKO(state, side, inst) {
+      if (inst.phoenixUsed) return false;
+      inst.phoenixUsed = true;
+      const cap = inst.maxHp ?? inst.card.cardHp;
+      inst.currentHp = Math.max(1, Math.round(cap / 2));
+      state.log.push({ id: state.log.length + 1, text: `🦅 Ho-Oh rose from the ashes at ${inst.currentHp} HP!`, kind: "summon" });
+      return true; // cancel the KO
+    },
+  },
+  251: {
+    // Celebi
+    name: "Heart Swap",
+    desc: "On summon, copies the highest enemy max HP.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      let best = 0;
+      for (const enemy of state.players[otherSide].field) {
+        if (!enemy) continue;
+        const max = enemy.maxHp ?? enemy.card.cardHp;
+        if (max > best) best = max;
+      }
+      if (best > inst.maxHp) {
+        inst.maxHp = best;
+        inst.currentHp = best;
+        state.log.push({ id: state.log.length + 1, text: `🌿 Celebi swapped max HP to ${best}.`, kind: "summon" });
+      }
+    },
+  },
+  384: {
+    // Rayquaza
+    name: "Dragon Ascent",
+    desc: "Gains +1 Attack at the start of each of your turns (caps at +5).",
+    onTurnStart(state, side, inst) {
+      const cur = inst.dragonAscentLevel || 0;
+      if (cur >= 5) return;
+      inst.dragonAscentLevel = cur + 1;
+      inst.attackBoost = (inst.attackBoost || 0) + 1;
+      state.log.push({ id: state.log.length + 1, text: `🐉 Rayquaza ascends! +1 ATK (now +${inst.dragonAscentLevel}).`, kind: "summon" });
+    },
+  },
+};
+
+export function signatureFor(card) {
+  if (!card) return null;
+  return SIGNATURE_ABILITIES[card.id] || null;
+}
+
 // Compute pinch-clause damage bonus for the attacker (blaze/torrent/overgrow).
 export function pinchAttackBonus(attackerInst) {
   const card = attackerInst.card;

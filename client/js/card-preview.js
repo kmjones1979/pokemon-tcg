@@ -6,7 +6,7 @@
 
 import { renderCard } from "./cards.js";
 import { abilitiesFor } from "./abilities.js";
-import { isGuardian, entranceAbility } from "./passives.js";
+import { isGuardian, entranceAbility, signatureFor } from "./passives.js";
 
 const HOVER_DELAY_MS = 350;
 let _hoverTimer = null;
@@ -129,6 +129,8 @@ const PASSIVE_DESCS = {
 };
 function renderTraitsSection(card) {
   const traits = [];
+  const sig = signatureFor(card);
+  if (sig) traits.push(`<div class="cp-ability"><span class="cp-aname">⭐ Signature: ${escape(sig.name)}</span><span class="cp-adesc">${escape(sig.desc)}</span></div>`);
   const entrance = entranceAbility(card);
   if (entrance) traits.push(`<div class="cp-ability"><span class="cp-aname">Entrance: ${escape(entrance.name)}</span><span class="cp-adesc">${escape(entrance.desc)}</span></div>`);
   if (isGuardian(card)) traits.push(`<div class="cp-ability"><span class="cp-aname">🛡 Guardian</span><span class="cp-adesc">Opposing attackers must target this first while it's on the field.</span></div>`);

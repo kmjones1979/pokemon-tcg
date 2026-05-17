@@ -740,6 +740,8 @@ function renderFields() {
         if (inst.attackedThisTurn) card.classList.add("spent");
         if (selectedAttacker && side === "player" && selectedAttacker.slot === i) card.classList.add("selected");
         if (pendingReplace && side === "player") card.classList.add("sacrifice-target");
+        if (inst.card?.is_legendary) card.classList.add("is-legendary");
+        else if (inst.card?.is_mythical) card.classList.add("is-mythical");
         // Pulse our ready attackers when it's our turn (cue: "tap me!").
         const canActNow =
           side === "player" &&

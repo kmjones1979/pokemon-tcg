@@ -215,11 +215,6 @@
 .card.shiny-2 { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 18px rgba(247,208,44,0.45); }
 .card.shiny-3 { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 28px rgba(247,208,44,0.65); }
 
-/* Sparkle for legendary / mythical: animated tiny stars circle the card. */
-.card.type-rarity-legendary::before,
-.card .card-rarity::before {
-  content: "";
-}
 @keyframes rarityShine {
   0%, 100% { opacity: 0.35; transform: scale(0.95); }
   50%      { opacity: 1;    transform: scale(1.05); }
@@ -227,6 +222,26 @@
 .card .card-rarity {
   animation: rarityShine 1.8s ease-in-out infinite;
 }
+
+/* Legendary / mythical aura — pulsing glow behind the card while it's on
+   the field (any instance, including hand-rendered ones get the rarity
+   tag, but only field cards get the big aura because the field-slot
+   wrapper sets up positioning). */
+@keyframes legendaryAura {
+  0%, 100% { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 18px rgba(247, 208, 44, 0.45); }
+  50%      { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 34px rgba(247, 208, 44, 0.95), 0 0 60px rgba(238, 129, 48, 0.4); }
+}
+@keyframes mythicalAura {
+  0%   { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 28px rgba(255, 145, 200, 0.6); }
+  33%  { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 28px rgba(167, 240, 255, 0.65); }
+  66%  { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 28px rgba(217, 192, 255, 0.65); }
+  100% { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 28px rgba(255, 145, 200, 0.6); }
+}
+.field-slot .card .card-rarity:not(.mythical) ~ .card-art,
+.field-slot .card.has-legendary { /* placeholder */ }
+/* Apply auras at the card root via classes for ease of selection: */
+.card.is-legendary { animation: legendaryAura 2.4s ease-in-out infinite; }
+.card.is-mythical  { animation: mythicalAura 3s linear infinite; }
 
 .card.selected {
   outline: 2px solid #fff;

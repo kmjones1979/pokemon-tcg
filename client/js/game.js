@@ -23,6 +23,7 @@ import { abilityById } from "./abilities.js";
 import {
   hasPassive, pinchAttackBonus, levitateBlocks,
   staticTrigger, intimidateOnSummon, isGuardian, entranceAbility,
+  signatureFor,
 } from "./passives.js";
 import { defaultKit, useItem as _useItem } from "./items.js";
 export const useItem = _useItem;
@@ -255,6 +256,12 @@ function beginTurn(state) {
   for (const slot of p.field) {
     if (slot) slot.summoningSickness = false;
   }
+  // Signature onTurnStart hooks (Mewtwo Recover, Rayquaza Dragon Ascent, …)
+  for (const inst of p.field) {
+    if (!inst) continue;
+    const sig = signatureFor(inst.card);
+    if (sig?.onTurnStart) sig.onTurnStart(state, state.activePlayer, inst);
+  }
   state.phase = "main";
   log(state, `Turn ${state.turn} — ${p.name} to move (${p.energy} Energy)`, "turn");
 
@@ -360,6 +367,9 @@ export function playCard(state, side, handIndex, { rand = Math.random, replaceSl
       if (healed > 0) log(state, `✨ ${card.name}'s Aurora restored ${healed} HP across the field.`, "summon");
     }
   }
+  // Per-Pokémon signature ability: onSummon hook.
+  const sig = signatureFor(card);
+  if (sig?.onSummon) sig.onSummon(state, side, inst);
   return { ok: true, slot, instance: inst, sacrificed };
 }
 
@@ -426,11 +436,14 @@ export function attack(
     // Levitate: defender immune to Ground regardless of type chart.
     const levitated = levitateBlocks(attackerInst.card, defenderInst.card);
     const pinchBonus = pinchAttackBonus(attackerInst);
+    // Signature passive (e.g. Lugia's Aeroblast) → ignoreDefense flag.
+    const sigPassive = signatureFor(attackerInst.card)?.passive || null;
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
       abilityBonus: attackBonus + (attackerInst.attackBoost || 0) + pinchBonus,
       ability,
       rand,
       themeType: state.themeType || null,
+      ignoreDefense: sigPassive?.ignoreDefense || false,
     });
     if (levitated) {
       calc.damage = 0;
@@ -493,6 +506,13 @@ export function attack(
     };
 
     if (defenderInst.currentHp <= 0) {
+      // Phoenix Down (Ho-Oh) / other onKO signatures get a chance to save it.
+      const sig = signatureFor(defenderInst.card);
+      const saved = sig?.onKO ? sig.onKO(state, opponentSide, defenderInst) : false;
+      if (saved && defenderInst.currentHp > 0) {
+        result.savedByPassive = sig.name;
+        // Don't count this as a KO. Skip discard + level-up branch.
+      } else {
       log(state, `${defenderInst.card.name} fainted!`, "ko");
       o.discard.push(defenderInst.card);
       o.field[defenderSlot] = null;
@@ -510,6 +530,7 @@ export function attack(
         result.attackerLeveled = lvls;
         log(state, `⚡ ${attackerInst.card.name} evolved to L${lvls} (+1 HP, +1 ATK)`, "summon");
       }
+      } // closes phoenix-saved else
     }
   }
 
