@@ -360,13 +360,20 @@ function renderMenu() {
         aiName: TRAINERS[aiTrainer].name,
         aiSprite: trainerMascotUrl(aiTrainer),
         aiColor: TYPE_COLORS[TRAINERS[aiTrainer].portrait] || "#888",
-        subtitle: `${({ aggressive: "Aggressive", balanced: "Balanced", tactical: "Tactical" })[aiPersonality]} Rival`,
+        subtitle: isFirstMatch ? "Your first rival" : `${({ aggressive: "Aggressive", balanced: "Balanced", tactical: "Tactical" })[aiPersonality]} Rival`,
       });
-      await openMulliganModal();
+      // First-match auto-skip: brand-new players don't yet know what
+      // mulligan IS, and the 15s decision adds friction without
+      // benefit.  Skip it on match #1 only — they keep their dealt hand.
+      if (!isFirstMatch) await openMulliganModal();
       render();
-      // Reveal the rival's personality.
-      const mood = ({ aggressive: "AGGRESSIVE 🔥", balanced: "BALANCED ⚖", tactical: "TACTICAL 🧠" })[aiPersonality];
-      setTimeout(() => flashVerdict(`Rival is feeling ${mood}`, "weak"), 600);
+      if (isFirstMatch) {
+        setTimeout(() => flashVerdict("Welcome! Tap a card to play it.", "super"), 500);
+      } else {
+        // Reveal the rival's personality.
+        const mood = ({ aggressive: "AGGRESSIVE 🔥", balanced: "BALANCED ⚖", tactical: "TACTICAL 🧠" })[aiPersonality];
+        setTimeout(() => flashVerdict(`Rival is feeling ${mood}`, "weak"), 600);
+      }
     } catch (err) {
       console.error(err);
       btn.textContent = "Failed to load deck. Retry";
