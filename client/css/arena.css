@@ -2733,3 +2733,78 @@ body.in-arena .landscape-prompt {
   0% { background-position: 0% 50%; }
   100% { background-position: 300% 50%; }
 }
+
+/* ============================================================
+   Wave 22: Opponent's hand (face-down card-backs)
+   ============================================================ */
+.opp-hand-row {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 12px 8px;
+  margin: -4px auto 4px;
+  flex-wrap: nowrap;
+  overflow: visible;
+  perspective: 800px;
+  z-index: 2;
+  pointer-events: none;
+}
+.opp-card-back {
+  width: 36px;
+  height: 50px;
+  border-radius: 5px;
+  background:
+    radial-gradient(circle at 50% 50%, #fff 0 5px, transparent 6px),
+    radial-gradient(circle at 50% 50%, #1a2540 0 12px, transparent 13px),
+    linear-gradient(135deg, #ef476f 0% 50%, #fff 50% 53%, #1a2540 53% 100%);
+  border: 1.5px solid #2a3658;
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,0.08),
+    0 3px 6px rgba(0,0,0,0.45);
+  flex: 0 0 36px;
+  transform-style: preserve-3d;
+  transform: translateY(0) rotate(0deg);
+  animation: oppCardBob 3.4s ease-in-out infinite;
+  will-change: transform;
+  position: relative;
+}
+/* Center crest — a small white ring (Pokéball center) is drawn by the
+   layered radial-gradients above. We layer a subtle sheen on top for a hint
+   of motion. */
+.opp-card-back::after {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.12) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: oppCardSheen 5s linear infinite;
+  pointer-events: none;
+}
+@keyframes oppCardBob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%      { transform: translateY(-3px) rotate(2deg); }
+}
+@keyframes oppCardSheen {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+/* Slightly fan the row so it reads like a held hand. */
+.opp-hand-row .opp-card-back:nth-child(odd)  { transform: translateY(-1px) rotate(-3deg); }
+.opp-hand-row .opp-card-back:nth-child(even) { transform: translateY(1px)  rotate(3deg); }
+.opp-hand-empty {
+  font-size: 12px; opacity: 0.55;
+  font-family: "Press Start 2P", monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px;
+}
+/* On small screens, shrink the backs so 10+ cards still fit on one row. */
+@media (max-width: 600px) {
+  .opp-card-back { width: 24px; height: 34px; flex-basis: 24px; }
+  .opp-hand-row { gap: 2px; padding: 2px 8px; }
+}
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .opp-card-back { animation: none; }
+  .opp-card-back::after { animation: none; }
+}

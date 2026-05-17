@@ -143,7 +143,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   collection.mount(app, authSupabase);
   rewards.mount(app, authSupabase, ensurePokedex);
   multiplayerHttp.mount(app, authSupabase, ensurePokedex);
-  achievements.mount(app, authSupabase);
+  achievements.mount(app, authSupabase, ensurePokedex);
   dailyStreak.mount(app, authSupabase, ensurePokedex);
   xpModule.mount(app, authSupabase);
   quests.mount(app, authSupabase, ensurePokedex);

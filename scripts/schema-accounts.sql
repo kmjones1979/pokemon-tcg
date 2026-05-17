@@ -103,3 +103,8 @@ create or replace view user_stats as
 -- Tracks completed story chapters per user. Safe to add to existing users:
 -- the column is nullable and defaults handled at app layer.
 alter table users add column if not exists story_progress jsonb default '{"completed": []}'::jsonb;
+
+-- Champion wins set (Wave 21+). Persists which champions a user has beaten.
+-- Defaults to empty array. Used by achievements.js to gate champion_one /
+-- champion_all unlocks.
+alter table users add column if not exists champion_wins text[] default '{}';

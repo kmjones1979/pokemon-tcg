@@ -230,48 +230,98 @@ body.dragging-attack .trainer-block.ai {
     box-shadow: 0 0 24px rgba(120, 165, 255, 1), 0 0 44px rgba(120, 165, 255, 0.55), 0 2px 4px rgba(0,0,0,0.5), inset 0 0 4px rgba(255,255,255,0.7);
   }
 }
-/* When a Guardian is on the field, give it a defensive aura ring around the
-   whole card so the "must attack me first" rule reads at a glance. */
-.field-slot .card[data-card-id]:has(.card-guardian)::after {
-  content: "";
+/* When a Guardian is on the field, give it a defensive aura ring as a
+   sibling element (not ::after — that conflicts with the .card.spent /
+   .card.summoning pseudo badges). The ring is BRIGHT BLUE so it pops on
+   any background and never tries to grey/mute the card it surrounds. */
+.card .guardian-ring {
   position: absolute;
-  inset: -6px;
+  inset: -7px;
   border-radius: 14px;
-  border: 2px solid rgba(120,165,255,0.5);
-  box-shadow: 0 0 24px rgba(120,165,255,0.45);
+  border: 2px solid rgba(120, 165, 255, 0.65);
+  box-shadow:
+    0 0 22px rgba(120, 165, 255, 0.55),
+    0 0 44px rgba(120, 165, 255, 0.25),
+    inset 0 0 12px rgba(120, 165, 255, 0.25);
   pointer-events: none;
+  z-index: 0; /* sit BEHIND the card-inner content so the art stays vibrant */
   animation: guardianRing 2.4s ease-in-out infinite;
 }
 @keyframes guardianRing {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50%      { opacity: 1;    transform: scale(1.03); }
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.04); }
+}
+/* Extra "ready to defend" cue: a small floating tag below the badge so the
+   "must hit me first" rule reads without any tutorial. */
+.card .guardian-tag {
+  position: absolute;
+  top: 18px; right: -4px;
+  background: rgba(20, 28, 60, 0.92);
+  color: #c2d4ff;
+  border: 1px solid rgba(120,165,255,0.7);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 8px;
+  letter-spacing: 1.2px;
+  font-family: "Press Start 2P", monospace;
+  z-index: 4;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  pointer-events: none;
 }
 
-/* Legendary holo: animated rainbow shimmer on cards flagged is_legendary. */
+/* Legendary holo: a single sheen band that slides across the card.
+   We translate a fixed-size pseudo-element with `transform` so the
+   compositor can run the whole animation on the GPU — animating
+   `background-position` instead would force a paint every frame and
+   stutters badly on mobile.  No `mix-blend-mode` either — same reason. */
 .card[data-card-rare="legendary"] .card-inner,
 .card[data-card-rare="mythical"] .card-inner {
   position: relative;
+  overflow: hidden;
 }
 .card[data-card-rare="legendary"] .card-inner::before,
 .card[data-card-rare="mythical"] .card-inner::before {
   content: "";
-  position: absolute; inset: 0;
-  background: linear-gradient(120deg,
-    rgba(255,180,200,0) 30%,
-    rgba(255,180,200,0.25) 40%,
-    rgba(180,225,255,0.3) 50%,
-    rgba(255,255,180,0.25) 60%,
-    rgba(255,180,200,0) 70%);
-  background-size: 200% 100%;
-  animation: legendaryHolo 3.8s linear infinite;
-  border-radius: inherit;
+  position: absolute;
+  top: 0;
+  /* The sheen band itself: ~60% of card width, positioned just off-screen
+     to the left so it can slide all the way across. */
+  left: -70%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(115deg,
+    transparent 0%,
+    rgba(255, 180, 200, 0.32) 30%,
+    rgba(220, 240, 255, 0.45) 50%,
+    rgba(255, 240, 180, 0.32) 70%,
+    transparent 100%);
   pointer-events: none;
-  mix-blend-mode: overlay;
   z-index: 2;
+  will-change: transform;
+  transform: translate3d(0, 0, 0); /* promote to its own layer */
+  animation: legendaryHoloSlide 3.8s linear infinite;
 }
-@keyframes legendaryHolo {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+@keyframes legendaryHoloSlide {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(280%, 0, 0); }
+}
+
+/* Slow the band down on mobile (where the paint cost still exists for the
+   compositor's transform layer) and on every device that asks for reduced
+   motion. Visually it still glints; just less often. */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .card[data-card-rare="legendary"] .card-inner::before,
+  .card[data-card-rare="mythical"] .card-inner::before {
+    animation-duration: 6.5s;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card[data-card-rare="legendary"] .card-inner::before,
+  .card[data-card-rare="mythical"] .card-inner::before {
+    animation: none;
+    opacity: 0.35;
+  }
 }
 .card[data-card-rare="mythical"] {
   border-color: #ffb3ff !important;

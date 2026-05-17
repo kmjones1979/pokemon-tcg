@@ -175,6 +175,20 @@ function mount(app, supabase, getPokedex) {
       // Champion victory — chunky reward: 5 picks, one guaranteed legendary.
       count = 5;
       guaranteeLegendary = true;
+      // Persist champion_wins for achievements (best-effort, ignore failures
+      // so the reward path itself never breaks).
+      try {
+        const { data: u } = await supabase
+          .from("users").select("champion_wins").eq("id", req.user.id).maybeSingle();
+        const cur = u?.champion_wins || [];
+        if (!cur.includes(championId)) {
+          await supabase.from("users")
+            .update({ champion_wins: [...cur, championId] })
+            .eq("id", req.user.id);
+        }
+      } catch (err) {
+        console.warn("[rewards] champion_wins persist failed:", err.message);
+      }
     } else if (won && difficulty === "medium") count = 1;
     else if (won && difficulty === "hard") count = 2;
     else if (!won && difficulty === "hard") count = 1;

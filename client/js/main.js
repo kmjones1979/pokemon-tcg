@@ -616,6 +616,8 @@ function render() {
       </div>
     </div>
 
+    <div class="opp-hand-row" id="opp-hand">${renderOpponentHand(state.players.ai.hand.length)}</div>
+
     <div class="field ai-field" id="ai-field"></div>
     <div class="field player-field" id="player-field"></div>
 
@@ -1462,6 +1464,21 @@ async function onEndTurn() {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+// Render N face-down "card-back" cards so the player can SEE how many cards
+// the opponent is holding without being able to read them. Pokéball logo in
+// the center, fanned slightly so >5 cards still fit.
+function renderOpponentHand(count) {
+  const n = Math.max(0, Math.min(count, 12));
+  if (n === 0) return `<div class="opp-hand-empty">Rival is out of cards</div>`;
+  const cards = [];
+  for (let i = 0; i < n; i++) {
+    // Tiny per-card variance so they don't all wobble in unison.
+    const delay = (i * 0.18).toFixed(2);
+    cards.push(`<div class="opp-card-back" style="animation-delay:${delay}s"></div>`);
+  }
+  return cards.join("");
+}
+
 // VS cinematic: two trainer portraits slam in from opposite sides, "VS"
 // flashes between them, then fade out. ~2s total, async so callers can
 // await before showing the mulligan modal.
@@ -2235,11 +2252,28 @@ function onGameOver() {
   // Grant XP based on outcome (signed-in users only).
   if (currentUser) {
     const myKOs = state.players.ai.discard.length;   // we KO'd these
+    const myRecap = state.recap?.player || {};
     grantXp({
       won: state.winner === "player",
       kos: myKOs,
-      crits: 0, // not currently tracked per-match; approx via kos
+      crits: myRecap.crits || 0,
     });
+    // Submit per-match highlight stats so the in-match achievements (biggest
+    // hit, crit master, rampage, perfect victory, lightning/endurance win)
+    // can unlock. Best-effort — failures are silent.
+    const matchStats = {
+      biggestHit: myRecap.biggestHit || 0,
+      crits: myRecap.crits || 0,
+      kos: myKOs,
+      perfectVictory: state.winner === "player" && state.players.player.trainerHp === TRAINER_START_HP,
+      lightningWin:   state.winner === "player" && state.turn <= 8,
+      enduranceWin:   state.winner === "player" && state.turn >= 25,
+    };
+    fetch("/me/match-stats", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(matchStats),
+    }).catch(() => {});
     setTimeout(() => achievements.checkForNewUnlocks(), 1500);
   }
   // In solo mode, finalise the server-tracked session and ask for a reward.
