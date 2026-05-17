@@ -347,6 +347,7 @@ export function attack(
       abilityBonus: attackBonus + (attackerInst.attackBoost || 0),
       ability,
       rand,
+      themeType: state.themeType || null,
     });
     const damage = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);

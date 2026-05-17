@@ -47,13 +47,19 @@ let soloSessionId = null;   // server-tracked anti-cheat session for solo matche
 let chosenAbilityId = "basic"; // ability the player will use on their next attack
 let pendingItem = null;        // when set, next slot click targets this item
 let pendingReplace = null;     // { handIndex } — next own-field click sacrifices that slot to summon this card
+let currentTheme = null;       // { type, endsAt } — theme of the week
 let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
 let _prevEnergy = null; // tracks your energy across renders so we can pip-refill the new ones
 
 // --- Boot ------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
   try {
-    currentUser = await passkey.me();
+    const [user, themeRes] = await Promise.all([
+      passkey.me(),
+      fetch("/api/theme").then((r) => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    currentUser = user;
+    currentTheme = themeRes;
   } catch {
     currentUser = null;
   }
@@ -121,6 +127,12 @@ function renderMenu() {
     <div class="menu-stage">
       <h1 class="game-title">Pokémon TCG</h1>
       <div class="menu-tagline">Pick your trainer. First to drop the opposing trainer to 0 HP wins.</div>
+      ${currentTheme?.type ? `
+        <div class="theme-banner" style="--theme:${TYPE_COLORS[currentTheme.type] || '#888'}">
+          <span class="theme-pill">Theme week</span>
+          <span class="theme-text"><strong>${currentTheme.type}</strong> Pokémon get +1 ATK and appear more often in reward drops</span>
+        </div>
+      ` : ""}
       <div id="daily-streak-banner"></div>
       <div id="daily-quests-panel"></div>
       <div class="trainer-grid">${trainerEls.join("")}</div>
@@ -202,6 +214,7 @@ function renderMenu() {
         aiAbility: aiTrainer,
         firstPlayer: "player",
       });
+      if (currentTheme?.type) state.themeType = currentTheme.type;
       _prevHps = { player: null, ai: null };
       _prevEnergy = null;
       // Anti-cheat: register the solo session with the server.

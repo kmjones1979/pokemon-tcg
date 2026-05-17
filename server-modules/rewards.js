@@ -34,15 +34,22 @@ function pickFromTier(pokedex, tier, exclude, rand = Math.random) {
   return candidates[Math.floor(rand() * candidates.length)];
 }
 
-function rollPicks(pokedex, count, rand = Math.random) {
+function rollPicks(pokedex, count, rand = Math.random, opts = {}) {
+  const { themeType = currentTheme(), themeBias = 0.3 } = opts;
   const picks = [];
   const seen = new Set();
   let safety = 0;
   while (picks.length < count && safety++ < 100) {
     const tier = weightedTier(rand);
-    let card = pickFromTier(pokedex, tier, seen, rand);
+    // With probability themeBias, try to draw a themed-type card of any
+    // tier first; if none, fall through to the regular tier pick.
+    let card = null;
+    if (themeType && rand() < themeBias) {
+      const themed = pokedex.filter((c) => !seen.has(c.id) && c.types?.includes(themeType));
+      if (themed.length > 0) card = themed[Math.floor(rand() * themed.length)];
+    }
+    if (!card) card = pickFromTier(pokedex, tier, seen, rand);
     if (!card) {
-      // Fall back through tiers
       for (const t of [3, 2, 4, 1, 5]) {
         card = pickFromTier(pokedex, t, seen, rand);
         if (card) break;
@@ -77,6 +84,8 @@ function consumeOffer(offerId, userId) {
   if (o.userId !== userId) return null;
   return o;
 }
+
+const { currentTheme } = require("./theme");
 
 // Anti-cheat for solo rewards. Replaces the older "just trust the client"
 // payload with server-tracked sessions:

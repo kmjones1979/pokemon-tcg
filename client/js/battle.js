@@ -14,14 +14,19 @@ export function effectiveDefense(card) {
 // is a trainer-ability flat-add (e.g. Pikachu Fan +1). If `rand` rolls a
 // crit (10% by default), the result is multiplied by `critMult` (1.5×) and
 // `critical: true` is flagged so the UI can play the gold flash.
+//
+// `themeType` (optional) — current week's themed type. Cards of that type
+// get +1 attack while it's their week.
 export const CRIT_CHANCE = 0.1;
 export const CRIT_MULT = 1.5;
 
 export function computeDamage(attacker, defender, opts = {}) {
-  const { abilityBonus = 0, ability = null, rand = null, preview = false } = opts;
+  const { abilityBonus = 0, ability = null, rand = null, preview = false, themeType = null } = opts;
   const attackerType = attacker.types?.[0];
   const mult = getMultiplier(attackerType, defender.types || []);
-  const base = (attacker.cardAttack || 0) + abilityBonus;
+  // Theme-of-the-week bonus: +1 flat ATK if the attacker is the themed type.
+  const themeBonus = themeType && attacker.types?.includes(themeType) ? 1 : 0;
+  const base = (attacker.cardAttack || 0) + abilityBonus + themeBonus;
   const abilityMult = ability?.damageMult ?? 1;
   const ignoreDefense =
     ability?.id === "special" &&
@@ -40,6 +45,7 @@ export function computeDamage(attacker, defender, opts = {}) {
     verdict: describeMultiplier(mult),
     ignoredDefense: ignoreDefense,
     critical,
+    themeBonus,
   };
 }
 
