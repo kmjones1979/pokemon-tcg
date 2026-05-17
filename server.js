@@ -76,9 +76,20 @@ app.use(siteGate.gateMiddleware);
 // Serve static files from the current directory
 app.use(express.static(path.join(__dirname)));
 
-// Inject socket.io client to HTML files
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+// Serve index.html with a hot-swappable script src: prod uses the
+// esbuild bundle at /dist/main.bundle.js; if that file doesn't exist
+// (local dev without a build step) we swap it for the raw ESM entry.
+const _bundlePath = path.join(__dirname, "dist", "main.bundle.js");
+function readIndexHtml() {
+  let html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+  if (!fs.existsSync(_bundlePath)) {
+    html = html.replace("/dist/main.bundle.js", "/client/js/main.js");
+  }
+  return html;
+}
+app.get("/", (_req, res) => {
+  res.set("content-type", "text/html; charset=utf-8");
+  res.send(readIndexHtml());
 });
 
 // Set up file watcher — reload clients on any HTML/CSS/JS change.
