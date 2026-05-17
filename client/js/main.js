@@ -1426,11 +1426,23 @@ async function onEndTurn() {
   if (state.winner) return;
   // Brief pause for the turn shift before the AI starts acting visibly.
   await sleep(500);
-  await aiTakeTurn(state, {
-    difficulty: aiDifficulty,
-    personality: aiPersonality,
-    onAction: handleAiAction,
-  });
+  try {
+    await aiTakeTurn(state, {
+      difficulty: aiDifficulty,
+      personality: aiPersonality,
+      onAction: handleAiAction,
+    });
+  } catch (err) {
+    // aiTakeTurn already force-ends the turn in its own finally clause on
+    // throw; here we just surface a hint and refresh.
+    console.error("[main] AI turn errored:", err);
+    flashVerdict("Rival fumbled — your turn", "weak");
+    // Belt-and-suspenders: if for any reason aiTakeTurn didn't advance state,
+    // do it here so the player isn't locked out.
+    if (state && state.activePlayer === "ai" && !state.winner) {
+      try { endTurn(state); } catch (e2) { console.error("[main] endTurn fallback failed:", e2); }
+    }
+  }
   render();
   // After AI's turn ends, control is back to us — render() picks up the
   // activePlayer flip and fires the banner via the _prevActivePlayer hook.
@@ -1439,6 +1451,15 @@ async function onEndTurn() {
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function handleAiAction(action) {
+  try {
+    await handleAiActionInner(action);
+  } catch (err) {
+    // Animation errors must never escape into aiTakeTurn — otherwise the AI
+    // turn aborts without calling endTurn(). Swallow + log + keep going.
+    console.error("[handleAiAction] animation error (recovered):", err);
+  }
+}
+async function handleAiActionInner(action) {
   if (state.winner) return;
   if (action.kind === "item") {
     render();
@@ -2055,11 +2076,21 @@ function startTurnTimer() {
     if (left <= 0) {
       el.textContent = "0:00";
       el.classList.add("expired");
-      // Only auto-end if it's the player's turn (mp + solo). In solo the
-      // AI runs synchronously so its turn can't expire here.
       if (state.activePlayer === "player" && !state.winner) {
         stopTurnTimer();
         onEndTurn();
+        return;
+      }
+      // AI-side watchdog: if the rival's turn timer has been expired for
+      // more than 8 seconds, assume something jammed and force end the
+      // turn. Solo only — multiplayer is server-authoritative.
+      if (state.activePlayer === "ai" && gameMode === "solo" && left < -8_000) {
+        console.warn("[watchdog] AI turn hung past timer — forcing end-turn");
+        try { endTurn(state); } catch (e) { console.error("[watchdog] endTurn failed:", e); }
+        stopTurnTimer();
+        render();
+        flashVerdict("Rival ran out of time", "weak");
+        return;
       }
       return;
     }

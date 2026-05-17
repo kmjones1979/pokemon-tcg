@@ -785,6 +785,22 @@ function chooseTarget(state, attackerInst, policy, rand) {
 const PERSONALITIES = ["aggressive", "balanced", "tactical"];
 
 export async function aiTakeTurn(state, { rand = Math.random, difficulty = "medium", onAction = null, personality = null } = {}) {
+  try {
+    return await aiTakeTurnInner(state, { rand, difficulty, onAction, personality });
+  } catch (err) {
+    // Defense-in-depth: if anything throws mid-turn we MUST still hand control
+    // back to the player, otherwise the game wedges with activePlayer="ai"
+    // forever. Log + force the turn to end. Surfacing the error to the user is
+    // the caller's job (main.js shows a verdict).
+    console.error("[ai] turn aborted by exception:", err);
+    if (state && state.activePlayer === "ai" && !state.winner) {
+      try { endTurn(state); } catch (e2) { console.error("[ai] endTurn fallback failed:", e2); }
+    }
+    throw err;
+  }
+}
+
+async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality }) {
   const policy = POLICIES[difficulty] || POLICIES.medium;
   const ai = state.players.ai;
   const mood = personality || PERSONALITIES[Math.floor(rand() * PERSONALITIES.length)];
