@@ -196,6 +196,7 @@ function renderMenu() {
     $("#mode-mp-match").disabled = false;
     $("#mode-mp-friend").disabled = false;
     $("#mode-champion").disabled = false;
+    if (currentUser) $("#mode-story").disabled = false;
   }
   $$(".trainer-card", menu).forEach((el) => {
     el.addEventListener("click", () => {
