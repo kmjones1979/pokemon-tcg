@@ -3006,3 +3006,35 @@ body.in-arena .landscape-prompt {
   .confetti-piece { animation: none; opacity: 0; }
   .first-win-banner { animation: none; }
 }
+
+/* ============================================================
+   Modal scroll-lock (Wave 28)
+   When any overlay is open, the body stops scrolling so the user's
+   scroll wheel / touch-drag drives the modal content instead of the
+   background.  scrollbar-gutter keeps the layout from jumping when
+   the body scrollbar is hidden.
+   ============================================================ */
+html { scrollbar-gutter: stable; }
+body:has(.share-overlay),
+body:has(.leaderboard-overlay),
+body:has(.game-over),
+body:has(.champ-overlay),
+body:has(.mh-overlay),
+body:has(.ach-overlay),
+body:has(.howto-overlay),
+body:has(.mulligan-overlay),
+body:has(.cb-overlay),
+body:has(.pdx-overlay),
+body:has(#story-stage),
+body:has(#trade-stage),
+body:has(#puzzle-stage),
+body:has(.story-gameover),
+body:has(.cb-preset-menu),
+body.modal-open {
+  overflow: hidden;
+}
+/* Prevent touch scroll-chaining on iOS Safari (< 16.4 doesn't honor
+   body{overflow:hidden} alone for touch-drag scrolls). */
+html { overscroll-behavior: none; }
+/* JS fallback: any future overlay that pre-dates the :has() list can
+   opt in via document.body.classList.add("modal-open"). */
