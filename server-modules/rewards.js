@@ -156,7 +156,7 @@ function mount(app, supabase, getPokedex) {
     if (!pokedex || pokedex.length === 0) {
       return res.status(503).json({ error: "Pokédex not loaded yet." });
     }
-    const { sessionId, won } = req.body || {};
+    const { sessionId, won, championId } = req.body || {};
     const session = SOLO_SESSIONS.get(sessionId);
     if (!session) return res.json({ reward: null, reason: "no_session" });
     if (session.userId !== req.user.id) {
@@ -169,8 +169,13 @@ function mount(app, supabase, getPokedex) {
     session.claimed = true;
 
     let count = 0;
+    let guaranteeLegendary = false;
     const difficulty = session.difficulty;
-    if (won && difficulty === "medium") count = 1;
+    if (championId && won) {
+      // Champion victory — chunky reward: 5 picks, one guaranteed legendary.
+      count = 5;
+      guaranteeLegendary = true;
+    } else if (won && difficulty === "medium") count = 1;
     else if (won && difficulty === "hard") count = 2;
     else if (!won && difficulty === "hard") count = 1;
     if (count === 0) {
@@ -179,7 +184,14 @@ function mount(app, supabase, getPokedex) {
     const gate = canClaimSolo(req.user.id);
     if (!gate.ok) return res.json({ reward: null, reason: gate.reason, retryAfterMs: gate.retryAfterMs });
 
-    const picks = rollPicks(pokedex, count);
+    let picks = rollPicks(pokedex, count);
+    if (guaranteeLegendary && !picks.some((p) => p.is_legendary || p.is_mythical)) {
+      // Swap one pick out for a random legendary/mythical.
+      const rares = pokedex.filter((p) => p.is_legendary || p.is_mythical);
+      if (rares.length) {
+        picks[picks.length - 1] = rares[Math.floor(Math.random() * rares.length)];
+      }
+    }
     const offerId = createOffer(req.user.id, picks);
     res.json({
       reward: {

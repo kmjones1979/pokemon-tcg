@@ -150,6 +150,7 @@ function renderMenu() {
         <div class="play-modes">
           <button class="mode-btn" id="mode-mp-match" disabled>Find online match</button>
           <button class="mode-btn" id="mode-mp-friend" disabled>Play vs friend (code)</button>
+          <button class="mode-btn" id="mode-champion" disabled>Fight a Champion</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -167,6 +168,7 @@ function renderMenu() {
     btn.textContent = `Battle as ${TRAINERS[chosen].name} ▸`;
     $("#mode-mp-match").disabled = false;
     $("#mode-mp-friend").disabled = false;
+    $("#mode-champion").disabled = false;
   }
   $$(".trainer-card", menu).forEach((el) => {
     el.addEventListener("click", () => {
@@ -179,6 +181,7 @@ function renderMenu() {
       btn.textContent = `Battle as ${TRAINERS[chosen].name} ▸`;
       $("#mode-mp-match").disabled = false;
       $("#mode-mp-friend").disabled = false;
+      $("#mode-champion").disabled = false;
 
       // QR auto-join: if we landed here via ?code=XXXXX, jump straight to
       // the friend-join flow now that a trainer is picked.
@@ -260,6 +263,7 @@ function renderMenu() {
 
   $("#mode-mp-match").addEventListener("click", () => startMultiplayer({ mode: "queue" }));
   $("#mode-mp-friend").addEventListener("click", () => startMultiplayer({ mode: "friend" }));
+  $("#mode-champion").addEventListener("click", () => openChampionPicker());
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).
@@ -423,6 +427,99 @@ async function claimStreak() {
   }
 }
 
+// Champion picker — fetches the 4 champions from the server and lets the
+// user pick one. Selecting starts a solo match with the champion's deck
+// as the AI, difficulty Hard, and a "championId" flag that the reward
+// endpoint reads to grant a beefier offer on win.
+let _championId = null;
+async function openChampionPicker() {
+  if (!chosenTrainer) { flashVerdict("Pick a trainer first", "weak"); return; }
+  let overlay = document.querySelector(".champ-overlay");
+  if (overlay) overlay.remove();
+  overlay = document.createElement("div");
+  overlay.className = "champ-overlay";
+  overlay.innerHTML = `<div class="champ-card"><div class="champ-loading">Loading champions…</div></div>`;
+  document.body.appendChild(overlay);
+  try {
+    const r = await fetch("/api/champion/list");
+    const { champions } = await r.json();
+    overlay.querySelector(".champ-card").innerHTML = `
+      <div class="champ-title">Challenge a Champion</div>
+      <div class="champ-sub">Curated legendary deck. Hard AI. Double reward on win.</div>
+      <div class="champ-list">
+        ${champions.map((c) => `
+          <button class="champ-row" data-id="${c.id}">
+            <img class="champ-art" src="https://play.pokemonshowdown.com/sprites/trainers/${c.portrait}.png" alt="${escape(c.name)}" loading="lazy">
+            <div class="champ-body">
+              <div class="champ-name">${escape(c.name)}</div>
+              <div class="champ-titletag">${escape(c.title)}</div>
+              <div class="champ-bio">${escape(c.bio)}</div>
+            </div>
+            <div class="champ-go">Fight ▸</div>
+          </button>
+        `).join("")}
+      </div>
+      <button class="champ-cancel">Cancel</button>
+    `;
+    overlay.querySelector(".champ-cancel").addEventListener("click", () => overlay.remove());
+    overlay.querySelectorAll(".champ-row").forEach((row) => {
+      row.addEventListener("click", async () => {
+        const id = row.dataset.id;
+        overlay.remove();
+        await startChampionFight(id);
+      });
+    });
+  } catch (err) {
+    overlay.querySelector(".champ-card").innerHTML = `<div class="champ-err">Couldn't load: ${err.message}</div>`;
+  }
+}
+
+async function startChampionFight(championId) {
+  if (!chosenTrainer) return;
+  flashVerdict("Engaging Champion…", "super");
+  try {
+    const r = await fetch(`/api/champion/${championId}/deck`);
+    const { champion, deck: aiDeck } = await r.json();
+    const playerDeck = await loadPlayerDeck();
+    gameMode = "solo";
+    _championId = championId;
+    state = createGame({
+      playerDeck,
+      aiDeck,
+      playerAbility: chosenTrainer,
+      aiAbility: "lance", // generic so the AI trainer has SOMETHING; flavor only
+      firstPlayer: "player",
+    });
+    if (currentTheme?.type) state.themeType = currentTheme.type;
+    _prevHps = { player: null, ai: null };
+    _prevEnergy = null;
+    aiPersonality = "tactical"; // champions are smart
+    // Champion match → soloSession not registered (anti-cheat path bypassed);
+    // server will accept the championId on /me/solo/end.
+    soloSessionId = null;
+    if (currentUser) {
+      try {
+        const r = await fetch("/me/solo/start", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ difficulty: "hard" }),
+        });
+        if (r.ok) { soloSessionId = (await r.json()).sessionId || null; }
+      } catch {}
+    }
+    aiDifficulty = "hard";
+    $("#menu").classList.add("hidden");
+    $("#arena").classList.remove("hidden");
+    document.body.classList.add("in-arena");
+    startBGM();
+    await openMulliganModal();
+    render();
+    setTimeout(() => flashVerdict(`${champion.name} accepts your challenge!`, "super"), 600);
+  } catch (err) {
+    alert("Couldn't start: " + (err.message || "unknown"));
+  }
+}
+
 function showHowToPlay() {
   localStorage.setItem("pokemon-tcg-seen-howto", "1");
   document.querySelector(".howto-overlay")?.remove();
@@ -558,6 +655,7 @@ function render() {
 
   bindTrainerAttackTarget();
   bindItemBar();
+  bindDragAttack();
   startTurnTimer();
 
   // Long-hover preview anywhere a card is rendered in-arena.
@@ -635,6 +733,89 @@ function renderFeatureStrip() {
       `).join("")}
     </div>
   `;
+}
+
+// Drag-to-attack — players can grab one of their ready attackers and drop
+// it on an enemy card or the opposing trainer block. Uses native HTML5
+// drag-and-drop; click-to-attack stays as fallback for touch and for the
+// ability-popover path.
+let _dragSlot = null;
+function bindDragAttack() {
+  // Source — player field cards with draggable="true".
+  document.querySelectorAll('.player-field .card[draggable="true"]').forEach((el) => {
+    el.addEventListener("dragstart", (e) => {
+      _dragSlot = Number(el.dataset.dragSlot);
+      el.classList.add("being-dragged");
+      try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(_dragSlot)); } catch {}
+      document.body.classList.add("dragging-attack");
+    });
+    el.addEventListener("dragend", () => {
+      el.classList.remove("being-dragged");
+      document.body.classList.remove("dragging-attack");
+      document.querySelectorAll(".drop-hover").forEach((x) => x.classList.remove("drop-hover"));
+      _dragSlot = null;
+    });
+  });
+
+  // Target highlighting for enemy field slots.
+  document.querySelectorAll(".ai-field .field-slot").forEach((slotEl) => {
+    slotEl.addEventListener("dragover", (e) => {
+      if (_dragSlot == null) return;
+      e.preventDefault();
+      slotEl.classList.add("drop-hover");
+    });
+    slotEl.addEventListener("dragleave", () => slotEl.classList.remove("drop-hover"));
+    slotEl.addEventListener("drop", (e) => {
+      e.preventDefault();
+      slotEl.classList.remove("drop-hover");
+      if (_dragSlot == null) return;
+      const targetSlot = Number(slotEl.dataset.slot);
+      const fromSlot = _dragSlot;
+      _dragSlot = null;
+      performAttackFromDrag(fromSlot, targetSlot);
+    });
+  });
+
+  // Trainer block as a drop target when their field is empty.
+  const trainerBlock = $(".trainer-row.top .trainer-block.ai");
+  if (trainerBlock) {
+    trainerBlock.addEventListener("dragover", (e) => {
+      if (_dragSlot == null) return;
+      e.preventDefault();
+      trainerBlock.classList.add("drop-hover");
+    });
+    trainerBlock.addEventListener("dragleave", () => trainerBlock.classList.remove("drop-hover"));
+    trainerBlock.addEventListener("drop", (e) => {
+      e.preventDefault();
+      trainerBlock.classList.remove("drop-hover");
+      if (_dragSlot == null) return;
+      const fromSlot = _dragSlot;
+      _dragSlot = null;
+      performAttackFromDrag(fromSlot, "trainer");
+    });
+  }
+}
+
+function performAttackFromDrag(fromSlot, target) {
+  // Drag uses the basic attack — popover flow still available via click.
+  selectedAttacker = null;
+  chosenAbilityId = "basic";
+  hideAbilityPopover();
+  if (gameMode === "mp") {
+    mp.attack(fromSlot, target, "basic");
+    return;
+  }
+  const attackerEl = $(`.player-field .field-slot[data-slot="${fromSlot}"] .card`);
+  const defenderEl = target === "trainer"
+    ? $(".trainer-block.ai")
+    : $(`.ai-field .field-slot[data-slot="${target}"] .card`);
+  const attackerInst = state.players.player.field[fromSlot];
+  const result = attack(state, "player", fromSlot, target, { abilityId: "basic" });
+  if (!result.ok) {
+    flashVerdict(result.reason, "weak");
+    return;
+  }
+  animateHit(attackerEl, defenderEl, attackerInst, result, () => render());
 }
 
 function renderComboTags(p) {
@@ -814,6 +995,18 @@ function renderFields() {
         if (pendingReplace && side === "player") card.classList.add("sacrifice-target");
         if (inst.card?.is_legendary) card.classList.add("is-legendary");
         else if (inst.card?.is_mythical) card.classList.add("is-mythical");
+        // Drag-to-attack — only on the player's own ready attackers.
+        if (
+          side === "player" &&
+          state.activePlayer === "player" &&
+          !state.winner &&
+          !inst.summoningSickness &&
+          !inst.attackedThisTurn &&
+          state.youAre !== "spectator"
+        ) {
+          card.setAttribute("draggable", "true");
+          card.dataset.dragSlot = String(i);
+        }
         // Pulse our ready attackers when it's our turn (cue: "tap me!").
         const canActNow =
           side === "player" &&
@@ -1936,6 +2129,7 @@ function onGameOver() {
       body: JSON.stringify({
         sessionId: soloSessionId,
         won: state.winner === "player",
+        championId: _championId || null,
       }),
     })
       .then((r) => r.json())
@@ -1991,6 +2185,7 @@ function onGameOver() {
       mpOpponent = null;
     }
     gameMode = "solo";
+    _championId = null;
     renderMenu();
   });
 }

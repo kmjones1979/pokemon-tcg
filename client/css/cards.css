@@ -180,6 +180,23 @@
   cursor: crosshair;
 }
 
+/* Drag-to-attack — visuals while dragging a player attacker. */
+.card.being-dragged {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+body.dragging-attack .ai-field .field-slot,
+body.dragging-attack .trainer-block.ai {
+  outline: 2px dashed rgba(255, 92, 99, 0.45);
+  outline-offset: 4px;
+  border-radius: 14px;
+  cursor: crosshair;
+}
+.drop-hover {
+  background: rgba(255, 92, 99, 0.18) !important;
+  box-shadow: 0 0 22px rgba(255, 92, 99, 0.55) inset;
+}
+
 /* Guardian badge — top-right shield. Pulses subtly so it's noticeable. */
 .card .card-guardian {
   position: absolute;

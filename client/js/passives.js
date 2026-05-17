@@ -385,6 +385,76 @@ export const SIGNATURE_ABILITIES = {
       if (healed) state.log.push({ id: state.log.length + 1, text: `🦌 Xerneas' Geomancy granted +3 max HP across the field.`, kind: "summon" });
     },
   },
+
+  // --- Pseudo-legendary expansion --------------------------------------
+  149: {
+    // Dragonite
+    name: "Multiscale",
+    desc: "Takes half damage from any attack while at full HP.",
+    passive: { multiscale: true },
+  },
+  373: {
+    // Salamence
+    name: "Moxie",
+    desc: "Gains +1 ATK permanently every time it scores a KO.",
+    onKill(state, side, inst) {
+      inst.attackBoost = (inst.attackBoost || 0) + 1;
+      state.log.push({ id: state.log.length + 1, text: `🐲 Salamence's Moxie kicked in. +1 ATK.`, kind: "summon" });
+    },
+  },
+  635: {
+    // Hydreigon
+    name: "Dark Pulse",
+    desc: "On summon, a random enemy takes 3 dark-type damage.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const targets = state.players[otherSide].field
+        .map((c, i) => ({ c, i }))
+        .filter((x) => x.c != null);
+      if (!targets.length) return;
+      const t = targets[Math.floor(Math.random() * targets.length)];
+      t.c.currentHp = Math.max(0, t.c.currentHp - 3);
+      state.log.push({ id: state.log.length + 1, text: `🌑 Hydreigon's Dark Pulse hit ${t.c.card.name} for 3.`, kind: "attack" });
+      if (t.c.currentHp <= 0) {
+        state.players[otherSide].discard.push(t.c.card);
+        state.players[otherSide].field[t.i] = null;
+        state.log.push({ id: state.log.length + 1, text: `${t.c.card.name} fainted!`, kind: "ko" });
+      }
+    },
+  },
+  778: {
+    // Mimikyu
+    name: "Disguise",
+    desc: "The first attack that would deal damage to it does nothing.",
+    onPreHit(state, side, inst) {
+      if (inst.disguiseBroken) return false;
+      inst.disguiseBroken = true;
+      state.log.push({ id: state.log.length + 1, text: `👻 Mimikyu's Disguise shattered — no damage!`, kind: "status" });
+      return true;
+    },
+  },
+  887: {
+    // Dragapult
+    name: "Phantom Force",
+    desc: "On summon, deals 2 ghost damage to two random enemies.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const targets = state.players[otherSide].field
+        .map((c, i) => ({ c, i }))
+        .filter((x) => x.c != null);
+      const shots = Math.min(2, targets.length);
+      for (let s = 0; s < shots; s++) {
+        const pick = targets[Math.floor(Math.random() * targets.length)];
+        pick.c.currentHp = Math.max(0, pick.c.currentHp - 2);
+        state.log.push({ id: state.log.length + 1, text: `👻 Dragapult's Phantom Force hit ${pick.c.card.name} for 2.`, kind: "attack" });
+        if (pick.c.currentHp <= 0) {
+          state.players[otherSide].discard.push(pick.c.card);
+          state.players[otherSide].field[pick.i] = null;
+          state.log.push({ id: state.log.length + 1, text: `${pick.c.card.name} fainted!`, kind: "ko" });
+        }
+      }
+    },
+  },
 };
 
 export function signatureFor(card) {

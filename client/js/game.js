@@ -498,9 +498,19 @@ export function attack(
     }
     // Metagross-style damage reduction (defender passive).
     const defReduction = defSig?.passive?.damageReduction || 0;
-    const damageBase = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
+    let damageBase = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
+    // Multiscale (Dragonite): halve damage while at full HP.
+    let multiscaleApplied = false;
+    if (defSig?.passive?.multiscale) {
+      const cap = defenderInst.maxHp ?? defenderInst.card.cardHp;
+      if (defenderInst.currentHp >= cap) {
+        damageBase = Math.max(1, Math.round(damageBase / 2));
+        multiscaleApplied = true;
+      }
+    }
     const damage = Math.max(calc.multiplier === 0 ? 0 : 1, damageBase - defReduction);
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);
+    if (multiscaleApplied) log(state, `🐉 ${defenderInst.card.name}'s Multiscale halved the blow.`, "status");
     if (defReduction > 0 && damageBase > damage) {
       log(state, `🛡 ${defenderInst.card.name}'s Iron Defense softened ${defReduction} damage.`, "status");
     }
