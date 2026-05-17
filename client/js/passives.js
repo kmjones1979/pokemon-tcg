@@ -241,6 +241,150 @@ export const SIGNATURE_ABILITIES = {
       if (healed) state.log.push({ id: state.log.length + 1, text: `🌟 Arceus' Judgment restored ${healed} HP across the field.`, kind: "summon" });
     },
   },
+
+  // --- Gen 1 starters: flavor signature buffs --------------------------
+  3: {
+    name: "Solar Beam",
+    desc: "Your Grass specials hit for +1 ATK while Venusaur is on the field.",
+    fieldAura: { type: "grass", attackBonus: 1 },
+  },
+  6: {
+    name: "Flamethrower",
+    desc: "Your Fire specials hit for +1 ATK while Charizard is on the field.",
+    fieldAura: { type: "fire", attackBonus: 1 },
+  },
+  9: {
+    name: "Hydro Cannon",
+    desc: "Your Water specials hit for +1 ATK while Blastoise is on the field.",
+    fieldAura: { type: "water", attackBonus: 1 },
+  },
+
+  // --- Pseudo-legendaries + iconic rares -------------------------------
+  248: {
+    // Tyranitar
+    name: "Sandstorm",
+    desc: "Deals 1 damage to every enemy that isn't Rock or Ground at the start of your turn.",
+    onTurnStart(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      let hits = 0;
+      for (let i = 0; i < state.players[otherSide].field.length; i++) {
+        const enemy = state.players[otherSide].field[i];
+        if (!enemy) continue;
+        const types = enemy.card.types || [];
+        if (types.includes("rock") || types.includes("ground")) continue;
+        enemy.currentHp = Math.max(0, enemy.currentHp - 1);
+        hits++;
+        if (enemy.currentHp <= 0) {
+          state.players[otherSide].discard.push(enemy.card);
+          state.players[otherSide].field[i] = null;
+          state.log.push({ id: state.log.length + 1, text: `${enemy.card.name} eroded in the Sandstorm.`, kind: "ko" });
+        }
+      }
+      if (hits) state.log.push({ id: state.log.length + 1, text: `🌪 Tyranitar's Sandstorm hit ${hits} foe${hits === 1 ? "" : "s"}.`, kind: "status" });
+    },
+  },
+  282: {
+    // Gardevoir
+    name: "Future Sight",
+    desc: "On summon, a random enemy takes 4 psychic damage.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const targets = state.players[otherSide].field
+        .map((c, i) => ({ c, i }))
+        .filter((x) => x.c != null);
+      if (targets.length === 0) return;
+      const t = targets[Math.floor(Math.random() * targets.length)];
+      t.c.currentHp = Math.max(0, t.c.currentHp - 4);
+      state.log.push({ id: state.log.length + 1, text: `🔮 Gardevoir's Future Sight struck ${t.c.card.name} for 4.`, kind: "attack" });
+      if (t.c.currentHp <= 0) {
+        state.players[otherSide].discard.push(t.c.card);
+        state.players[otherSide].field[t.i] = null;
+        state.log.push({ id: state.log.length + 1, text: `${t.c.card.name} fainted!`, kind: "ko" });
+      }
+    },
+  },
+  376: {
+    // Metagross
+    name: "Iron Defense",
+    desc: "Takes 1 less damage from every attack (minimum 1).",
+    passive: { damageReduction: 1 },
+  },
+  445: {
+    // Garchomp
+    name: "Sand Force",
+    desc: "Whenever it KOs an enemy, heals 2 HP.",
+    onKill(state, side, inst) {
+      const cap = inst.maxHp ?? inst.card.cardHp;
+      const before = inst.currentHp;
+      inst.currentHp = Math.min(cap, inst.currentHp + 2);
+      if (inst.currentHp > before) {
+        state.log.push({ id: state.log.length + 1, text: `🐉 Garchomp's Sand Force healed ${inst.currentHp - before}.`, kind: "summon" });
+      }
+    },
+  },
+  448: {
+    // Lucario
+    name: "Aura Sphere",
+    desc: "Your special attacks cost 1 less Energy while Lucario is on the field.",
+    fieldAura: { specialCostMod: -1 },
+  },
+  658: {
+    // Greninja
+    name: "Protean",
+    desc: "On summon, copies the primary type of the strongest enemy on the field.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      let best = null;
+      for (const enemy of state.players[otherSide].field) {
+        if (!enemy) continue;
+        const atk = (enemy.card.cardAttack || 0) + (enemy.attackBoost || 0);
+        if (!best || atk > best.atk) best = { atk, type: enemy.card.types?.[0] };
+      }
+      if (best?.type) {
+        // Mutate this instance's `card` snapshot so attacks use the new primary type.
+        inst.card = { ...inst.card, types: [best.type, ...(inst.card.types?.slice(1) || [])] };
+        state.log.push({ id: state.log.length + 1, text: `🥷 Greninja's Protean shifted to ${best.type}.`, kind: "summon" });
+      }
+    },
+  },
+  487: {
+    // Giratina
+    name: "Shadow Force",
+    desc: "Ignores the first attack that would hit it each match.",
+    onPreHit(state, side, inst) {
+      if (inst.shadowForceUsed) return false;
+      inst.shadowForceUsed = true;
+      state.log.push({ id: state.log.length + 1, text: `👻 Giratina phased out — Shadow Force blocked the attack!`, kind: "status" });
+      return true;
+    },
+  },
+  643: {
+    // Reshiram
+    name: "Blue Flare",
+    desc: "While on the field, your Fire Pokémon attack with +1 ATK and apply Burn.",
+    fieldAura: { type: "fire", attackBonus: 1, statusOnHit: "burn" },
+  },
+  644: {
+    // Zekrom
+    name: "Bolt Strike",
+    desc: "While on the field, your Electric Pokémon attack with +1 ATK and apply Paralyze.",
+    fieldAura: { type: "electric", attackBonus: 1, statusOnHit: "paralyze" },
+  },
+  716: {
+    // Xerneas
+    name: "Geomancy",
+    desc: "On summon, every ally gains +3 HP (over max).",
+    onSummon(state, side, inst) {
+      let healed = 0;
+      for (const ally of state.players[side].field) {
+        if (!ally) continue;
+        ally.maxHp = (ally.maxHp ?? ally.card.cardHp) + 3;
+        ally.currentHp += 3;
+        healed += 3;
+      }
+      if (healed) state.log.push({ id: state.log.length + 1, text: `🦌 Xerneas' Geomancy granted +3 max HP across the field.`, kind: "summon" });
+    },
+  },
 };
 
 export function signatureFor(card) {

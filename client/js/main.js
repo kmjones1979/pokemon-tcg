@@ -33,6 +33,7 @@ import * as mp from "./multiplayer.js";
 import * as rewards from "./rewards.js";
 import * as leaderboard from "./leaderboard.js";
 import * as achievements from "./achievements.js";
+import * as pokedex from "./pokedex.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1347,6 +1348,7 @@ function renderAccountPanel() {
         </div>
         <div class="account-actions">
           <button id="account-collection-btn">Collection</button>
+          <button id="account-pokedex-btn">Pokédex</button>
           <button id="account-achievements-btn">Achievements</button>
           <button id="account-matches-btn">History</button>
           <button id="account-leaderboard-btn">Leaderboard</button>
@@ -1393,6 +1395,8 @@ function wireAccountPanel() {
   if ($mh) $mh.addEventListener("click", () => {
     achievements.openMatchHistory({ onClose: () => {} });
   });
+  const $pdx = $("#account-pokedex-btn");
+  if ($pdx) $pdx.addEventListener("click", () => pokedex.open());
 }
 
 function onRegister() {

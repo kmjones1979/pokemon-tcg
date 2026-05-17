@@ -180,6 +180,41 @@ function mount(app, supabase) {
     res.json({ ok: true });
   });
 
+  // Pokédex completion view — minimal data per row so the grid stays fast.
+  app.get("/me/pokedex", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    // All 1025 species in order (id, name, sprite, generation, types).
+    const { data: all, error: e1 } = await supabase
+      .from("pokemon")
+      .select("id, name, sprite_front, generation, types, is_legendary, is_mythical")
+      .order("id", { ascending: true });
+    if (e1) return res.status(500).json({ error: e1.message });
+    const { data: mine, error: e2 } = await supabase
+      .from("owned_cards")
+      .select("pokemon_id, quantity, shiny_level")
+      .eq("user_id", req.user.id);
+    if (e2) return res.status(500).json({ error: e2.message });
+    const owned = new Map((mine || []).map((r) => [r.pokemon_id, r]));
+    const total = all.length;
+    let ownedCount = 0;
+    const rows = all.map((p) => {
+      const o = owned.get(p.id);
+      if (o) ownedCount++;
+      return {
+        id: p.id,
+        name: p.name,
+        sprite: p.sprite_front,
+        generation: p.generation,
+        types: p.types,
+        legendary: !!p.is_legendary,
+        mythical: !!p.is_mythical,
+        quantity: o?.quantity || 0,
+        shinyLevel: o?.shiny_level || 0,
+      };
+    });
+    res.json({ total, owned: ownedCount, rows });
+  });
+
   // Upgrade a card by consuming 3 duplicate copies — increments shiny_level.
   // Each shiny level grants +1 max HP and +1 attack when that card is
   // instantiated in a match (see engine instantiate()).

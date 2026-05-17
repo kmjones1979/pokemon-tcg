@@ -548,6 +548,140 @@ h1, h2, h3,
 .cp-adesc { grid-column: 1 / -1; color: var(--muted); font-size: 10.5px; margin-top: 2px; }
 .cp-flavor { color: var(--muted); font-size: 11px; font-style: italic; line-height: 1.5; }
 
+/* === Pokédex completion overlay === */
+.pdx-overlay {
+  position: fixed; inset: 0;
+  background: rgba(8, 9, 18, 0.86);
+  z-index: 2500;
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+}
+.pdx-overlay.hidden { display: none; }
+.pdx-card {
+  width: 94vw;
+  max-width: 1300px;
+  height: 92vh;
+  background: linear-gradient(180deg, #181b35, #0c0d1a);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 18px 22px;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+}
+.pdx-header {
+  display: flex; align-items: center; gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+.pdx-title {
+  font-family: "Press Start 2P", monospace;
+  font-size: 16px;
+  background: linear-gradient(90deg, #f7d02c, #ee8130, #f95587);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.pdx-summary { margin-left: auto; text-align: right; }
+.pdx-pct {
+  font-family: "Press Start 2P", monospace;
+  font-size: 18px;
+  background: linear-gradient(90deg, #f7d02c, #ee8130);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.pdx-count { font-size: 11px; color: var(--muted); }
+.pdx-x {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px;
+}
+.pdx-genbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pdx-gen { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.pdx-gen-label { font-family: "Press Start 2P", monospace; font-size: 9px; color: var(--muted); white-space: nowrap; }
+.pdx-gen-bar {
+  flex: 1; height: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.pdx-gen-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6cd97c, #4eb159);
+  transition: width 0.4s ease;
+}
+.pdx-gen-count { color: var(--muted); font-size: 10.5px; white-space: nowrap; }
+.pdx-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  padding-right: 8px;
+}
+.pdx-cell {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 6px 4px 4px;
+  text-align: center;
+  font-size: 10px;
+}
+.pdx-cell.locked img { filter: brightness(0) opacity(0.35); }
+.pdx-cell.locked .pdx-name { color: rgba(255, 255, 255, 0.25); }
+.pdx-cell.owned { border-color: rgba(108, 217, 124, 0.35); }
+.pdx-cell.owned.legendary { border-color: rgba(247, 208, 44, 0.7); box-shadow: 0 0 14px rgba(247, 208, 44, 0.25); }
+.pdx-cell.owned.mythical  { border-color: rgba(247, 105, 220, 0.55); box-shadow: 0 0 14px rgba(247, 105, 220, 0.25); }
+.pdx-cell img { width: 64px; height: 64px; object-fit: contain; }
+.pdx-id {
+  font-family: "Press Start 2P", monospace;
+  font-size: 7px;
+  color: var(--muted);
+  margin-bottom: 2px;
+  letter-spacing: 1px;
+}
+.pdx-name {
+  font-size: 10px;
+  margin-top: 2px;
+  text-transform: capitalize;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pdx-qty {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  background: var(--bg-mid);
+  color: var(--ink);
+  font-family: "Press Start 2P", monospace;
+  font-size: 7px;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.pdx-shiny {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: linear-gradient(140deg, #f7d02c, #ee8130);
+  color: #1a0a00;
+  font-family: "Press Start 2P", monospace;
+  font-size: 7px;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.pdx-loading, .pdx-err {
+  color: var(--muted);
+  padding: 28px;
+  text-align: center;
+}
+
 /* === Mulligan modal === */
 .mulligan-overlay {
   position: fixed; inset: 0;

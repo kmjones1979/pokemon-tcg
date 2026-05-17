@@ -136,15 +136,24 @@ function abilityModifiers(playerState, card) {
 }
 
 // Per-trainer adjustment to a special ability's energy cost. Lookup is by
-// (playerState.ability, card type, ability id).
+// (playerState.ability, card type, ability id). Plus per-signature field
+// auras (e.g. Lucario's Aura Sphere reduces specials cost by 1).
 export function trainerAbilityCostMod(playerState, card, ability) {
   if (!playerState || !ability) return 0;
+  let mod = 0;
   if (playerState.ability === "sabrina"
       && card.types?.includes("psychic")
       && ability.id === "special") {
-    return -1;
+    mod -= 1;
   }
-  return 0;
+  if (ability.id === "special") {
+    for (const inst of playerState.field) {
+      if (!inst) continue;
+      const sig = signatureFor(inst.card);
+      if (sig?.fieldAura?.specialCostMod) mod += sig.fieldAura.specialCostMod;
+    }
+  }
+  return mod;
 }
 
 export function effectiveCost(playerState, card) {
@@ -452,6 +461,13 @@ export function attack(
     // Levitate: defender immune to Ground regardless of type chart.
     const levitated = levitateBlocks(attackerInst.card, defenderInst.card);
     const pinchBonus = pinchAttackBonus(attackerInst);
+    // Giratina Shadow Force — phase out one attack per match.
+    const defSig = signatureFor(defenderInst.card);
+    if (defSig?.onPreHit && defSig.onPreHit(state, opponentSide, defenderInst)) {
+      attackerInst.attackedThisTurn = true;
+      p.energy -= 0; // no charge — attack was phased out
+      return { ok: true, damage: 0, multiplier: 0, verdict: { text: "Shadow Force!", tone: "miss" }, abilityId, abilityName: ability.name, target: defenderSlot };
+    }
     // Signature passive (e.g. Lugia's Aeroblast) → ignoreDefense flag.
     const sigPassive = signatureFor(attackerInst.card)?.passive || null;
     const comboBonus = comboBonusFor(p, attackerInst.card);
@@ -480,8 +496,14 @@ export function attack(
       calc.multiplier = 0;
       calc.verdict = { text: "Levitate — no effect!", tone: "miss" };
     }
-    const damage = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
+    // Metagross-style damage reduction (defender passive).
+    const defReduction = defSig?.passive?.damageReduction || 0;
+    const damageBase = Math.max(calc.multiplier === 0 ? 0 : 1, calc.damage - defenseBonus);
+    const damage = Math.max(calc.multiplier === 0 ? 0 : 1, damageBase - defReduction);
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);
+    if (defReduction > 0 && damageBase > damage) {
+      log(state, `🛡 ${defenderInst.card.name}'s Iron Defense softened ${defReduction} damage.`, "status");
+    }
 
     let line = attackPhrase(attackerInst.card, ability, defenderInst.card.name, damage, calc.multiplier, state.turn);
     if (calc.critical) line = `💥 CRITICAL! ${line}`;
@@ -522,6 +544,22 @@ export function attack(
         log(state, `⚡ ${defenderInst.card.name}'s Static paralyzed ${attackerInst.card.name}!`, "status");
       }
     }
+    // Field aura: Reshiram / Zekrom-style auto-apply status if attacker is
+    // the aura's type AND the defender survived the hit.
+    if (damage > 0 && defenderInst.currentHp > 0 && !status) {
+      for (const ally of p.field) {
+        if (!ally) continue;
+        const sigA = signatureFor(ally.card);
+        if (sigA?.fieldAura?.statusOnHit && attackerInst.card.types?.includes(sigA.fieldAura.type)) {
+          const kind = sigA.fieldAura.statusOnHit;
+          const turnsLeft = kind === "burn" ? 2 : 1;
+          defenderInst.status = { kind, turnsLeft };
+          status = defenderInst.status;
+          log(state, `${ally.card.name}'s aura inflicted ${kind} on ${defenderInst.card.name}!`, "status");
+          break;
+        }
+      }
+    }
 
     // Bug Special: leech 50% of damage as healing for the attacker.
     if (ability.id === "special" && (attackerInst.card.types?.[0] === "bug")) {
@@ -557,6 +595,9 @@ export function attack(
       o.field[defenderSlot] = null;
       result.knockedOut = true;
       if (state.recap) state.recap[side].kos += 1;
+      // Garchomp Sand Force-style onKill hook on the attacker.
+      const attackerSig = signatureFor(attackerInst.card);
+      if (attackerSig?.onKill) attackerSig.onKill(state, side, attackerInst);
       // Level-up reward: the attacker grows +1 HP / +1 ATK for the rest of
       // the match. Snowballs aggressive play and gives long-lived Pokémon a
       // distinct identity ("Evolved x2"). Cap at +3 so it doesn't run away.
