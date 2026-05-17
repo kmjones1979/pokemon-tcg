@@ -1561,7 +1561,7 @@ function onHandCardClick(handIndex) {
   render();
 }
 
-function onSlotClick(side, slot) {
+async function onSlotClick(side, slot) {
   if (state.youAre === "spectator") return;
   if (state.winner) return;
   if (state.activePlayer !== "player") {
@@ -1651,7 +1651,19 @@ function onSlotClick(side, slot) {
   const defenderEl = $(`.ai-field .field-slot[data-slot="${slot}"] .card`);
   const attackerInst = state.players.player.field[fromSlot];
 
-  const result = attack(state, "player", fromSlot, slot, { abilityId: chosenAbilityId });
+  // Crit-timing micro-game: only on Special attacks. Tap the sweet
+  // spot → forceCrit. Skipped if reduced-motion is on.
+  let forceCrit = false;
+  if (chosenAbilityId === "special") {
+    try {
+      const { runCritBar } = await import("./crit-bar.js");
+      const typeColor = TYPE_COLORS[attackerInst?.card?.types?.[0]] || "#ffd166";
+      const r = await runCritBar({ themeColor: typeColor });
+      forceCrit = !!r?.crit;
+      trackEvent("crit_bar", { crit: forceCrit });
+    } catch {}
+  }
+  const result = attack(state, "player", fromSlot, slot, { abilityId: chosenAbilityId, forceCrit });
   if (!result.ok) {
     flashVerdict(result.reason, "weak");
     selectedAttacker = null;

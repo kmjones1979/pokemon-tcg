@@ -3171,3 +3171,80 @@ body.modal-open {
 html { overscroll-behavior: none; }
 /* JS fallback: any future overlay that pre-dates the :has() list can
    opt in via document.body.classList.add("modal-open"). */
+
+/* ============================================================
+   Crit-Timing Micro-game (Wave 30c)
+   ============================================================ */
+.critbar-overlay {
+  position: fixed; inset: 0;
+  z-index: 300;
+  display: grid; place-items: center;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.critbar-overlay.show { opacity: 1; }
+.critbar-overlay.hit  .critbar-zone { background: linear-gradient(90deg, var(--theme), #fff7c2, var(--theme)); animation: critbar-hit-flash 0.3s ease-out; }
+.critbar-overlay.near .critbar-zone { background: rgba(255,209,102,0.4); }
+.critbar-overlay.miss .critbar-zone { background: rgba(255,255,255,0.1); }
+@keyframes critbar-hit-flash {
+  0%, 100% { box-shadow: 0 0 0 0 var(--theme); }
+  50%      { box-shadow: 0 0 32px 8px var(--theme); }
+}
+.critbar-card {
+  background: linear-gradient(160deg, #15192a, #06061a);
+  border: 1.5px solid var(--theme, #ffd166);
+  border-radius: 14px;
+  padding: 20px 24px;
+  text-align: center;
+  box-shadow: 0 14px 50px rgba(0,0,0,0.6), 0 0 30px color-mix(in srgb, var(--theme) 30%, transparent);
+  width: min(380px, 92vw);
+}
+.critbar-hint {
+  font-family: "Press Start 2P", monospace;
+  letter-spacing: 3px;
+  font-size: 11px;
+  color: var(--theme);
+  text-shadow: 0 0 8px var(--theme);
+  margin-bottom: 12px;
+}
+.critbar-track {
+  position: relative;
+  height: 28px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 999px;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+.critbar-zone {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 39%; right: 39%;          /* 22% wide centered sweet spot */
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--theme) 60%, transparent), transparent);
+  border-left: 1px solid var(--theme);
+  border-right: 1px solid var(--theme);
+}
+.critbar-indicator {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  width: 4px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 0 12px #fff, 0 0 24px var(--theme);
+  left: 0;
+  transform: translateX(-50%);
+  will-change: left;
+}
+.critbar-sub {
+  font-size: 11px;
+  opacity: 0.65;
+  margin-top: 10px;
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .critbar-overlay { display: none; }
+}

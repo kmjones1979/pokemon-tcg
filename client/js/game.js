@@ -443,7 +443,7 @@ export function playCard(state, side, handIndex, { rand = Math.random, replaceSl
 
 export function attack(
   state, side, fromSlot, target,
-  { rand = Math.random, abilityId = "basic" } = {},
+  { rand = Math.random, abilityId = "basic", forceCrit = false } = {},
 ) {
   if (state.winner) return { ok: false, reason: "game over" };
   if (state.activePlayer !== side) return { ok: false, reason: "not your turn" };
@@ -542,6 +542,7 @@ export function attack(
       themeType: state.themeType || null,
       ignoreDefense: ignoreDefenseFlag,
       critBoost,
+      forceCrit,
     });
     if (comboBonus > 0) calc.comboBonus = comboBonus;
     if (levitated) {
