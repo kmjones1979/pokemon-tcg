@@ -11,7 +11,15 @@ const HOVER_DELAY_MS = 350;
 let _hoverTimer = null;
 let _previewEl = null;
 
+// Touch-only devices fire mouseenter on tap but never mouseleave reliably,
+// which leaves the preview stuck open. Skip the long-hover behaviour there.
+function isTouchDevice() {
+  return typeof window !== "undefined" &&
+    (window.matchMedia?.("(hover: none)").matches || "ontouchstart" in window);
+}
+
 export function attachPreviewHandlers(rootEl, lookup) {
+  if (isTouchDevice()) return;
   const cards = rootEl.querySelectorAll(".card[data-card-id]");
   cards.forEach((cardEl) => {
     cardEl.addEventListener("mouseenter", (e) => {
