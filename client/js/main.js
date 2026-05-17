@@ -2274,28 +2274,69 @@ function onGameOver() {
   const oppHpLeft = state.players.ai.trainerHp;
   const recap = state.recap || { player: {}, ai: {} };
   const my = recap.player || {};
-  const opp = recap.ai || {};
+  // Earned badges — pure flavour, drive replay urge.
+  const badges = [];
+  if (state.winner === "player") {
+    if (myHpLeft === TRAINER_START_HP) badges.push({ key: "perfect", label: "PERFECT VICTORY", desc: "Won without taking a single point of damage." });
+    else if (myHpLeft >= TRAINER_START_HP - 3) badges.push({ key: "untouchable", label: "UNTOUCHABLE", desc: "Won with nearly full HP." });
+    if (state.turn <= 8) badges.push({ key: "lightning", label: "LIGHTNING WIN", desc: `Closed it out in ${state.turn} turns.` });
+    if (state.turn >= 25) badges.push({ key: "endurance", label: "ENDURANCE", desc: `A ${state.turn}-turn grind — and you won.` });
+    if ((my.crits || 0) >= 3) badges.push({ key: "crit-chain", label: "CRIT MASTER", desc: `${my.crits} critical hits in one match.` });
+    if (myKOs >= 5) badges.push({ key: "rampage", label: "RAMPAGE", desc: `KO'd ${myKOs} of the rival's Pokémon.` });
+  } else {
+    if (state.turn >= 20) badges.push({ key: "valiant", label: "VALIANT EFFORT", desc: `Held out for ${state.turn} turns.` });
+    if ((my.biggestHit || 0) >= 12) badges.push({ key: "punisher", label: "HEAVY HITTER", desc: `Landed a ${my.biggestHit}-damage strike.` });
+  }
+  const badgesHtml = badges.length ? `
+    <div class="go-badges">
+      ${badges.map((b) => `
+        <div class="go-badge go-badge-${b.key}">
+          <div class="go-badge-label">${b.label}</div>
+          <div class="go-badge-desc">${escape(b.desc)}</div>
+        </div>`).join("")}
+    </div>` : "";
   overlay.innerHTML = `
     <div class="game-over-card ${state.winner === "player" ? "win" : "loss"}">
       <h2>${state.winner === "player" ? "Victory!" : "Defeat"}</h2>
       <p class="go-sub">${state.winner === "player"
         ? "Your rival's trainer has been knocked out."
         : "Your trainer has been knocked out."}</p>
+      ${badgesHtml}
       <div class="go-stats">
-        <div class="go-stat"><span>Turns played</span><strong>${state.turn}</strong></div>
-        <div class="go-stat"><span>HP remaining</span><strong>${myHpLeft} vs ${oppHpLeft}</strong></div>
-        <div class="go-stat"><span>KOs scored</span><strong>${myKOs}</strong></div>
-        <div class="go-stat"><span>KOs taken</span><strong>${oppKOs}</strong></div>
-        <div class="go-stat"><span>Crit hits</span><strong>${my.crits || 0}</strong></div>
-        <div class="go-stat"><span>Total damage</span><strong>${my.totalDamage || 0}</strong></div>
+        <div class="go-stat"><span>Turns played</span><strong data-count-to="${state.turn}">0</strong></div>
+        <div class="go-stat"><span>HP remaining</span><strong data-count-to="${myHpLeft}">0</strong> <em class="go-vs">vs</em> <strong data-count-to="${oppHpLeft}">0</strong></div>
+        <div class="go-stat"><span>KOs scored</span><strong data-count-to="${myKOs}">0</strong></div>
+        <div class="go-stat"><span>KOs taken</span><strong data-count-to="${oppKOs}">0</strong></div>
+        <div class="go-stat"><span>Crit hits</span><strong data-count-to="${my.crits || 0}">0</strong></div>
+        <div class="go-stat"><span>Total damage</span><strong data-count-to="${my.totalDamage || 0}">0</strong></div>
         ${my.biggestHitName ? `
-          <div class="go-stat" style="grid-column:1/-1"><span>Biggest hit</span><strong>${escape(my.biggestHitName)} for ${my.biggestHit}</strong></div>
+          <div class="go-stat go-stat-mvp" style="grid-column:1/-1">
+            <span>MVP — biggest hit</span>
+            <strong><span class="mvp-name">${escape(my.biggestHitName)}</span> for <span data-count-to="${my.biggestHit}">0</span></strong>
+          </div>
         ` : ""}
       </div>
       <button id="play-again-btn">Play again</button>
     </div>
   `;
   document.body.appendChild(overlay);
+  // Animate counters from 0 to their target. ~700ms ease-out so the numbers
+  // feel earned, not slapped on.
+  requestAnimationFrame(() => {
+    overlay.querySelectorAll("[data-count-to]").forEach((el) => {
+      const target = Number(el.dataset.countTo) || 0;
+      if (target <= 0) { el.textContent = "0"; return; }
+      const duration = 700;
+      const start = performance.now();
+      function tick(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = String(Math.round(target * eased));
+        if (t < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    });
+  });
   $("#play-again-btn").addEventListener("click", () => {
     overlay.remove();
     state = null;

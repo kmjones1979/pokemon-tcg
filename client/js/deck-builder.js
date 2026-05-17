@@ -76,6 +76,18 @@ async function refresh() {
 
 function render() {
   const overlay = ensureOverlay();
+  // Preserve scroll position of the collection grid AND the deck list so a
+  // single click doesn't fling the user back to the top after every pick.
+  const prevGridScroll = overlay.querySelector(".cb-collection")?.scrollTop ?? 0;
+  const prevDeckScroll = overlay.querySelector(".cb-deck-list")?.scrollTop ?? 0;
+  const prevOuterScroll = overlay.querySelector(".cb-body")?.scrollTop ?? 0;
+  const prevActiveSelector = (() => {
+    const a = document.activeElement;
+    if (!a || !overlay.contains(a)) return null;
+    if (a.classList.contains("cb-search")) return ".cb-search";
+    if (a.classList.contains("cb-deck-name")) return ".cb-deck-name";
+    return null;
+  })();
   const ownedById = new Map(_collection.map((c) => [c.id, c]));
   const usedById = new Map();
   for (const id of _editorIds) usedById.set(id, (usedById.get(id) || 0) + 1);
@@ -255,6 +267,21 @@ function render() {
   });
   overlay.querySelector(".cb-deck-delete")?.addEventListener("click", deleteCurrentDeck);
   overlay.querySelector(".cb-activate")?.addEventListener("click", setCurrentAsActive);
+
+  // Restore scroll + focus so a click on a card doesn't fling the user back
+  // to the top of the grid on every selection.
+  const cbCollection = overlay.querySelector(".cb-collection");
+  const cbDeckList   = overlay.querySelector(".cb-deck-list");
+  const cbBody       = overlay.querySelector(".cb-body");
+  if (cbCollection) cbCollection.scrollTop = prevGridScroll;
+  if (cbDeckList)   cbDeckList.scrollTop   = prevDeckScroll;
+  if (cbBody)       cbBody.scrollTop       = prevOuterScroll;
+  if (prevActiveSelector) {
+    const el = overlay.querySelector(prevActiveSelector);
+    if (el) { el.focus(); /* preserve caret position too */
+      try { el.setSelectionRange(el.value.length, el.value.length); } catch {}
+    }
+  }
 }
 
 function loadDeckIntoEditor(deck) {
