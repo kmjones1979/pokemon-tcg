@@ -37,6 +37,7 @@ import * as pokedex from "./pokedex.js";
 import * as story from "./story.js";
 import * as trading from "./trading.js";
 import * as daily from "./daily.js";
+import * as puzzle from "./puzzle.js";
 import { trackEvent } from "./analytics.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -184,6 +185,7 @@ function renderMenu() {
           <button class="mode-btn" id="mode-champion" disabled>Fight a Champion</button>
           <button class="mode-btn story-launch" id="mode-story" disabled title="${currentUser ? "Pick a trainer to begin Story Mode" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
           <button class="mode-btn" id="mode-trade" ${currentUser ? "" : "disabled"} title="${currentUser ? "Trade cards with other trainers" : "Sign in to trade"}">🔄 Trade Cards</button>
+          <button class="mode-btn puzzle-launch" id="mode-puzzle" title="Today's chess-style card puzzle">🧩 Daily Puzzle</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -310,6 +312,7 @@ function renderMenu() {
   $("#mode-champion").addEventListener("click", () => openChampionPicker());
   $("#mode-story")?.addEventListener("click", () => story.openStoryHub({ currentUser }));
   $("#mode-trade")?.addEventListener("click", () => trading.openTradeMarket({ currentUser }));
+  $("#mode-puzzle")?.addEventListener("click", () => puzzle.openPuzzle({ currentUser }));
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).

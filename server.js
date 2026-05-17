@@ -24,6 +24,7 @@ const champions = require("./server-modules/champions");
 const story = require("./server-modules/story");
 const trading = require("./server-modules/trading");
 const dailyBoss = require("./server-modules/daily-boss");
+const dailyPuzzle = require("./server-modules/daily-puzzle");
 const analytics = require("./server-modules/analytics");
 
 const app = express();
@@ -155,6 +156,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   story.mount(app, authSupabase, ensurePokedex);
   trading.mount(app, authSupabase, ensurePokedex);
   dailyBoss.mount(app, authSupabase, ensurePokedex);
+  dailyPuzzle.mount(app, authSupabase);
   analytics.mount(app);
 
   // Match history for the signed-in user.
