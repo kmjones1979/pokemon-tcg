@@ -258,6 +258,45 @@ function mount(app, supabase, getPokedex) {
     res.json({ view: viewFor(m, side) });
   });
 
+  // Spectator endpoint — returns a view of any active match with BOTH hands
+  // hidden. No auth required; anyone with the match id can watch.
+  app.get("/api/mp/spectate/:id", async (req, res) => {
+    const matchId = req.params.id;
+    const since = Number(req.query.since || 0);
+    const m = await store.roomGet(matchId);
+    if (!m) return res.status(404).json({ error: "Match not found." });
+    if (m.v <= since) return res.status(204).end();
+    const s = m.state;
+    res.json({
+      view: {
+        v: m.v,
+        matchId: m.id,
+        turn: s.turn,
+        activePlayer: s.activePlayer,
+        phase: s.phase,
+        winner: s.winner,
+        log: s.log.slice(-30),
+        players: {
+          player: {
+            ...s.players.player,
+            hand: s.players.player.hand.map(() => ({ hidden: true })),
+            deck: [],
+          },
+          ai: {
+            ...s.players.ai,
+            hand: s.players.ai.hand.map(() => ({ hidden: true })),
+            deck: [],
+          },
+        },
+        opponents: {
+          player: { displayName: m.players.player.displayName, ability: m.players.player.ability },
+          ai: { displayName: m.players.ai.displayName, ability: m.players.ai.ability },
+        },
+        youAre: "spectator",
+      },
+    });
+  });
+
   app.post("/api/mp/match/:id/action", async (req, res) => {
     const matchId = req.params.id;
     const playerId = String(req.body?.playerId || "");

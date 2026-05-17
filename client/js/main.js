@@ -71,15 +71,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   refreshMuteIcon();
 
-  // QR / deep-link: if ?code=XXXXXX is in the URL, prompt to auto-join that
-  // private room once the user has picked a trainer.
+  // QR / deep-link: ?code=XXXXXX auto-joins a private room.
   const urlParams = new URLSearchParams(location.search);
   const incomingCode = urlParams.get("code");
   if (incomingCode) {
     flashVerdict(`Tap a trainer, then join ${incomingCode.toUpperCase()}`, "super");
-    // After they pick a trainer, the auto-join handler in renderMenu will
-    // fire. We stash the code on a hidden global.
     window.__incomingRoomCode = incomingCode.toUpperCase();
+  }
+  // Spectator deep-link: ?spectate=<matchId> opens watch mode.
+  const spectateId = urlParams.get("spectate");
+  if (spectateId) {
+    startSpectator(spectateId);
   }
 });
 
@@ -860,6 +862,11 @@ function renderHand() {
   const p = state.players.player;
   const n = p.hand.length;
   hand.dataset.size = String(n);
+  // Spectator: hand contents aren't visible, just show a placeholder count.
+  if (state.youAre === "spectator") {
+    hand.innerHTML = `<div class="spectator-handcount">Player hand: ${n}</div>`;
+    return;
+  }
   p.hand.forEach((card, idx) => {
     const cardEl = renderCard(card);
     const cost = effectiveCost(p, card);
@@ -904,6 +911,7 @@ function escape(s) {
 
 // --- Interaction -----------------------------------------------------------
 function onHandCardClick(handIndex) {
+  if (state.youAre === "spectator") return;
   if (state.activePlayer !== "player" || state.winner) {
     flashVerdict("Wait for your turn", "weak");
     return;
@@ -946,6 +954,7 @@ function onHandCardClick(handIndex) {
 }
 
 function onSlotClick(side, slot) {
+  if (state.youAre === "spectator") return;
   if (state.winner) return;
   if (state.activePlayer !== "player") {
     flashVerdict("Wait for your turn", "weak");
@@ -1404,6 +1413,48 @@ let mpUnsubs = [];
 function teardownMpListeners() {
   for (const off of mpUnsubs) try { off(); } catch {}
   mpUnsubs = [];
+}
+
+// Spectator mode — read-only watch of any match by id. Polls /api/mp/spectate.
+let _spectatorTimer = null;
+let _spectatorVersion = 0;
+async function startSpectator(matchId) {
+  gameMode = "spectator";
+  state = null;
+  $("#menu").classList.add("hidden");
+  $("#arena").classList.remove("hidden");
+  document.body.classList.add("in-arena");
+  startBGM();
+  flashVerdict("Spectating — read-only", "super");
+  const poll = async () => {
+    try {
+      const r = await fetch(`/api/mp/spectate/${matchId}?since=${_spectatorVersion}`);
+      if (r.status === 204) return;
+      if (!r.ok) {
+        stopSpectator();
+        alert("Match ended or not found.");
+        renderMenu();
+        return;
+      }
+      const data = await r.json();
+      if (!data.view) return;
+      _spectatorVersion = data.view.v;
+      state = data.view;
+      // Render reuses the existing path. Player side is fixed to the player
+      // half of the field; AI side to the AI half. Hands hidden both ways.
+      render();
+      if (state.winner) {
+        stopSpectator();
+      }
+    } catch {}
+  };
+  await poll();
+  _spectatorTimer = setInterval(poll, 1500);
+}
+function stopSpectator() {
+  if (_spectatorTimer) clearInterval(_spectatorTimer);
+  _spectatorTimer = null;
+  _spectatorVersion = 0;
 }
 
 async function startMultiplayer({ mode }) {
