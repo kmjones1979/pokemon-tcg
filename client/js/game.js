@@ -31,27 +31,32 @@ export const MAX_ENERGY = 10;
 let _instanceCounter = 0;
 const nextInstanceId = () => `i${++_instanceCounter}`;
 
-// Trainer signature Pokémon — PokeAPI national dex ids of each trainer's
-// canonical mascot. We use the official artwork for the trainer's portrait
-// chip on the menu and arena, so each trainer has a distinct visual identity
-// (Brock = Onix, Misty = Starmie, etc) without us having to source human
-// trainer artwork.
+// Six canonical Kanto-era human trainers (gym leaders + champion). Each is
+// flavored to a Pokémon type and grants a passive ability for that type.
+// The internal id ("pikachu" → renamed display to "Lt. Surge") is preserved
+// so users who already picked that ability don't break.
+//
+// Portraits come from Pokémon Showdown's open trainer sprite collection
+// (https://play.pokemonshowdown.com/sprites/trainers). Used under fair-use
+// for this non-commercial fan project.
 export const TRAINERS = {
-  brock:   { id: "brock",   name: "Brock",       bio: "+1 Defense to Rock/Ground",       portrait: "rock",     mascotId: 95  /* Onix    */ },
-  misty:   { id: "misty",   name: "Misty",       bio: "Water cards cost 1 less (min 1)", portrait: "water",    mascotId: 121 /* Starmie */ },
-  pikachu: { id: "pikachu", name: "Pikachu Fan", bio: "+1 Attack to Electric Pokémon",   portrait: "electric", mascotId: 25  /* Pikachu */ },
-  erika:   { id: "erika",   name: "Erika",       bio: "+1 HP to all Grass Pokémon",      portrait: "grass",    mascotId: 71  /* Victreebel */ },
-  sabrina: { id: "sabrina", name: "Sabrina",     bio: "Psychic specials cost 1 less",    portrait: "psychic",  mascotId: 65  /* Alakazam */ },
-  lance:   { id: "lance",   name: "Lance",       bio: "+1 Attack to Dragon Pokémon",     portrait: "dragon",   mascotId: 149 /* Dragonite */ },
+  brock:   { id: "brock",   name: "Brock",     bio: "+1 Defense to Rock/Ground",        portrait: "rock",     sprite: "brock" },
+  misty:   { id: "misty",   name: "Misty",     bio: "Water cards cost 1 less (min 1)",  portrait: "water",    sprite: "misty" },
+  pikachu: { id: "pikachu", name: "Lt. Surge", bio: "+1 Attack to Electric Pokémon",    portrait: "electric", sprite: "ltsurge" },
+  erika:   { id: "erika",   name: "Erika",     bio: "+1 HP to all Grass Pokémon",       portrait: "grass",    sprite: "erika" },
+  sabrina: { id: "sabrina", name: "Sabrina",   bio: "Psychic specials cost 1 less",     portrait: "psychic",  sprite: "sabrina" },
+  lance:   { id: "lance",   name: "Lance",     bio: "+1 Attack to Dragon Pokémon",      portrait: "dragon",   sprite: "lance" },
 };
 
-// PokeAPI official-artwork URL helper — we use it directly, same source the
-// Pokédex cards pull from.
-export function trainerMascotUrl(trainer) {
-  const id = TRAINERS[trainer]?.mascotId;
-  if (!id) return null;
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+// Pokémon Showdown CDN — humans, transparent PNG, ~96×96.
+export function trainerSpriteUrl(trainer) {
+  const slug = TRAINERS[trainer]?.sprite;
+  if (!slug) return null;
+  return `https://play.pokemonshowdown.com/sprites/trainers/${slug}.png`;
 }
+
+// Backwards-compat alias (older import sites used trainerMascotUrl).
+export const trainerMascotUrl = trainerSpriteUrl;
 
 function shuffle(arr, rand = Math.random) {
   const a = arr.slice();
