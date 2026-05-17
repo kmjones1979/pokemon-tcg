@@ -48,6 +48,13 @@ async function shareDeckCode() {
   try {
     const code = encodeDeckIds(_editorIds);
     const url = `${location.origin}/d/${code}`;
+    // Best-effort: claim ownership of this code so result-loop results
+    // come back to us. Signed-in only; failure is silent.
+    fetch("/me/shared-decks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code, cardIds: _editorIds }),
+    }).catch(() => {});
     try {
       await navigator.clipboard.writeText(url);
     } catch {

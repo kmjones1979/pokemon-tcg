@@ -29,6 +29,7 @@ const analytics = require("./server-modules/analytics");
 const siteGate = require("./server-modules/site-gate");
 const guestMigrate = require("./server-modules/guest-migrate");
 const deckShare = require("./server-modules/deck-share");
+const friendChallenge = require("./server-modules/friend-challenge");
 
 const app = express();
 // Vercel + most PaaS hosts proxy requests. Trust the proxy headers so
@@ -181,6 +182,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   analytics.mount(app);
   guestMigrate.mount(app, authSupabase);
   deckShare.mount(app, authSupabase, ensurePokedex);
+  friendChallenge.mount(app, authSupabase);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {

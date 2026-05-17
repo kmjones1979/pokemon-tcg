@@ -196,6 +196,12 @@ window.addEventListener("DOMContentLoaded", async () => {
         const { cards } = await r.json();
         if (!r.ok || !cards) throw new Error("bad code");
         window.__versusDeck = cards;
+        window.__versusCode = versusDeck;
+        // Best-effort: who owns this code? Used for the "Challenging X"
+        // VS cinematic subtitle.
+        fetch(`/api/deck-code/${encodeURIComponent(versusDeck)}/owner`).then((r) => r.ok ? r.json() : null)
+          .then((data) => { if (data?.owner) window.__versusOwner = data.owner.displayName; })
+          .catch(() => {});
         flashVerdict("Tap a trainer to battle the shared deck.", "super");
       } catch {
         flashVerdict("Couldn't load battle deck.", "weak");
@@ -251,6 +257,7 @@ function renderMenu() {
       <div class="menu-tagline">Build a 30-card deck. Wield Legendary signature moves. Out-strategize your rival.</div>
       ${renderFeatureStrip()}
       <div id="daily-card-slot"></div>
+      <div id="challenges-inbox"></div>
       ${currentTheme?.type ? `
         <div class="theme-banner" style="--theme:${TYPE_COLORS[currentTheme.type] || '#888'}">
           <span class="theme-pill">Theme week</span>
@@ -345,9 +352,12 @@ function renderMenu() {
         window.__versusDeck ? Promise.resolve(window.__versusDeck) : fetchDeck(),
       ]);
       const isVersusShared = !!window.__versusDeck;
+      let versusCode = null;
       if (isVersusShared) {
-        trackEvent("versus_deck_loaded");
+        versusCode = window.__versusCode || null;
+        trackEvent("versus_deck_loaded", { code: versusCode });
         window.__versusDeck = null;
+        window.__versusCode = null;
       }
       state = createGame({
         playerDeck,
@@ -357,6 +367,10 @@ function renderMenu() {
         firstPlayer: "player",
       });
       if (currentTheme?.type) state.themeType = currentTheme.type;
+      // Friend-challenge attribution — when this is a /v/<code> battle,
+      // attach the deck-code to state so onGameOver can post the result
+      // back to the deck owner's inbox.
+      if (versusCode) state._versusCode = versusCode;
       _prevHps = { player: null, ai: null };
       _prevEnergy = null;
       // Auto-tune the first-ever match so brand-new players win in 60-90s
@@ -438,6 +452,7 @@ function renderMenu() {
   // Daily boss landing card — shown to everyone (anonymous users see the
   // "sign in to play" CTA).  Lazy-rendered so it doesn't block first paint.
   daily.renderDailyCard($("#daily-card-slot"), { currentUser }).catch(() => {});
+  if (currentUser) loadAndRenderChallenges();
 
   // First-time helper: nudge new visitors who haven't started a game yet.
   if (!localStorage.getItem("pokemon-tcg-seen-howto")) {
@@ -447,6 +462,39 @@ function renderMenu() {
       }
     }, 800);
   }
+}
+
+// "People played your shared deck" inbox — surfaces every time the
+// home screen renders, so the loop closes from share → battle →
+// notification on the original sharer's next visit.
+async function loadAndRenderChallenges() {
+  const panel = $("#challenges-inbox");
+  if (!panel) return;
+  try {
+    const r = await fetch("/me/challenges/recent");
+    if (!r.ok) return;
+    const { results } = await r.json();
+    if (!results?.length) return;
+    const wins = results.filter((x) => !x.won).length;     // creator's deck won
+    const losses = results.filter((x) => x.won).length;
+    const recent = results.slice(0, 4);
+    panel.innerHTML = `
+      <div class="challenges-inbox">
+        <div class="ci-head">
+          <span class="ci-tag">📬 Your shared decks</span>
+          <span class="ci-tot">${results.length} ${results.length === 1 ? "challenger" : "challengers"}
+            · 🏆 ${wins} · 💀 ${losses}</span>
+        </div>
+        <ul class="ci-list">
+          ${recent.map((r) => `
+            <li class="ci-row ${r.won ? "lost" : "won"}">
+              <span class="ci-who">${escape(r.challenger_name || "Anonymous Trainer")}</span>
+              <span class="ci-verdict">${r.won ? "beat your deck" : "lost to your deck"}</span>
+              <span class="ci-meta">${r.turns}t · ${r.hp_left}HP</span>
+            </li>`).join("")}
+        </ul>
+      </div>`;
+  } catch {}
 }
 
 async function loadAndRenderQuests() {
@@ -2581,6 +2629,26 @@ function onGameOver() {
       body: JSON.stringify(matchStats),
     }).catch(() => {});
     setTimeout(() => achievements.checkForNewUnlocks(), 1500);
+  }
+  // Friend-challenge result — POST back to the deck-code owner's
+  // inbox if this match was launched via /v/<code>. Best-effort,
+  // anonymous-friendly.
+  if (state._versusCode) {
+    const anonId = (() => {
+      try { return localStorage.getItem("pokemon-tcg-anon-id") || null; } catch { return null; }
+    })();
+    fetch(`/api/deck-code/${encodeURIComponent(state._versusCode)}/result`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        won: state.winner === "player",
+        turns: state.turn,
+        hpLeft: state.players.player.trainerHp,
+        anonId,
+        challengerName: currentUser?.display_name || "Anonymous Trainer",
+      }),
+    }).then((r) => r.ok && trackEvent("versus_result_posted", { won: state.winner === "player" }))
+      .catch(() => {});
   }
   // Daily boss outcome → finishDaily + share dialog (highest viral leverage).
   if (gameMode === "story" && _storyContext?.daily) {
