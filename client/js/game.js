@@ -23,7 +23,7 @@ import { abilityById } from "./abilities.js";
 import {
   hasPassive, pinchAttackBonus, levitateBlocks,
   staticTrigger, intimidateOnSummon, isGuardian, entranceAbility,
-  signatureFor,
+  signatureFor, fieldAttackBonusFor, enemyFieldAttackPenaltyFor, fieldCritBonus,
 } from "./passives.js";
 import { defaultKit, useItem as _useItem } from "./items.js";
 export const useItem = _useItem;
@@ -105,6 +105,19 @@ function emptySlot(field) {
   return -1;
 }
 
+// Type-combo bonus — if the attacker shares a primary type with 2+ of its
+// own field, that type's attackers get +1 ATK on this strike. Two adds +1,
+// three adds +2, four adds +3, capped at +3.
+function comboBonusFor(playerState, card) {
+  const t = card.types?.[0];
+  if (!t) return 0;
+  const count = playerState.field.filter(
+    (s) => s && s.card.types?.[0] === t,
+  ).length;
+  if (count < 2) return 0;
+  return Math.min(3, count - 1);
+}
+
 // Trainer ability effects applied at lookup time (no state mutation needed).
 function abilityModifiers(playerState, card) {
   const a = playerState.ability;
@@ -174,10 +187,12 @@ export function createGame({
       player: makePlayer("You", playerAbility || "brock", playerDeck),
       ai:     makePlayer("Rival", aiAbility || "pikachu", aiDeck),
     },
-    // Going-second compensation: the player who didn't go first will draw
-    // an extra card on their first turn. We track that with a flag so
-    // beginTurn can grant it once.
     firstSide,
+    // Per-match recap: aggregated stats we show in the game-over screen.
+    recap: {
+      player: { crits: 0, kos: 0, biggestHit: 0, biggestHitName: null, totalDamage: 0 },
+      ai:     { crits: 0, kos: 0, biggestHit: 0, biggestHitName: null, totalDamage: 0 },
+    },
   };
   beginTurn(state);
   return state;
@@ -423,7 +438,8 @@ export function attack(
     if (hasField) {
       return { ok: false, reason: "must attack opposing Pokémon first" };
     }
-    const base = attackerInst.card.cardAttack + attackBonus + (attackerInst.attackBoost || 0);
+    const comboBonus = comboBonusFor(p, attackerInst.card);
+    const base = attackerInst.card.cardAttack + attackBonus + (attackerInst.attackBoost || 0) + comboBonus;
     const damage = Math.max(1, Math.round(base * (ability.damageMult || 1)));
     o.trainerHp = Math.max(0, o.trainerHp - damage);
     log(state, attackPhrase(attackerInst.card, ability, o.name, damage, 1, state.turn), "attack");
@@ -438,13 +454,27 @@ export function attack(
     const pinchBonus = pinchAttackBonus(attackerInst);
     // Signature passive (e.g. Lugia's Aeroblast) → ignoreDefense flag.
     const sigPassive = signatureFor(attackerInst.card)?.passive || null;
+    const comboBonus = comboBonusFor(p, attackerInst.card);
+    // Kyogre Drizzle / Groudon Drought-style aura modifiers.
+    const auraBonus = fieldAttackBonusFor(p.field, attackerInst.card);
+    const auraPenalty = enemyFieldAttackPenaltyFor(o.field, attackerInst.card);
+    // Zapdos Thunderstorm-style aura crit boost.
+    const critBoost = fieldCritBonus(p.field);
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
-      abilityBonus: attackBonus + (attackerInst.attackBoost || 0) + pinchBonus,
+      abilityBonus:
+        attackBonus +
+        (attackerInst.attackBoost || 0) +
+        pinchBonus +
+        comboBonus +
+        auraBonus -
+        auraPenalty,
       ability,
       rand,
       themeType: state.themeType || null,
       ignoreDefense: sigPassive?.ignoreDefense || false,
+      critBoost,
     });
+    if (comboBonus > 0) calc.comboBonus = comboBonus;
     if (levitated) {
       calc.damage = 0;
       calc.multiplier = 0;
@@ -455,6 +485,15 @@ export function attack(
 
     let line = attackPhrase(attackerInst.card, ability, defenderInst.card.name, damage, calc.multiplier, state.turn);
     if (calc.critical) line = `💥 CRITICAL! ${line}`;
+    if (state.recap && damage > 0) {
+      const r = state.recap[side];
+      r.totalDamage += damage;
+      if (damage > r.biggestHit) {
+        r.biggestHit = damage;
+        r.biggestHitName = attackerInst.card.name;
+      }
+      if (calc.critical) r.crits += 1;
+    }
     if (calc.verdict.text) line += ` — ${calc.verdict.text}`;
     log(state, line, "attack");
 
@@ -517,6 +556,7 @@ export function attack(
       o.discard.push(defenderInst.card);
       o.field[defenderSlot] = null;
       result.knockedOut = true;
+      if (state.recap) state.recap[side].kos += 1;
       // Level-up reward: the attacker grows +1 HP / +1 ATK for the rest of
       // the match. Snowballs aggressive play and gives long-lived Pokémon a
       // distinct identity ("Evolved x2"). Cap at +3 so it doesn't run away.

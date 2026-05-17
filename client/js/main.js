@@ -49,6 +49,7 @@ let chosenAbilityId = "basic"; // ability the player will use on their next atta
 let pendingItem = null;        // when set, next slot click targets this item
 let pendingReplace = null;     // { handIndex } — next own-field click sacrifices that slot to summon this card
 let currentTheme = null;       // { type, endsAt } — theme of the week
+let aiPersonality = null;      // chosen at match start so it stays consistent
 let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
 let _prevEnergy = null; // tracks your energy across renders so we can pip-refill the new ones
 let _prevActivePlayer = null; // tracks active player so we can fire a turn-start cue
@@ -130,7 +131,8 @@ function renderMenu() {
     ${renderAccountPanel()}
     <div class="menu-stage">
       <h1 class="game-title">Pokémon TCG</h1>
-      <div class="menu-tagline">Pick your trainer. First to drop the opposing trainer to 0 HP wins.</div>
+      <div class="menu-tagline">Build a 30-card deck. Wield Legendary signature moves. Out-strategize your rival.</div>
+      ${renderFeatureStrip()}
       ${currentTheme?.type ? `
         <div class="theme-banner" style="--theme:${TYPE_COLORS[currentTheme.type] || '#888'}">
           <span class="theme-pill">Theme week</span>
@@ -221,6 +223,8 @@ function renderMenu() {
       if (currentTheme?.type) state.themeType = currentTheme.type;
       _prevHps = { player: null, ai: null };
       _prevEnergy = null;
+      // Pick the AI personality once for this match so it stays consistent.
+      aiPersonality = ["aggressive", "balanced", "tactical"][Math.floor(Math.random() * 3)];
       // Anti-cheat: register the solo session with the server.
       // The reward issued at game-over will require this id and a min duration.
       soloSessionId = null;
@@ -243,6 +247,9 @@ function renderMenu() {
       startBGM();
       await openMulliganModal();
       render();
+      // Reveal the rival's personality.
+      const mood = ({ aggressive: "AGGRESSIVE 🔥", balanced: "BALANCED ⚖", tactical: "TACTICAL 🧠" })[aiPersonality];
+      setTimeout(() => flashVerdict(`Rival is feeling ${mood}`, "weak"), 600);
     } catch (err) {
       console.error(err);
       btn.textContent = "Failed to load deck. Retry";
@@ -351,8 +358,13 @@ async function grantXp({ won, kos, crits }) {
     const data = await res.json();
     setTimeout(() => {
       flashVerdict(`+${data.gained} XP`, "super");
+      if (data.streakMilestone) {
+        setTimeout(() => flashVerdict(`🔥 ${data.streakMilestone} +${data.streakBonus} bonus XP`, "super"), 700);
+      } else if (won && data.winStreak >= 2) {
+        setTimeout(() => flashVerdict(`Win streak: ${data.winStreak}`, "super"), 600);
+      }
       if (data.leveledUp) {
-        setTimeout(() => flashVerdict(`Trainer Level ${data.level}!`, "super"), 900);
+        setTimeout(() => flashVerdict(`Trainer Level ${data.level}!`, "super"), 1300);
       }
     }, 600);
   } catch {}
@@ -513,6 +525,7 @@ function render() {
             <span>🗑 ${state.players.player.discard.length}</span>
           </div>
           ${renderItemBar(state.players.player)}
+          ${renderComboTags(state.players.player)}
         </div>
       </div>
       <div class="action-bar">
@@ -586,6 +599,64 @@ function render() {
 
 // Coach the player about what to do next. Reads state to figure out which
 // action is the most useful nudge.
+// Three featured legendaries above the trainer grid — rotates each page-load
+// from a small curated pool of icons with custom signatures.
+const FEATURED_POOL = [
+  { id: 150, name: "Mewtwo",   tag: "Recover",        desc: "Heals 3 HP every turn it survives" },
+  { id: 384, name: "Rayquaza", tag: "Dragon Ascent",  desc: "+1 ATK each turn, up to +5" },
+  { id: 250, name: "Ho-Oh",    tag: "Phoenix Down",   desc: "Survives the first KO at 50% HP" },
+  { id: 249, name: "Lugia",    tag: "Aeroblast",      desc: "Every attack ignores defense" },
+  { id: 145, name: "Zapdos",   tag: "Thunderstorm",   desc: "Doubles your crit chance" },
+  { id: 493, name: "Arceus",   tag: "Judgment",       desc: "Heals your whole field on summon" },
+  { id: 382, name: "Kyogre",   tag: "Drizzle",        desc: "Your Water Pokémon strike for +1" },
+  { id: 384, name: "Rayquaza", tag: "Dragon Ascent",  desc: "+1 ATK each turn, up to +5" },
+];
+function renderFeatureStrip() {
+  // Pick 3 distinct random entries.
+  const pool = [...FEATURED_POOL];
+  const picks = [];
+  while (picks.length < 3 && pool.length > 0) {
+    const idx = Math.floor(Math.random() * pool.length);
+    const c = pool.splice(idx, 1)[0];
+    if (!picks.some((p) => p.id === c.id)) picks.push(c);
+  }
+  return `
+    <div class="feature-strip">
+      ${picks.map((c) => `
+        <div class="feature-card">
+          <div class="feature-art" style="background-image:url('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${c.id}.png')"></div>
+          <div class="feature-body">
+            <div class="feature-name">${escape(c.name)}</div>
+            <div class="feature-ability">⭐ ${escape(c.tag)}</div>
+            <div class="feature-desc">${escape(c.desc)}</div>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderComboTags(p) {
+  // Group by primary type; show a chip if any group ≥ 2.
+  const counts = new Map();
+  for (const inst of p.field) {
+    if (!inst) continue;
+    const t = inst.card.types?.[0];
+    if (!t) continue;
+    counts.set(t, (counts.get(t) || 0) + 1);
+  }
+  const active = [...counts.entries()].filter(([, n]) => n >= 2);
+  if (!active.length) return "";
+  return `
+    <div class="combo-tags">
+      ${active.map(([t, n]) => {
+        const bonus = Math.min(3, n - 1);
+        return `<span class="combo-tag" style="background:${TYPE_COLORS[t] || "#888"}">${t} ×${n} +${bonus} ATK</span>`;
+      }).join("")}
+    </div>
+  `;
+}
+
 function renderItemBar(p) {
   if (!p.items?.length) return "";
   return `
@@ -1163,6 +1234,7 @@ async function onEndTurn() {
   await sleep(500);
   await aiTakeTurn(state, {
     difficulty: aiDifficulty,
+    personality: aiPersonality,
     onAction: handleAiAction,
   });
   render();
@@ -1877,10 +1949,13 @@ function onGameOver() {
 
   const overlay = document.createElement("div");
   overlay.className = "game-over";
-  const myKOs = state.players.player.discard.length;
-  const oppKOs = state.players.ai.discard.length;
+  const myKOs = state.players.ai.discard.length;     // we KO'd these of theirs
+  const oppKOs = state.players.player.discard.length;
   const myHpLeft = state.players.player.trainerHp;
   const oppHpLeft = state.players.ai.trainerHp;
+  const recap = state.recap || { player: {}, ai: {} };
+  const my = recap.player || {};
+  const opp = recap.ai || {};
   overlay.innerHTML = `
     <div class="game-over-card ${state.winner === "player" ? "win" : "loss"}">
       <h2>${state.winner === "player" ? "Victory!" : "Defeat"}</h2>
@@ -1889,9 +1964,14 @@ function onGameOver() {
         : "Your trainer has been knocked out."}</p>
       <div class="go-stats">
         <div class="go-stat"><span>Turns played</span><strong>${state.turn}</strong></div>
-        <div class="go-stat"><span>Your KOs</span><strong>${oppKOs}</strong></div>
-        <div class="go-stat"><span>Their KOs</span><strong>${myKOs}</strong></div>
-        <div class="go-stat"><span>Trainer HP</span><strong>${myHpLeft} vs ${oppHpLeft}</strong></div>
+        <div class="go-stat"><span>HP remaining</span><strong>${myHpLeft} vs ${oppHpLeft}</strong></div>
+        <div class="go-stat"><span>KOs scored</span><strong>${myKOs}</strong></div>
+        <div class="go-stat"><span>KOs taken</span><strong>${oppKOs}</strong></div>
+        <div class="go-stat"><span>Crit hits</span><strong>${my.crits || 0}</strong></div>
+        <div class="go-stat"><span>Total damage</span><strong>${my.totalDamage || 0}</strong></div>
+        ${my.biggestHitName ? `
+          <div class="go-stat" style="grid-column:1/-1"><span>Biggest hit</span><strong>${escape(my.biggestHitName)} for ${my.biggestHit}</strong></div>
+        ` : ""}
       </div>
       <button id="play-again-btn">Play again</button>
     </div>

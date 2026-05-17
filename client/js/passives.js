@@ -147,11 +147,144 @@ export const SIGNATURE_ABILITIES = {
       state.log.push({ id: state.log.length + 1, text: `🐉 Rayquaza ascends! +1 ATK (now +${inst.dragonAscentLevel}).`, kind: "summon" });
     },
   },
+  144: {
+    // Articuno
+    name: "Glacial Veil",
+    desc: "On summon, every enemy on the field is paralyzed for one turn.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      let n = 0;
+      for (const enemy of state.players[otherSide].field) {
+        if (!enemy) continue;
+        enemy.status = { kind: "paralyze", turnsLeft: 1 };
+        n++;
+      }
+      if (n) state.log.push({ id: state.log.length + 1, text: `❄ Articuno froze ${n} foe${n === 1 ? "" : "s"}!`, kind: "status" });
+    },
+  },
+  145: {
+    // Zapdos
+    name: "Thunderstorm",
+    desc: "Critical-hit chance doubled while it's on the field for your attacks.",
+    passive: { critBonus: 0.1 },
+  },
+  146: {
+    // Moltres
+    name: "Sky Attack",
+    desc: "Burns every enemy on the field on summon.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      let n = 0;
+      for (const enemy of state.players[otherSide].field) {
+        if (!enemy) continue;
+        enemy.status = { kind: "burn", turnsLeft: 2 };
+        n++;
+      }
+      if (n) state.log.push({ id: state.log.length + 1, text: `🔥 Moltres scorched ${n} foe${n === 1 ? "" : "s"}!`, kind: "status" });
+    },
+  },
+  382: {
+    // Kyogre
+    name: "Drizzle",
+    desc: "While on the field, your Water Pokémon attack with +1 ATK.",
+    fieldAura: { type: "water", attackBonus: 1 },
+  },
+  383: {
+    // Groudon
+    name: "Drought",
+    desc: "While on the field, enemy Water Pokémon lose 1 ATK on their attacks.",
+    fieldAura: { enemyType: "water", attackPenalty: 1 },
+  },
+  483: {
+    // Dialga
+    name: "Roar of Time",
+    desc: "On summon, your maximum Energy this turn doubles (capped at 10).",
+    onSummon(state, side, inst) {
+      const p = state.players[side];
+      p.maxEnergy = Math.min(10, p.maxEnergy * 2);
+      p.energy = Math.min(p.maxEnergy, p.energy * 2);
+      state.log.push({ id: state.log.length + 1, text: `⏳ Dialga warps time! Energy doubled this turn.`, kind: "summon" });
+    },
+  },
+  484: {
+    // Palkia
+    name: "Spacial Rend",
+    desc: "On summon, swaps the positions of every enemy on the field (random shuffle).",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const field = state.players[otherSide].field;
+      const occupied = field.map((c, i) => ({ c, i })).filter((x) => x.c != null);
+      for (let i = occupied.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [occupied[i], occupied[j]] = [occupied[j], occupied[i]];
+      }
+      // Reassign in original empty slots first, then originals.
+      const slots = field.map((_, i) => i);
+      for (let i = 0; i < field.length; i++) field[i] = null;
+      for (let i = 0; i < occupied.length; i++) field[i] = occupied[i].c;
+      if (occupied.length > 0) state.log.push({ id: state.log.length + 1, text: `🌌 Palkia tore through space — enemies rearranged.`, kind: "summon" });
+    },
+  },
+  493: {
+    // Arceus
+    name: "Judgment",
+    desc: "On summon, all your Pokémon are healed to full HP.",
+    onSummon(state, side, inst) {
+      let healed = 0;
+      for (const ally of state.players[side].field) {
+        if (!ally) continue;
+        const cap = ally.maxHp ?? ally.card.cardHp;
+        const before = ally.currentHp;
+        ally.currentHp = cap;
+        healed += cap - before;
+      }
+      if (healed) state.log.push({ id: state.log.length + 1, text: `🌟 Arceus' Judgment restored ${healed} HP across the field.`, kind: "summon" });
+    },
+  },
 };
 
 export function signatureFor(card) {
   if (!card) return null;
   return SIGNATURE_ABILITIES[card.id] || null;
+}
+
+// Field-aura helpers — given a player's field, sum bonuses/penalties that
+// apply to a specific attacker based on its type.
+export function fieldAttackBonusFor(playerField, attackerCard) {
+  let bonus = 0;
+  for (const inst of playerField) {
+    if (!inst) continue;
+    const sig = signatureFor(inst.card);
+    if (!sig?.fieldAura) continue;
+    if (sig.fieldAura.type && attackerCard.types?.includes(sig.fieldAura.type)) {
+      bonus += sig.fieldAura.attackBonus || 0;
+    }
+  }
+  return bonus;
+}
+
+export function enemyFieldAttackPenaltyFor(enemyField, attackerCard) {
+  let penalty = 0;
+  for (const inst of enemyField) {
+    if (!inst) continue;
+    const sig = signatureFor(inst.card);
+    if (!sig?.fieldAura) continue;
+    if (sig.fieldAura.enemyType && attackerCard.types?.includes(sig.fieldAura.enemyType)) {
+      penalty += sig.fieldAura.attackPenalty || 0;
+    }
+  }
+  return penalty;
+}
+
+// Crit chance bonus from your own field (Zapdos Thunderstorm).
+export function fieldCritBonus(playerField) {
+  let bonus = 0;
+  for (const inst of playerField) {
+    if (!inst) continue;
+    const sig = signatureFor(inst.card);
+    if (sig?.passive?.critBonus) bonus += sig.passive.critBonus;
+  }
+  return bonus;
 }
 
 // Compute pinch-clause damage bonus for the attacker (blaze/torrent/overgrow).

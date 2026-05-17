@@ -75,23 +75,47 @@ function mount(app, supabase) {
 
     const { data: cur } = await supabase
       .from("users")
-      .select("trainer_xp")
+      .select("trainer_xp, match_win_streak, match_win_streak_best")
       .eq("id", req.user.id)
       .maybeSingle();
     const before = cur?.trainer_xp || 0;
-    const after = before + gained;
+    let newStreak = cur?.match_win_streak || 0;
+    let bestStreak = cur?.match_win_streak_best || 0;
+    if (won) {
+      newStreak += 1;
+      if (newStreak > bestStreak) bestStreak = newStreak;
+    } else if (!abandoned) {
+      newStreak = 0;
+    }
+    // Streak milestone bonus XP: +50 at 3, +100 at 5, +250 at 10.
+    let streakBonus = 0;
+    let streakMilestone = null;
+    if (won) {
+      if (newStreak === 3)  { streakBonus = 50;  streakMilestone = "3-streak!"; }
+      if (newStreak === 5)  { streakBonus = 100; streakMilestone = "5-streak!"; }
+      if (newStreak === 10) { streakBonus = 250; streakMilestone = "10-streak!"; }
+    }
+    const after = before + gained + streakBonus;
     const prevLevel = levelFromXp(before);
     const newLevel = levelFromXp(after);
     await supabase
       .from("users")
-      .update({ trainer_xp: after })
+      .update({
+        trainer_xp: after,
+        match_win_streak: newStreak,
+        match_win_streak_best: bestStreak,
+      })
       .eq("id", req.user.id);
 
     res.json({
-      gained,
+      gained: gained + streakBonus,
       xp: after,
       level: newLevel,
       leveledUp: newLevel > prevLevel,
+      winStreak: newStreak,
+      bestStreak,
+      streakBonus,
+      streakMilestone,
     });
   });
 }
