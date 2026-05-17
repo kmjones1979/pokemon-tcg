@@ -220,6 +220,23 @@ a share artifact. No retention layer matters if there are zero shares.
   "this is my favorite mon" cards).
 - Localized rosters per region.
 - Esports support (replays, brackets, observer mode).
+- Match-3 mini-game between matches (currency-only, no card-power
+  effects). Weakest TCG tie-in of the mini-game set — included only
+  if D7 retention shows a clear gap after Phase 3.
+
+---
+
+## Mini-games (slotted across phases)
+
+User approved all four. Each is scoped to the phase where it does
+the most work for the North Star metrics:
+
+| Mini-game                | Phase | Why this phase                                  |
+| ------------------------ | ----- | ----------------------------------------------- |
+| **Daily Puzzle** (Wordle-style — fixed board, fewest-moves-to-KO, shareable result) | 2 | Direct K-factor lift; rides the daily-boss share-string infra already deployed. Single biggest viral lever after daily boss. |
+| **Crit-timing micro-game** (tap-the-sweet-spot bar on big attacks, guarantees crit) | 4 | Skill expression depth — moves time-played, increases match-end "wow" moments worth sharing. Pure client-side, ~1 day of work. |
+| **Booster-pack opening** (tear/scratch/flip card-reveal animation, replaces reward modal) | 4 | Dopamine + memeable screenshots. Plus: cosmetic pack designs are unlockable, doubling as season-pass content. |
+| **Match-3 between matches** (separate loop, earns daily cosmetic currency) | 7+ | Weakest TCG tie-in. Defer until Phase 3 retention data shows a gap that needs filling. Risk of feature dilution if shipped earlier. |
 
 ---
 
