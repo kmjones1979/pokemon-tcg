@@ -164,7 +164,15 @@ export function trainerAbilityCostMod(playerState, card, ability) {
 
 export function effectiveCost(playerState, card) {
   const { costMod } = abilityModifiers(playerState, card);
-  return Math.max(1, (card.energyCost || 1) + costMod);
+  let cost = (card.energyCost || 1) + costMod;
+  // Comeback mechanic: when you're below 25% trainer HP, every card
+  // play costs 1 less energy (floor 1). Keeps losing matches alive,
+  // makes high-cost emergency drops feasible.
+  if (playerState && playerState.trainerHp != null && playerState.maxTrainerHp != null) {
+    const ratio = playerState.trainerHp / playerState.maxTrainerHp;
+    if (ratio > 0 && ratio < 0.25) cost -= 1;
+  }
+  return Math.max(1, cost);
 }
 
 export function createGame({
@@ -301,6 +309,15 @@ function beginTurn(state) {
       log(state, `${p.name} is out of cards! Trainer takes ${dmg} fatigue.`, "warn");
       p.trainerHp = Math.max(0, p.trainerHp - dmg);
     }
+  }
+  // Match-length governor: long matches start chipping both trainers
+  // past turn 12 even if both still have deck. Pushes average match
+  // length toward 2.5–4 min (per PLAN.md exit criteria). Tick is small
+  // so it's a tiebreaker, not a kill.
+  if (state.turn >= 13) {
+    const tick = Math.min(4, Math.floor((state.turn - 12) / 2) + 1);
+    p.trainerHp = Math.max(0, p.trainerHp - tick);
+    log(state, `⏱ Time pressure — ${p.name} loses ${tick} HP.`, "warn");
   }
   if (isFirstSecondMoverTurn) {
     log(state, `${p.name} drew an extra card (going second).`, "info");

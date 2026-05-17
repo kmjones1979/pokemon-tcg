@@ -574,6 +574,87 @@ export const SIGNATURE_ABILITIES = {
     },
   },
 
+  // --- New signatures (Wave 30d) for fan-favorite mons --------------------
+  149: {
+    // Dragonite — Outrage (rage scaling)
+    name: "Outrage",
+    desc: "Gains +1 ATK at the start of each turn until KO'd.",
+    onTurnStart(state, side, inst) {
+      inst.attackBoost = (inst.attackBoost || 0) + 1;
+      state.log.push({ id: state.log.length + 1, text: `🐲 ${inst.card.name}'s Outrage flared — +1 ATK.`, kind: "summon" });
+    },
+  },
+  468: {
+    // Togekiss — Air Slash: 30% flinch chance baked in is hard; do
+    // an on-summon heal-on-low-HP-allies instead. Fan-favorite.
+    name: "Fairy Wind",
+    desc: "On summon, heals every Fairy/Flying/Normal ally for 3 HP.",
+    onSummon(state, side, inst) {
+      const allies = state.players[side].field.filter((a) => a && a !== inst);
+      let healed = 0;
+      for (const ally of allies) {
+        const types = ally.card?.types || [];
+        if (!types.some((t) => ["fairy", "flying", "normal"].includes(t))) continue;
+        const cap = ally.maxHp ?? ally.card.cardHp;
+        const before = ally.currentHp;
+        ally.currentHp = Math.min(cap, ally.currentHp + 3);
+        healed += ally.currentHp - before;
+      }
+      if (healed) state.log.push({ id: state.log.length + 1, text: `🕊 Togekiss' Fairy Wind healed ${healed} HP across the field.`, kind: "summon" });
+    },
+  },
+  208: {
+    // Steelix — Sandstorm-style chip on Steel/Ground enemies
+    name: "Sand Veil",
+    desc: "While on the field, every attack against you takes a flat 1 damage off (minimum 1).",
+    passive: { damageReduction: 1 },
+  },
+  571: {
+    // Zoroark — Illusion: enemy gets random crit boost AGAINST it (high-risk attacker)
+    name: "Illusion",
+    desc: "On summon, copies the attack stat of the strongest enemy as a permanent boost.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      let best = 0;
+      for (const enemy of state.players[otherSide].field) {
+        if (!enemy) continue;
+        const atk = (enemy.card.cardAttack || 0) + (enemy.attackBoost || 0);
+        if (atk > best) best = atk;
+      }
+      if (best > 0) {
+        const gain = Math.min(3, Math.max(1, Math.round(best / 3)));
+        inst.attackBoost = (inst.attackBoost || 0) + gain;
+        state.log.push({ id: state.log.length + 1, text: `🦊 Zoroark's Illusion absorbed +${gain} ATK.`, kind: "summon" });
+      }
+    },
+  },
+  609: {
+    // Chandelure — Soul Drain: heal on KO
+    name: "Soul Drain",
+    desc: "When it KOs an enemy, heals 3 HP and the strongest ally gains +1 ATK.",
+    onKill(state, side, inst) {
+      const cap = inst.maxHp ?? inst.card.cardHp;
+      const before = inst.currentHp;
+      inst.currentHp = Math.min(cap, inst.currentHp + 3);
+      const allies = state.players[side].field.filter((a) => a && a !== inst);
+      if (allies.length) {
+        const best = allies.reduce((a, b) =>
+          (b.card.cardAttack + (b.attackBoost || 0)) >
+          (a.card.cardAttack + (a.attackBoost || 0)) ? b : a);
+        best.attackBoost = (best.attackBoost || 0) + 1;
+        state.log.push({ id: state.log.length + 1, text: `🔮 Chandelure drained — +${inst.currentHp - before} HP, +1 ATK to ${best.card.name}.`, kind: "summon" });
+      } else {
+        state.log.push({ id: state.log.length + 1, text: `🔮 Chandelure drained +${inst.currentHp - before} HP.`, kind: "summon" });
+      }
+    },
+  },
+  254: {
+    // Sceptree (Sceptile) — Overgrow: Grass aura
+    name: "Leaf Storm",
+    desc: "While on the field, your Grass Pokémon attack with +1 ATK and apply burn 25%.",
+    fieldAura: { type: "grass", attackBonus: 1, statusOnHit: "burn" },
+  },
+
   // --- Crowd-control / board-clear signatures --------------------------
   // These shine when the OPPONENT has filled their field. The more of them
   // there are, the harder these hit — keeps a wide board from snowballing.
