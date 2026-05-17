@@ -1394,6 +1394,12 @@ h1, h2, h3,
 .action-bar {
   display: flex;
   gap: 10px;
+  /* Always reachable above the fanned hand, even when there are 16 cards
+     fighting for the bottom of the screen. */
+  position: fixed;
+  right: 18px;
+  bottom: 14px;
+  z-index: 50;
 }
 .action-bar button {
   background: var(--bg-mid);

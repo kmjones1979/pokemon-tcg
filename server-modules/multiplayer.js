@@ -298,10 +298,10 @@ function attach(io, supabase, pokedexOrGetter) {
       return result;
     }
 
-    socket.on("game:play-card", async ({ handIndex } = {}) => {
+    socket.on("game:play-card", async ({ handIndex, replaceSlot } = {}) => {
       const out = await inRoom(async (room, side) => {
         const engine = await getEngine();
-        const r = engine.playCard(room.state, side, handIndex);
+        const r = engine.playCard(room.state, side, handIndex, { replaceSlot });
         if (!r.ok) { socket.emit("error", { error: r.reason }); return null; }
         broadcast(room);
         return { ok: true };

@@ -28,6 +28,7 @@ export const FIELD_SIZE = 5;
 export const STARTING_HAND = 5;
 export const TRAINER_START_HP = 30;
 export const MAX_ENERGY = 10;
+export const MAX_HAND = 10;
 
 let _instanceCounter = 0;
 const nextInstanceId = () => `i${++_instanceCounter}`;
@@ -221,7 +222,14 @@ function beginTurn(state) {
   const draws = isFirstSecondMoverTurn ? 2 : 1;
   for (let i = 0; i < draws; i++) {
     if (p.deck.length > 0) {
-      p.hand.push(p.deck.shift());
+      const card = p.deck.shift();
+      if (p.hand.length >= MAX_HAND) {
+        // Burn — hand is full, card goes straight to the discard pile.
+        p.discard.push(card);
+        log(state, `${p.name}'s hand is full — ${card.name} burned.`, "warn");
+      } else {
+        p.hand.push(card);
+      }
     } else {
       // Fatigue scales each turn an empty-deck player draws — Hearthstone-
       // style — so decking out is decisive instead of dragging on forever.
@@ -247,7 +255,7 @@ function beginTurn(state) {
   if (checkWinner(state)) return;
 }
 
-export function playCard(state, side, handIndex, { rand = Math.random } = {}) {
+export function playCard(state, side, handIndex, { rand = Math.random, replaceSlot = null } = {}) {
   if (state.winner) return { ok: false, reason: "game over" };
   if (state.activePlayer !== side) return { ok: false, reason: "not your turn" };
   if (state.phase !== "main") return { ok: false, reason: "wrong phase" };
@@ -256,14 +264,33 @@ export function playCard(state, side, handIndex, { rand = Math.random } = {}) {
   if (!card) return { ok: false, reason: "no such card" };
   const cost = effectiveCost(p, card);
   if (p.energy < cost) return { ok: false, reason: "not enough energy" };
-  const slot = emptySlot(p.field);
-  if (slot === -1) return { ok: false, reason: "field is full" };
+
+  // Determine target slot.
+  let slot = emptySlot(p.field);
+  let sacrificed = null;
+  if (replaceSlot != null) {
+    if (!Number.isInteger(replaceSlot) || replaceSlot < 0 || replaceSlot >= FIELD_SIZE) {
+      return { ok: false, reason: "invalid replace slot" };
+    }
+    const existing = p.field[replaceSlot];
+    if (!existing) return { ok: false, reason: "slot is empty — no need to replace" };
+    sacrificed = existing.card;
+    p.discard.push(existing.card);
+    slot = replaceSlot;
+  } else if (slot === -1) {
+    return { ok: false, reason: "field is full — pick a slot to replace" };
+  }
+
   p.energy -= cost;
   p.hand.splice(handIndex, 1);
   const inst = instantiate(card, p);
   p.field[slot] = inst;
-  log(state, `${p.name} summoned ${card.name}!`, "summon");
-  return { ok: true, slot, instance: inst };
+  if (sacrificed) {
+    log(state, `${p.name} sacrificed ${sacrificed.name} and summoned ${card.name}!`, "summon");
+  } else {
+    log(state, `${p.name} summoned ${card.name}!`, "summon");
+  }
+  return { ok: true, slot, instance: inst, sacrificed };
 }
 
 export function attack(

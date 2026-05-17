@@ -46,6 +46,7 @@ let chosenTrainer = null;   // remember during multiplayer matchmaking
 let soloSessionId = null;   // server-tracked anti-cheat session for solo matches
 let chosenAbilityId = "basic"; // ability the player will use on their next attack
 let pendingItem = null;        // when set, next slot click targets this item
+let pendingReplace = null;     // { handIndex } — next own-field click sacrifices that slot to summon this card
 let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
 let _prevEnergy = null; // tracks your energy across renders so we can pip-refill the new ones
 
@@ -637,6 +638,12 @@ function turnHint() {
   const me = p.field.filter(Boolean);
   const oppField = state.players.ai.field.filter(Boolean);
 
+  if (pendingReplace != null) {
+    return "Tap one of your Pokémon to sacrifice (it will be discarded)";
+  }
+  if (pendingItem != null) {
+    return "Tap one of your Pokémon to use the item on";
+  }
   if (selectedAttacker != null) {
     if (oppField.length > 0) return "Pick an attack, then tap your target";
     return "Pick an attack, then tap the opposing trainer";
@@ -694,6 +701,7 @@ function renderFields() {
         if (inst.summoningSickness) card.classList.add("summoning");
         if (inst.attackedThisTurn) card.classList.add("spent");
         if (selectedAttacker && side === "player" && selectedAttacker.slot === i) card.classList.add("selected");
+        if (pendingReplace && side === "player") card.classList.add("sacrifice-target");
         // Pulse our ready attackers when it's our turn (cue: "tap me!").
         const canActNow =
           side === "player" &&
@@ -896,7 +904,13 @@ function onHandCardClick(handIndex) {
     return;
   }
   if (!p.field.includes(null)) {
-    flashVerdict("Field is full!", "weak");
+    // Field is full — prompt user to sacrifice one of their Pokémon.
+    pendingReplace = { handIndex };
+    selectedAttacker = null;
+    chosenAbilityId = "basic";
+    hideAbilityPopover();
+    flashVerdict(`Field full — tap a Pokémon to sacrifice for ${card.name}`, "weak");
+    render();
     return;
   }
 
@@ -937,6 +951,37 @@ function onSlotClick(side, slot) {
       return;
     }
     applyItem(pendingItem, slot);
+    return;
+  }
+
+  // Replace targeting: user picked a hand card while field was full,
+  // now they're choosing which Pokémon to sacrifice.
+  if (pendingReplace) {
+    if (side !== "player") {
+      flashVerdict("Tap one of YOUR Pokémon to sacrifice", "weak");
+      return;
+    }
+    const inst = state.players.player.field[slot];
+    if (!inst) {
+      flashVerdict("Tap an occupied slot to sacrifice", "weak");
+      return;
+    }
+    const handIndex = pendingReplace.handIndex;
+    pendingReplace = null;
+    if (gameMode === "mp") {
+      sfxCardPlay();
+      mp.playCard(handIndex, slot);
+      return;
+    }
+    const r = playCard(state, "player", handIndex, { replaceSlot: slot });
+    if (!r.ok) {
+      flashVerdict(r.reason, "weak");
+      render();
+      return;
+    }
+    sfxCardPlay();
+    playCry(r.instance?.card?.cry_url).catch(() => {});
+    render();
     return;
   }
 

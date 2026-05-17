@@ -169,6 +169,17 @@
 }
 .card.leveled-up { animation: levelUp 0.85s ease-out; }
 
+/* Sacrifice prompt — pulsing red outline on your own field cards while
+   choosing one to discard so the new hand card can take its slot. */
+@keyframes sacrificePulse {
+  0%, 100% { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 0 0 rgba(255, 92, 99, 0.6); }
+  50%      { box-shadow: 0 6px 14px rgba(0,0,0,0.4), 0 0 22px 4px rgba(255, 92, 99, 0.7); }
+}
+.card.sacrifice-target {
+  animation: sacrificePulse 0.9s ease-in-out infinite;
+  cursor: crosshair;
+}
+
 /* Shiny tier — additional rainbow shimmer behind the holo sheen so shiny
    cards are immediately recognisable. */
 .card.shiny-1 .card-sheen,
