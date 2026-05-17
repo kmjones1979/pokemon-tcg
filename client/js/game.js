@@ -176,7 +176,27 @@ export function createGame({
   firstPlayer,             // "player" | "ai" — if omitted, picked at random
   aiTrainerHp,             // override AI side's starting HP (boss fights)
   aiName,                  // override AI's display name (boss name)
+  masteryById,             // { [pokemonId]: { level: 0..3 } } — player-side
+                            // mastery snapshot. L3 cards get +1 ATK for the
+                            // whole match (engine applies via cardAttack).
 } = {}) {
+  // Stamp the mastery bonus directly onto a clone of each player-side
+  // card so every code path (hand, field, draw, discard) sees the
+  // boosted value with no per-call lookup overhead.
+  function applyMasteryToDeck(deck) {
+    if (!masteryById) return deck;
+    return deck.map((card) => {
+      const m = masteryById[card?.id];
+      if (m?.level >= 3) {
+        return { ...card, cardAttack: (card.cardAttack || 0) + 1, _masteryLevel: m.level };
+      }
+      if (m?.level) {
+        return { ...card, _masteryLevel: m.level };
+      }
+      return card;
+    });
+  }
+  const adjustedPlayerDeck = applyMasteryToDeck(playerDeck);
   function makePlayer(name, ability, deck, hpOverride) {
     const shuffled = shuffle(deck, rand);
     const hand = shuffled.splice(0, STARTING_HAND);
@@ -202,7 +222,7 @@ export function createGame({
     winner: null,
     log: [],
     players: {
-      player: makePlayer("You", playerAbility || "brock", playerDeck),
+      player: makePlayer("You", playerAbility || "brock", adjustedPlayerDeck),
       ai:     makePlayer(aiName || "Rival", aiAbility || "pikachu", aiDeck, aiTrainerHp),
     },
     firstSide,
@@ -644,7 +664,14 @@ export function attack(
       o.discard.push(defenderInst.card);
       o.field[defenderSlot] = null;
       result.knockedOut = true;
-      if (state.recap) state.recap[side].kos += 1;
+      if (state.recap) {
+        state.recap[side].kos += 1;
+        // Per-Pokémon kill tracking for Card Mastery. The player-side
+        // tally is posted to /me/mastery/bump at game-over.
+        const m = state.recap[side].kosByPokemonId = state.recap[side].kosByPokemonId || {};
+        const attackerId = attackerInst.card?.id;
+        if (attackerId) m[attackerId] = (m[attackerId] || 0) + 1;
+      }
       // Garchomp Sand Force-style onKill hook on the attacker.
       const attackerSig = signatureFor(attackerInst.card);
       if (attackerSig?.onKill) attackerSig.onKill(state, side, attackerInst);

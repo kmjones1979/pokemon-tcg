@@ -75,6 +75,7 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
         <div class="card-level shiny-badge" title="Shiny L${card.shinyLevel} (+${card.shinyLevel} HP, +${card.shinyLevel} ATK)">★${card.shinyLevel}</div>
       ` : ""}
       ${card.is_legendary ? `<div class="card-rarity">★ LEGENDARY ★</div>` : card.is_mythical ? `<div class="card-rarity mythical">✦ MYTHICAL ✦</div>` : ""}
+      ${card._masteryLevel ? `<div class="card-mastery" title="Card Mastery L${card._masteryLevel}${card._masteryLevel >= 3 ? " · +1 ATK active" : ""}">${"★".repeat(card._masteryLevel)}</div>` : ""}
     </div>
     ${isGuardianCard(card) ? `
       <div class="guardian-ring" aria-hidden="true"></div>

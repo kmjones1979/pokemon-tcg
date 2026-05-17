@@ -359,12 +359,23 @@ function renderMenu() {
         window.__versusDeck = null;
         window.__versusCode = null;
       }
+      // Load the user's Card Mastery snapshot so L3 cards get +1 ATK
+      // baked into createGame. Best-effort: missing or 401 is just no
+      // mastery (vanilla match).
+      let masteryById = null;
+      if (currentUser) {
+        try {
+          const mr = await fetch("/me/mastery");
+          if (mr.ok) masteryById = (await mr.json()).mastery || null;
+        } catch {}
+      }
       state = createGame({
         playerDeck,
         aiDeck,
         playerAbility: chosen,
         aiAbility: aiTrainer,
         firstPlayer: "player",
+        masteryById,
       });
       if (currentTheme?.type) state.themeType = currentTheme.type;
       // Friend-challenge attribution — when this is a /v/<code> battle,
@@ -2629,6 +2640,27 @@ function onGameOver() {
       body: JSON.stringify(matchStats),
     }).catch(() => {});
     setTimeout(() => achievements.checkForNewUnlocks(), 1500);
+  }
+  // Card Mastery: post per-Pokémon kill tallies from this match.
+  // Server returns level-up info; we surface a quick "★ Mastery
+  // levelled up" verdict for any cards that crossed a threshold.
+  if (currentUser) {
+    const kos = state.recap?.player?.kosByPokemonId || {};
+    if (Object.keys(kos).length) {
+      fetch("/me/mastery/bump", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kos }),
+      }).then((r) => r.ok ? r.json() : null).then((data) => {
+        if (!data?.updated) return;
+        const levelups = Object.entries(data.updated)
+          .filter(([, info]) => info.leveledUp);
+        for (const [, info] of levelups) {
+          setTimeout(() => flashVerdict(`★ Mastery L${info.level} reached`, "super"), 1400);
+          trackEvent("mastery_levelup", { level: info.level });
+        }
+      }).catch(() => {});
+    }
   }
   // Friend-challenge result — POST back to the deck-code owner's
   // inbox if this match was launched via /v/<code>. Best-effort,
