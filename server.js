@@ -22,6 +22,10 @@ const quests = require("./server-modules/quests");
 const theme = require("./server-modules/theme");
 
 const app = express();
+// Vercel + most PaaS hosts proxy requests. Trust the proxy headers so
+// req.hostname / req.protocol come from X-Forwarded-* (matching the
+// public URL) instead of the internal Lambda hostname.
+app.set("trust proxy", true);
 const server = http.createServer(app);
 const io = socketIo(server);
 app.use(express.json({ limit: "256kb" }));

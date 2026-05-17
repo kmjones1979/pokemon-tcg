@@ -49,10 +49,25 @@ function randomId() {
 
 function rpFromReq(req) {
   // RP ID is the registrable host (no port). For local dev that's "localhost".
-  // In production set RP_ID + RP_NAME + ORIGIN env vars.
-  const rpID = process.env.RP_ID || req.hostname || "localhost";
-  const rpName = process.env.RP_NAME || "Pokémon TCG";
-  const origin = process.env.ORIGIN || `${req.protocol}://${req.headers.host}`;
+  // Resolution order:
+  //   1. RP_ID env var if it matches the current request's hostname (or is
+  //      an ancestor domain of it).
+  //   2. Otherwise fall back to the actual request hostname.
+  //   3. "localhost" if neither is set.
+  // This makes preview-URL deployments (pokemon-xxxxx.vercel.app) work
+  // without breaking the canonical alias.
+  const envId = (process.env.RP_ID || "").trim();
+  const host = (req.hostname || "").trim() || "localhost";
+  let rpID;
+  if (envId && (host === envId || host.endsWith("." + envId))) {
+    rpID = envId;
+  } else {
+    rpID = host;
+  }
+  const rpName = (process.env.RP_NAME || "Pokémon TCG").trim();
+  // Origin must match the page the user is on, so always derive from request.
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+  const origin = `${proto}://${req.headers.host}`;
   return { rpID, rpName, origin };
 }
 
