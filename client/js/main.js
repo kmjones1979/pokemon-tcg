@@ -2884,25 +2884,49 @@ function onGameOver() {
     const { showHighlightShare } = await import("./highlight-card.js");
     await showHighlightShare({ state, currentUser });
   });
-  $("#play-again-btn").addEventListener("click", () => {
-    overlay.remove();
-    const wasStory = gameMode === "story";
-    state = null;
-    selectedAttacker = null;
-    if (gameMode === "mp") {
-      mp.disconnect();
-      teardownMpListeners();
-      mpOpponent = null;
-    }
-    gameMode = "solo";
-    _championId = null;
-    _storyContext = null;
-    if (wasStory) {
-      // Return to the story hub so the player can see unlocked chapters /
-      // pick the next one instead of being dropped back on the main menu.
-      story.openStoryHub({ currentUser });
-    } else {
-      renderMenu();
+  // Play Again. Wrapped in try/catch + an escape-hatch reload because
+  // any throw inside renderMenu / story.openStoryHub (account panel
+  // wiring, daily card fetch, feature strip render…) used to silently
+  // leave the user on the dim post-game screen with a broken button.
+  let _playAgainClicked = false;
+  $("#play-again-btn").addEventListener("click", async () => {
+    if (_playAgainClicked) return;            // ignore double-tap
+    _playAgainClicked = true;
+    try {
+      overlay.remove();
+      // Restore body scroll in case the modal-scroll-lock didn't unmount
+      // cleanly (modal CSS uses body:has(.game-over) — removing the
+      // overlay should release it, but belt-and-suspenders).
+      document.body.classList.remove("modal-open");
+      const wasStory = gameMode === "story";
+      const wasMp    = gameMode === "mp";
+      state = null;
+      selectedAttacker = null;
+      if (wasMp) {
+        try { mp.disconnect(); } catch (e) { console.warn("[play-again] mp.disconnect failed:", e); }
+        try { teardownMpListeners(); } catch (e) { console.warn("[play-again] teardownMpListeners failed:", e); }
+        mpOpponent = null;
+      }
+      gameMode = "solo";
+      _championId = null;
+      _storyContext = null;
+      if (wasStory) {
+        await story.openStoryHub({ currentUser });
+      } else {
+        // renderMenu is sync but the panel widgets (daily card, quests
+        // inbox) fire async fetches that we don't await — render the
+        // menu shell first so the user always sees the chrome even if
+        // a widget fetch hangs.
+        renderMenu();
+      }
+      trackEvent("play_again", { from: wasStory ? "story" : wasMp ? "mp" : "solo" });
+    } catch (err) {
+      // Last-ditch: log + flash + force a page reload so the user
+      // never gets stranded on a frozen post-game screen.
+      console.error("[play-again] handler threw:", err);
+      try { trackEvent("play_again_error", { name: err?.name || "Error", message: (err?.message || "").slice(0, 200) }); } catch {}
+      flashVerdict("Reloading…", "weak");
+      setTimeout(() => location.reload(), 600);
     }
   });
 }
