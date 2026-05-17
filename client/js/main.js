@@ -36,8 +36,8 @@ import * as achievements from "./achievements.js";
 import * as pokedex from "./pokedex.js";
 import * as story from "./story.js";
 import * as trading from "./trading.js";
-// Daily-boss module gated until the strategic plan approves rollout.
-// import * as daily from "./daily.js";
+import * as daily from "./daily.js";
+import { trackEvent } from "./analytics.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -94,10 +94,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch {
     currentUser = null;
   }
-  // Wire story-mode hooks. Daily-boss endpoints + module are deployed but
-  // gated off the UI until the strategic audit (AUDIT.md / PLAN.md)
-  // approves the rollout.
+  // Wire story + daily-boss hooks — both hand off to the regular arena.
   story.setHooks({ startBossFight });
+  daily.setHooks({ startBossFight: startDailyBossFight });
   renderMenu();
   $("#mute-toggle").addEventListener("click", () => {
     setMuted(!isMuted());
@@ -165,6 +164,7 @@ function renderMenu() {
       <h1 class="game-title">Pokémon TCG</h1>
       <div class="menu-tagline">Build a 30-card deck. Wield Legendary signature moves. Out-strategize your rival.</div>
       ${renderFeatureStrip()}
+      <div id="daily-card-slot"></div>
       ${currentTheme?.type ? `
         <div class="theme-banner" style="--theme:${TYPE_COLORS[currentTheme.type] || '#888'}">
           <span class="theme-pill">Theme week</span>
@@ -318,6 +318,9 @@ function renderMenu() {
     loadAndRenderTrainerLevel();
     loadAndRenderQuests();
   }
+  // Daily boss landing card — shown to everyone (anonymous users see the
+  // "sign in to play" CTA).  Lazy-rendered so it doesn't block first paint.
+  daily.renderDailyCard($("#daily-card-slot"), { currentUser }).catch(() => {});
 
   // First-time helper: nudge new visitors who haven't started a game yet.
   if (!localStorage.getItem("pokemon-tcg-seen-howto")) {
@@ -521,6 +524,24 @@ async function openChampionPicker() {
 }
 
 let _storyContext = null; // { chapterId, sessionId, chapter } during a story fight
+
+// Daily Boss wrapper around the regular boss-fight path. Same engine,
+// same arena — finishDaily replaces finishChapter on game-over.
+async function startDailyBossFight({ sessionId, chapter, boss, deck, phaseRules, summonCards }) {
+  if (!chosenTrainer) chosenTrainer = currentUser?.trainer_ability || Object.keys(TRAINERS)[0];
+  await startBossFight({
+    chapterId: chapter.id,
+    sessionId,
+    chapter,
+    boss,
+    deck,
+    phaseRules,
+    summonCards,
+  });
+  // Tag the context so onGameOver routes to the daily flow.
+  if (_storyContext) _storyContext.daily = true;
+  trackEvent("daily_started", { day: chapter.id });
+}
 
 async function startBossFight({ chapterId, sessionId, chapter, boss, deck, phaseRules, summonCards }) {
   // Story can be launched from a chapter card directly — be lenient about
@@ -2412,6 +2433,22 @@ function onGameOver() {
       body: JSON.stringify(matchStats),
     }).catch(() => {});
     setTimeout(() => achievements.checkForNewUnlocks(), 1500);
+  }
+  // Daily boss outcome → finishDaily + share dialog (highest viral leverage).
+  if (gameMode === "story" && _storyContext?.daily) {
+    const won = state.winner === "player";
+    const result = {
+      sessionId: _storyContext.sessionId,
+      won,
+      turns: state.turn,
+      hpLeft: state.players.player.trainerHp,
+      kos: state.players.ai.discard.length,
+    };
+    daily.finishDaily(result).then((data) => {
+      trackEvent("daily_finished", { won, turns: result.turns });
+      if (data) setTimeout(() => daily.showShareDialog(data), 1200);
+    }).catch(() => {});
+    return; // skip the regular story path
   }
   // Story chapter: post outcome → roll reward → record progress.
   if (gameMode === "story" && _storyContext) {
