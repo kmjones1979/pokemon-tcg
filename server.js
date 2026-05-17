@@ -23,6 +23,7 @@ const theme = require("./server-modules/theme");
 const champions = require("./server-modules/champions");
 const story = require("./server-modules/story");
 const trading = require("./server-modules/trading");
+const dailyBoss = require("./server-modules/daily-boss");
 
 const app = express();
 // Vercel + most PaaS hosts proxy requests. Trust the proxy headers so
@@ -152,6 +153,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   champions.mount(app, authSupabase);
   story.mount(app, authSupabase, ensurePokedex);
   trading.mount(app, authSupabase, ensurePokedex);
+  dailyBoss.mount(app, authSupabase, ensurePokedex);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {

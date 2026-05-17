@@ -36,6 +36,8 @@ import * as achievements from "./achievements.js";
 import * as pokedex from "./pokedex.js";
 import * as story from "./story.js";
 import * as trading from "./trading.js";
+// Daily-boss module gated until the strategic plan approves rollout.
+// import * as daily from "./daily.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -92,7 +94,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch {
     currentUser = null;
   }
-  // Wire story-mode's hooks so its hub can hand off to the regular arena.
+  // Wire story-mode hooks. Daily-boss endpoints + module are deployed but
+  // gated off the UI until the strategic audit (AUDIT.md / PLAN.md)
+  // approves the rollout.
   story.setHooks({ startBossFight });
   renderMenu();
   $("#mute-toggle").addEventListener("click", () => {
