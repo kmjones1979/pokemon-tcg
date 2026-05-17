@@ -21,6 +21,7 @@ function ensureStage() {
   _stage = document.createElement("section");
   _stage.id = "puzzle-stage";
   document.body.appendChild(_stage);
+  installCloseShortcuts();
   return _stage;
 }
 
@@ -28,6 +29,23 @@ function closeStage() {
   _stage?.remove();
   _stage = null;
   _state = null;
+  // Untie the escape handler when the puzzle is closed.
+  document.removeEventListener("keydown", _escHandler);
+}
+// Single escape-handler reference so add/remove pair correctly.
+function _escHandler(e) {
+  if (e.key === "Escape") closeStage();
+}
+// Attach backdrop click + Escape on every stage mount so the X is
+// never the only way out. Idempotent — multiple installs are
+// safe because we always pass the same handler reference.
+function installCloseShortcuts() {
+  if (!_stage) return;
+  // Click on the stage backdrop (NOT the inner card) closes.
+  _stage.addEventListener("click", (e) => {
+    if (e.target === _stage) closeStage();
+  });
+  document.addEventListener("keydown", _escHandler);
 }
 
 function escape(s) {

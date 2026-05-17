@@ -86,7 +86,10 @@ function mount(app, supabase, getPokedex) {
     // rollPicks doesn't natively bias by tier, so we filter.
     const eligible = pokedex.filter((c) => c.tier >= minTier);
     const picks = rollPicks(eligible.length >= count ? eligible : pokedex, count);
-    const offerId = createOffer(req.user.id, picks);
+    // createOffer is async (writes to Redis); must await so the JSON
+    // response carries the resolved id, not a Promise that serializes
+    // to "{}" and breaks the client's claim flow.
+    const offerId = await createOffer(req.user.id, picks);
 
     await supabase
       .from("users")
