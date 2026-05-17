@@ -27,6 +27,7 @@ const dailyBoss = require("./server-modules/daily-boss");
 const dailyPuzzle = require("./server-modules/daily-puzzle");
 const analytics = require("./server-modules/analytics");
 const siteGate = require("./server-modules/site-gate");
+const guestMigrate = require("./server-modules/guest-migrate");
 
 const app = express();
 // Vercel + most PaaS hosts proxy requests. Trust the proxy headers so
@@ -177,6 +178,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   dailyBoss.mount(app, authSupabase, ensurePokedex);
   dailyPuzzle.mount(app, authSupabase);
   analytics.mount(app);
+  guestMigrate.mount(app, authSupabase);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {

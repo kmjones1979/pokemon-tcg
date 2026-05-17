@@ -123,6 +123,14 @@ export async function register(displayName) {
   });
   const finData = await fin.json();
   if (!fin.ok) throw new Error(finData.error || "register/complete failed");
+  // First account on this device gets any guest-accumulated state
+  // (owned cards, story progress, champion wins) merged into the
+  // freshly-created user. Failure is silent — the account is still
+  // valid, the guest state just doesn't migrate.
+  try {
+    const guest = await import("./guest-state.js");
+    await guest.migrateOnSignup();
+  } catch {}
   return finData.user;
 }
 
@@ -156,6 +164,13 @@ export async function login(displayName = "") {
   });
   const finData = await fin.json();
   if (!fin.ok) throw new Error(finData.error || "login/complete failed");
+  // Signing in from a device that previously played as a guest: merge
+  // any local state into the now-authenticated user. Idempotent +
+  // capped server-side.
+  try {
+    const guest = await import("./guest-state.js");
+    await guest.migrateOnSignup();
+  } catch {}
   return finData.user;
 }
 
