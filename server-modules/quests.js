@@ -7,7 +7,13 @@
 //   GET  /me/quests        -> { date, quests: [{ id, label, target, progress, reward, claimed }] }
 //   POST /me/quests/:id/claim -> { reward } if eligible
 
-const { createOffer, rollPicks } = require("./rewards");
+// Live reference (not destructured) to break the circular dep with
+// rewards.js. rewards.js requires this module for bumpDailyStats, so
+// destructuring `createOffer` / `rollPicks` at top of file gives us
+// `undefined` because rewards.js hasn't finished evaluating yet when
+// the require resolves. Accessing through `rewards.<fn>` at call time
+// always reads the now-fully-populated exports.
+const rewards = require("./rewards");
 const { createHash } = require("crypto");
 
 const QUEST_POOL = [
@@ -159,13 +165,13 @@ function mount(app, supabase, getPokedex) {
 
     // Roll picks and create an offer.
     const eligible = pokedex.filter((c) => c.tier >= q.minTier);
-    const picks = rollPicks(eligible.length >= q.rewardCount ? eligible : pokedex, q.rewardCount);
+    const picks = rewards.rollPicks(eligible.length >= q.rewardCount ? eligible : pokedex, q.rewardCount);
     if (!picks.length) {
       return res.status(500).json({ error: "Couldn't roll a reward — try again." });
     }
     let offerId;
     try {
-      offerId = await createOffer(req.user.id, picks);
+      offerId = await rewards.createOffer(req.user.id, picks);
     } catch (err) {
       console.error("[quests] createOffer failed:", err);
       return res.status(500).json({ error: "Reward offer couldn't be stashed. Please retry." });
