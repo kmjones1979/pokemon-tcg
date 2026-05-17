@@ -3248,3 +3248,85 @@ html { overscroll-behavior: none; }
 @media (prefers-reduced-motion: reduce) {
   .critbar-overlay { display: none; }
 }
+
+/* Highlight share overlay (Wave 31 — Phase 2) */
+.highlight-overlay {
+  position: fixed; inset: 0; z-index: 320;
+  background: rgba(0,0,0,0.78);
+  display: grid; place-items: center;
+  backdrop-filter: blur(6px);
+}
+.highlight-card {
+  background: linear-gradient(160deg, #15192a, #06061a);
+  border: 1.5px solid rgba(255,209,102,0.5);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 480px;
+  width: 92vw;
+  text-align: center;
+  position: relative;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+.highlight-card .hc-close {
+  position: absolute; top: 12px; right: 14px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff; width: 32px; height: 32px;
+  border-radius: 50%; cursor: pointer; font-size: 14px;
+}
+.highlight-card h2 {
+  margin: 0 0 14px;
+  background: linear-gradient(135deg, #ffd166, #ef476f);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.highlight-card .hc-img {
+  width: 100%; height: auto;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6), 0 0 24px rgba(255,209,102,0.18);
+}
+.highlight-card .hc-actions {
+  display: flex; gap: 10px; margin-top: 14px;
+  justify-content: center;
+}
+.highlight-card .hc-actions a,
+.highlight-card .hc-actions button {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.18);
+  text-decoration: none;
+}
+.highlight-card .hc-actions .primary {
+  background: linear-gradient(135deg, #ffd166, #ef476f);
+  color: #1a0518; border-color: #ffd166;
+  box-shadow: 0 4px 18px rgba(255,209,102,0.35);
+}
+.highlight-card .hc-actions .ghost {
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+}
+
+/* Game-over CTA row — Share + Play again side-by-side */
+.game-over-cta-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+.game-over-cta-row #share-highlight-btn {
+  background: linear-gradient(135deg, #2a3a5a, #1a2540);
+  color: #d4e0ff;
+  border: 1px solid rgba(140, 180, 255, 0.45);
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.game-over-cta-row #share-highlight-btn:hover {
+  box-shadow: 0 0 18px rgba(140,180,255,0.4);
+}

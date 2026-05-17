@@ -2804,7 +2804,10 @@ function onGameOver() {
           </div>
         ` : ""}
       </div>
-      <button id="play-again-btn">Play again</button>
+      <div class="game-over-cta-row">
+        <button id="share-highlight-btn" class="secondary">📷 Share highlight</button>
+        <button id="play-again-btn">Play again</button>
+      </div>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -2824,6 +2827,11 @@ function onGameOver() {
       }
       requestAnimationFrame(tick);
     });
+  });
+  $("#share-highlight-btn")?.addEventListener("click", async () => {
+    trackEvent("highlight_clicked", { won: state.winner === "player" });
+    const { showHighlightShare } = await import("./highlight-card.js");
+    await showHighlightShare({ state, currentUser });
   });
   $("#play-again-btn").addEventListener("click", () => {
     overlay.remove();
