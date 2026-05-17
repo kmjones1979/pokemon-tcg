@@ -1756,12 +1756,29 @@ async function onEndTurn() {
   if (state.winner) return;
   // Brief pause for the turn shift before the AI starts acting visibly.
   await sleep(500);
+  // Race aiTakeTurn against a 25s timeout so a hung animation promise
+  // can't lock the match. Boss fights with phase summons + AOE +
+  // status effects can run a few seconds long, so 25s is well above
+  // the normal worst case and well under the player's patience limit.
+  const aiPromise = aiTakeTurn(state, {
+    difficulty: aiDifficulty,
+    personality: aiPersonality,
+    onAction: handleAiAction,
+  });
+  const TURN_HARD_TIMEOUT_MS = 25_000;
+  let timedOut = false;
+  const timeoutPromise = new Promise((resolve) => setTimeout(() => {
+    timedOut = true; resolve("__timeout__");
+  }, TURN_HARD_TIMEOUT_MS));
   try {
-    await aiTakeTurn(state, {
-      difficulty: aiDifficulty,
-      personality: aiPersonality,
-      onAction: handleAiAction,
-    });
+    const result = await Promise.race([aiPromise, timeoutPromise]);
+    if (result === "__timeout__") {
+      console.warn("[main] AI turn hit 25s timeout — force-ending");
+      flashVerdict(gameMode === "story" ? "Boss thinking too long — your turn" : "Rival timed out", "weak");
+      if (state && state.activePlayer === "ai" && !state.winner) {
+        try { endTurn(state); } catch (e) { console.error("[main] timeout endTurn failed:", e); }
+      }
+    }
   } catch (err) {
     // aiTakeTurn already force-ends the turn in its own finally clause on
     // throw; here we just surface a hint and refresh.
@@ -2536,13 +2553,16 @@ function startTurnTimer() {
       }
       // AI-side watchdog: if the rival's turn timer has been expired for
       // more than 8 seconds, assume something jammed and force end the
-      // turn. Solo only — multiplayer is server-authoritative.
-      if (state.activePlayer === "ai" && gameMode === "solo" && left < -8_000) {
+      // turn. Covers solo + story (boss fights) + champion battles —
+      // anything where the engine runs client-side. Multiplayer is
+      // server-authoritative, so we skip the watchdog there.
+      const isLocalAi = gameMode === "solo" || gameMode === "story";
+      if (state.activePlayer === "ai" && isLocalAi && left < -8_000) {
         console.warn("[watchdog] AI turn hung past timer — forcing end-turn");
         try { endTurn(state); } catch (e) { console.error("[watchdog] endTurn failed:", e); }
         stopTurnTimer();
         render();
-        flashVerdict("Rival ran out of time", "weak");
+        flashVerdict(gameMode === "story" ? "Boss skipped a turn — fight on" : "Rival ran out of time", "weak");
         return;
       }
       return;
