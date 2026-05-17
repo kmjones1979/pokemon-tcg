@@ -82,24 +82,34 @@
 
 /* Field-card state badges. Summoning sickness shows a sleeping zzz; spent
    (already attacked this turn) shows a clear "✓ ACTED" pill + dims the
-   card. Pills sit ABOVE the card so they don't cover the Pokémon name. */
+   card. Pills sit clearly ABOVE the card, extending off the top edge so
+   they read from across the board. */
 .card.summoning::after {
   content: "💤 sleeping";
   position: absolute;
-  top: -16px;
+  top: -24px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  padding: 2px 8px;
+  background: linear-gradient(145deg, #2a3658, #15192a);
+  border: 1.5px solid rgba(180, 200, 255, 0.5);
+  border-radius: 12px;
+  padding: 4px 10px;
   font-size: 9px;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   font-family: "Press Start 2P", monospace;
-  color: #fff;
+  color: #d4e0ff;
   white-space: nowrap;
-  z-index: 3;
+  z-index: 10;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.5), 0 0 14px rgba(140, 180, 255, 0.3);
+  pointer-events: none;
+}
+/* Guardians and sleepers can occupy the same card — offset the sleep pill
+   down a tick so it doesn't overlap the shield. */
+.card .card-guardian + .card-status,
+.card.summoning .card-guardian + ::after { /* unused fallback */ }
+.card.summoning .card-guardian {
+  top: -34px; /* push the shield further up when there's a sleep pill */
 }
 .card.spent {
   filter: saturate(0.55) brightness(0.85);
@@ -197,37 +207,39 @@ body.dragging-attack .trainer-block.ai {
   box-shadow: 0 0 22px rgba(255, 92, 99, 0.55) inset;
 }
 
-/* Guardian badge — top-right shield. Pulses prominently so it's
-   immediately recognisable from across the screen. */
+/* Guardian badge — perched at the TOP-CENTER of the card and lifted high
+   enough to clearly extend off the card's top edge. Sits above all other
+   layers (z-10) so it never gets clipped by neighbouring cards. */
 .card .card-guardian {
   position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 34px;
-  height: 34px;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #e5edff, #4a6fc4 60%, #1f3982);
   color: #0a1430;
-  font-size: 18px;
+  font-size: 20px;
   display: grid;
   place-items: center;
   box-shadow:
-    0 0 16px rgba(120, 165, 255, 0.85),
-    0 0 28px rgba(120, 165, 255, 0.4),
-    0 2px 4px rgba(0,0,0,0.5),
-    inset 0 0 4px rgba(255,255,255,0.6);
-  z-index: 4;
+    0 0 18px rgba(120, 165, 255, 0.95),
+    0 0 36px rgba(120, 165, 255, 0.5),
+    0 3px 6px rgba(0,0,0,0.6),
+    inset 0 0 4px rgba(255,255,255,0.7);
+  z-index: 10;
   pointer-events: none;
   animation: guardianPulse 1.8s ease-in-out infinite;
 }
 @keyframes guardianPulse {
   0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 16px rgba(120, 165, 255, 0.85), 0 0 28px rgba(120, 165, 255, 0.4), 0 2px 4px rgba(0,0,0,0.5), inset 0 0 4px rgba(255,255,255,0.6);
+    transform: translateX(-50%) scale(1);
+    box-shadow: 0 0 18px rgba(120, 165, 255, 0.95), 0 0 36px rgba(120, 165, 255, 0.5), 0 3px 6px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.7);
   }
   50% {
-    transform: scale(1.15);
-    box-shadow: 0 0 24px rgba(120, 165, 255, 1), 0 0 44px rgba(120, 165, 255, 0.55), 0 2px 4px rgba(0,0,0,0.5), inset 0 0 4px rgba(255,255,255,0.7);
+    transform: translateX(-50%) scale(1.15);
+    box-shadow: 0 0 26px rgba(120, 165, 255, 1), 0 0 52px rgba(120, 165, 255, 0.65), 0 3px 6px rgba(0,0,0,0.6), inset 0 0 4px rgba(255,255,255,0.8);
   }
 }
 /* When a Guardian is on the field, give it a defensive aura ring as a

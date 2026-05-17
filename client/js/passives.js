@@ -455,6 +455,125 @@ export const SIGNATURE_ABILITIES = {
       return true;
     },
   },
+  // --- On-summon abilities (non-legendary) ----------------------------
+  // Cards that trigger an effect the moment they hit the field. Adds
+  // tactical depth — when to drop matters as much as which card.
+  113: {
+    // Chansey — Soft-Boiled: heal weakest ally on summon.
+    name: "Soft-Boiled",
+    desc: "On summon, fully heals your lowest-HP ally.",
+    onSummon(state, side, inst) {
+      const allies = state.players[side].field.filter((a) => a && a !== inst);
+      if (!allies.length) return;
+      const target = allies.reduce((a, b) => (a.currentHp / a.maxHp < b.currentHp / b.maxHp ? a : b));
+      const before = target.currentHp;
+      target.currentHp = target.maxHp;
+      if (target.currentHp > before) {
+        state.log.push({ id: state.log.length + 1, text: `💗 Chansey's Soft-Boiled restored ${target.card.name} to full HP.`, kind: "summon" });
+      }
+    },
+  },
+  36: {
+    // Clefable — Moonlight: small heal across the board.
+    name: "Moonlight",
+    desc: "On summon, heals every ally for 2 HP.",
+    onSummon(state, side, inst) {
+      let healed = 0;
+      for (const ally of state.players[side].field) {
+        if (!ally || ally === inst) continue;
+        const cap = ally.maxHp ?? ally.card.cardHp;
+        const before = ally.currentHp;
+        ally.currentHp = Math.min(cap, ally.currentHp + 2);
+        healed += ally.currentHp - before;
+      }
+      if (healed) state.log.push({ id: state.log.length + 1, text: `🌙 Clefable's Moonlight healed ${healed} HP across the field.`, kind: "summon" });
+    },
+  },
+  65: {
+    // Alakazam — Psychic: deal 4 damage to the strongest enemy on summon.
+    name: "Psychic",
+    desc: "On summon, deals 4 damage to the enemy with the most current HP.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const enemies = state.players[otherSide].field
+        .map((c, i) => ({ c, i }))
+        .filter((x) => x.c != null);
+      if (!enemies.length) return;
+      const t = enemies.reduce((a, b) => (a.c.currentHp > b.c.currentHp ? a : b));
+      t.c.currentHp = Math.max(0, t.c.currentHp - 4);
+      state.log.push({ id: state.log.length + 1, text: `🔮 Alakazam's Psychic struck ${t.c.card.name} for 4.`, kind: "attack" });
+      if (t.c.currentHp <= 0) {
+        state.players[otherSide].discard.push(t.c.card);
+        state.players[otherSide].field[t.i] = null;
+        state.log.push({ id: state.log.length + 1, text: `${t.c.card.name} fainted!`, kind: "ko" });
+      }
+    },
+  },
+  124: {
+    // Jynx — Lovely Kiss: sleep a random enemy on summon.
+    name: "Lovely Kiss",
+    desc: "On summon, puts a random enemy to sleep for 1 turn.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const enemies = state.players[otherSide].field.filter(Boolean);
+      if (!enemies.length) return;
+      const t = enemies[Math.floor(Math.random() * enemies.length)];
+      t.status = { kind: "sleep", turnsLeft: 1 };
+      state.log.push({ id: state.log.length + 1, text: `💋 Jynx kissed ${t.card.name} — they fell asleep!`, kind: "status" });
+    },
+  },
+  25: {
+    // Pikachu — Thunder Shock: chip 2 damage to a random enemy.
+    name: "Thunder Shock",
+    desc: "On summon, zaps a random enemy for 2 damage and may paralyze.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const enemies = state.players[otherSide].field
+        .map((c, i) => ({ c, i }))
+        .filter((x) => x.c != null);
+      if (!enemies.length) return;
+      const t = enemies[Math.floor(Math.random() * enemies.length)];
+      t.c.currentHp = Math.max(0, t.c.currentHp - 2);
+      if (Math.random() < 0.3) {
+        t.c.status = { kind: "paralyze", turnsLeft: 1 };
+        state.log.push({ id: state.log.length + 1, text: `⚡ Pikachu zapped ${t.c.card.name} for 2 — paralyzed!`, kind: "status" });
+      } else {
+        state.log.push({ id: state.log.length + 1, text: `⚡ Pikachu zapped ${t.c.card.name} for 2.`, kind: "attack" });
+      }
+      if (t.c.currentHp <= 0) {
+        state.players[otherSide].discard.push(t.c.card);
+        state.players[otherSide].field[t.i] = null;
+        state.log.push({ id: state.log.length + 1, text: `${t.c.card.name} fainted!`, kind: "ko" });
+      }
+    },
+  },
+  78: {
+    // Rapidash — Flame Charge: buff a random ally's attack this turn.
+    name: "Flame Charge",
+    desc: "On summon, grants a random ally +2 ATK permanently.",
+    onSummon(state, side, inst) {
+      const allies = state.players[side].field.filter((a) => a && a !== inst);
+      if (!allies.length) return;
+      const t = allies[Math.floor(Math.random() * allies.length)];
+      t.attackBoost = (t.attackBoost || 0) + 2;
+      state.log.push({ id: state.log.length + 1, text: `🔥 Rapidash's Flame Charge pumped ${t.card.name} up — +2 ATK.`, kind: "summon" });
+    },
+  },
+  94: {
+    // Gengar — Hex: a random enemy gets a 2-turn burn-like ghost curse.
+    name: "Hex",
+    desc: "On summon, curses a random enemy — they take 2 damage at the start of their next turn.",
+    onSummon(state, side, inst) {
+      const otherSide = side === "player" ? "ai" : "player";
+      const enemies = state.players[otherSide].field.filter(Boolean);
+      if (!enemies.length) return;
+      const t = enemies[Math.floor(Math.random() * enemies.length)];
+      // Burn does damage on tick — perfect for "ghost curse" semantically.
+      t.status = { kind: "burn", turnsLeft: 2 };
+      state.log.push({ id: state.log.length + 1, text: `👻 Gengar's Hex cursed ${t.card.name} — 2 damage per turn.`, kind: "status" });
+    },
+  },
+
   // --- Crowd-control / board-clear signatures --------------------------
   // These shine when the OPPONENT has filled their field. The more of them
   // there are, the harder these hit — keeps a wide board from snowballing.

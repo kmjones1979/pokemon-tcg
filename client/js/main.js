@@ -68,6 +68,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch {
     currentUser = null;
   }
+  // Wire story-mode's hooks so its hub can hand off to the regular arena.
+  story.setHooks({ startBossFight });
   renderMenu();
   $("#mute-toggle").addEventListener("click", () => {
     setMuted(!isMuted());
@@ -486,6 +488,48 @@ async function openChampionPicker() {
   }
 }
 
+let _storyContext = null; // { chapterId, sessionId, chapter } during a story fight
+
+async function startBossFight({ chapterId, sessionId, chapter, boss, deck, phaseRules, summonCards }) {
+  if (!chosenTrainer) { flashVerdict("Pick a trainer first", "weak"); return; }
+  flashVerdict(`${chapter.enemyTrainerName} blocks your path!`, "super");
+  const playerDeck = await loadPlayerDeck();
+  gameMode = "story";
+  _storyContext = { chapterId, sessionId, chapter };
+  state = createGame({
+    playerDeck,
+    aiDeck: deck,
+    playerAbility: chosenTrainer,
+    aiAbility: chapter.enemyAbility || "lance",
+    firstPlayer: "player",
+    aiTrainerHp: boss.maxHp,
+    aiName: chapter.enemyTrainerName || boss.displayName,
+  });
+  if (currentTheme?.type) state.themeType = currentTheme.type;
+  state.boss = {
+    chapterId,
+    displayName: boss.displayName,
+    maxHp: boss.maxHp,
+    anchorPokemonId: boss.anchorPokemonId,
+    types: boss.types || [],
+    phaseRules: (phaseRules || []).map((r) => ({ ...r, applied: false })),
+    summonCards: summonCards || {},
+    attackBonus: 0,
+    ignoreDefense: false,
+  };
+  _prevHps = { player: null, ai: null };
+  _prevEnergy = null;
+  aiPersonality = "tactical";
+  aiDifficulty = "hard";
+  $("#menu").classList.add("hidden");
+  $("#arena").classList.remove("hidden");
+  document.body.classList.add("in-arena");
+  startBGM();
+  await openMulliganModal();
+  render();
+  setTimeout(() => flashVerdict(`${boss.displayName} appears!`, "super"), 600);
+}
+
 async function startChampionFight(championId) {
   if (!chosenTrainer) return;
   flashVerdict("Engaging Champion…", "super");
@@ -601,7 +645,7 @@ function render() {
         </div>
         <div class="trainer-meta">
           <div class="trainer-label">${escape(opponentLabel())} (${TRAINERS[state.players.ai.ability]?.name || state.players.ai.ability})</div>
-          ${hpBar(state.players.ai.trainerHp)}
+          ${hpBar(state.players.ai.trainerHp, state.players.ai.maxTrainerHp)}
           <div class="trainer-resources">
             <span>✋ ${state.players.ai.hand.length}</span>
             <span>📚 ${state.players.ai.deck.length}</span>
@@ -628,7 +672,7 @@ function render() {
         </div>
         <div class="trainer-meta">
           <div class="trainer-label">${escape(youLabel())} (${TRAINERS[state.players.player.ability]?.name || state.players.player.ability})</div>
-          ${hpBar(state.players.player.trainerHp)}
+          ${hpBar(state.players.player.trainerHp, state.players.player.maxTrainerHp)}
           <div class="trainer-resources">
             <div class="energy-pips" title="Energy ${state.players.player.energy}/${state.players.player.maxEnergy}">
               ${renderEnergyPips(state.players.player.energy, state.players.player.maxEnergy)}
@@ -979,13 +1023,14 @@ function youLabel() {
   return state?.players?.player?.name || "You";
 }
 
-function hpBar(hp) {
-  const pct = Math.max(0, (hp / TRAINER_START_HP) * 100);
+function hpBar(hp, max) {
+  const cap = max || TRAINER_START_HP;
+  const pct = Math.max(0, Math.min(100, (hp / cap) * 100));
   const tone = pct > 60 ? "good" : pct > 30 ? "mid" : "bad";
   return `
     <div class="hp-row">
       <div class="hp-bar tone-${tone}"><div class="hp-fill" style="width:${pct}%"></div></div>
-      <div class="hp-text">${hp}/${TRAINER_START_HP}</div>
+      <div class="hp-text">${hp}/${cap}</div>
     </div>
   `;
 }
@@ -2276,6 +2321,24 @@ function onGameOver() {
     }).catch(() => {});
     setTimeout(() => achievements.checkForNewUnlocks(), 1500);
   }
+  // Story chapter: post outcome → roll reward → record progress.
+  if (gameMode === "story" && _storyContext) {
+    const won = state.winner === "player";
+    story.finishChapter({
+      sessionId: _storyContext.sessionId,
+      won,
+      chapterId: _storyContext.chapterId,
+    }).then((reward) => {
+      if (reward) {
+        rewards.showOffer(reward, {
+          didWin: true,
+          onClaim: (card) => { if (card) flashVerdict(`+${card.name}!`, "super"); },
+        });
+      } else if (won) {
+        flashVerdict("Chapter cleared!", "super");
+      }
+    }).catch(() => {});
+  }
   // In solo mode, finalise the server-tracked session and ask for a reward.
   if (gameMode === "solo" && currentUser && soloSessionId) {
     fetch("/me/solo/end", {
@@ -2373,6 +2436,7 @@ function onGameOver() {
   });
   $("#play-again-btn").addEventListener("click", () => {
     overlay.remove();
+    const wasStory = gameMode === "story";
     state = null;
     selectedAttacker = null;
     if (gameMode === "mp") {
@@ -2382,7 +2446,14 @@ function onGameOver() {
     }
     gameMode = "solo";
     _championId = null;
-    renderMenu();
+    _storyContext = null;
+    if (wasStory) {
+      // Return to the story hub so the player can see unlocked chapters /
+      // pick the next one instead of being dropped back on the main menu.
+      story.openStoryHub({ currentUser });
+    } else {
+      renderMenu();
+    }
   });
 }
 

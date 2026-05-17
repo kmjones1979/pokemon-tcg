@@ -173,14 +173,17 @@ export function createGame({
   aiAbility,
   rand = Math.random,
   firstPlayer,             // "player" | "ai" — if omitted, picked at random
+  aiTrainerHp,             // override AI side's starting HP (boss fights)
+  aiName,                  // override AI's display name (boss name)
 } = {}) {
-  function makePlayer(name, ability, deck) {
+  function makePlayer(name, ability, deck, hpOverride) {
     const shuffled = shuffle(deck, rand);
     const hand = shuffled.splice(0, STARTING_HAND);
     return {
       name,
       ability,
-      trainerHp: TRAINER_START_HP,
+      trainerHp: hpOverride || TRAINER_START_HP,
+      maxTrainerHp: hpOverride || TRAINER_START_HP,
       energy: 0,
       maxEnergy: 0,
       deck: shuffled,
@@ -199,7 +202,7 @@ export function createGame({
     log: [],
     players: {
       player: makePlayer("You", playerAbility || "brock", playerDeck),
-      ai:     makePlayer("Rival", aiAbility || "pikachu", aiDeck),
+      ai:     makePlayer(aiName || "Rival", aiAbility || "pikachu", aiDeck, aiTrainerHp),
     },
     firstSide,
     // Per-match recap: aggregated stats we show in the game-over screen.
@@ -236,6 +239,9 @@ function beginTurn(state) {
   state.turn += 1;
   state.phase = "draw";
   state.turnEndsAt = Date.now() + TURN_DURATION_MS;
+  // Boss-mode phase check: at every turn boundary, see if the boss has
+  // crossed a new HP threshold and apply that phase's effects once.
+  applyBossPhaseChecks(state);
   const p = state.players[state.activePlayer];
 
   // Auto-loss: a player who has nothing left to do (no deck, no hand, no
@@ -465,7 +471,8 @@ export function attack(
       return { ok: false, reason: "must attack opposing Pokémon first" };
     }
     const comboBonus = comboBonusFor(p, attackerInst.card);
-    const base = attackerInst.card.cardAttack + attackBonus + (attackerInst.attackBoost || 0) + comboBonus;
+    const bossSideBonus = (side === "ai" && state.boss?.attackBonus) || 0;
+    const base = attackerInst.card.cardAttack + attackBonus + (attackerInst.attackBoost || 0) + comboBonus + bossSideBonus;
     const damage = Math.max(1, Math.round(base * (ability.damageMult || 1)));
     o.trainerHp = Math.max(0, o.trainerHp - damage);
     log(state, attackPhrase(attackerInst.card, ability, o.name, damage, 1, state.turn), "attack");
@@ -495,7 +502,11 @@ export function attack(
     const critBoost = fieldCritBonus(p.field);
     const ignoreDefenseFlag =
       sigPassive?.ignoreDefense ||
-      (sigPassive?.ignoreDefenseSpecial && ability?.id === "special");
+      (sigPassive?.ignoreDefenseSpecial && ability?.id === "special") ||
+      (side === "ai" && state.boss?.ignoreDefense);
+    // Boss-mode bonus: in story chapters, the boss's attacks get a flat
+    // +attackBonus from active phase rules.
+    const bossSideBonus = (side === "ai" && state.boss?.attackBonus) || 0;
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
       abilityBonus:
         attackBonus +
@@ -503,7 +514,8 @@ export function attack(
         pinchBonus +
         comboBonus +
         auraBonus -
-        auraPenalty,
+        auraPenalty +
+        bossSideBonus,
       ability,
       rand,
       themeType: state.themeType || null,
@@ -784,6 +796,86 @@ function chooseTarget(state, attackerInst, policy, rand) {
 
     default:
       return fieldTargets[0].slot;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Boss mode (story chapters) — additional rules layered on top of the regular
+// 1v1 engine. State carries `state.boss = { displayName, maxHp, phaseRules,
+// summonCards, attackBonus, ignoreDefense }` when a story fight is in flight.
+// `phaseRules` is an array of { fromHpFraction, effects: [{kind, ...}] }
+// sorted high-fraction → low. Each rule has an `applied` flag set once its
+// threshold is crossed so effects fire exactly once per match.
+// ---------------------------------------------------------------------------
+function applyBossPhaseChecks(state) {
+  const rules = state.boss?.phaseRules;
+  if (!rules || !rules.length) return;
+  const ai = state.players.ai;
+  const max = state.boss.maxHp || ai.trainerHp || 30;
+  const frac = ai.trainerHp / max;
+  for (const rule of rules) {
+    if (rule.applied) continue;
+    if (frac > rule.fromHpFraction) continue; // not yet crossed
+    rule.applied = true;
+    for (const eff of rule.effects || []) applyBossEffect(state, eff);
+  }
+}
+
+function applyBossEffect(state, eff) {
+  const ai = state.players.ai;
+  const bossName = state.boss?.displayName || "Boss";
+  switch (eff.kind) {
+    case "buff":
+      state.boss.attackBonus = (state.boss.attackBonus || 0) + (eff.amount || 1);
+      log(state, `⚡ ${bossName} surges — all attacks +${eff.amount || 1} ATK!`, "boss-move");
+      break;
+    case "ignoreDef":
+      state.boss.ignoreDefense = true;
+      log(state, `🔥 ${bossName}'s attacks now pierce defenses!`, "boss-move");
+      break;
+    case "summon": {
+      let n = 0;
+      for (const id of (eff.pokemonIds || [])) {
+        const c = state.boss?.summonCards?.[id];
+        if (c && ai.hand.length < MAX_HAND) { ai.hand.push(c); n++; }
+      }
+      if (eff.note) log(state, eff.note, "boss-move");
+      else if (n) log(state, `${bossName} called in reinforcements!`, "boss-move");
+      break;
+    }
+    case "aoe": {
+      const dmg = eff.amount || 3;
+      let hits = 0;
+      const p = state.players.player;
+      for (let i = 0; i < p.field.length; i++) {
+        const inst = p.field[i];
+        if (!inst) continue;
+        inst.currentHp = Math.max(0, inst.currentHp - dmg);
+        hits++;
+        if (inst.currentHp <= 0) {
+          p.discard.push(inst.card);
+          p.field[i] = null;
+          log(state, `${inst.card.name} fainted!`, "ko");
+        }
+      }
+      if (hits) log(state, `💥 ${bossName}'s wave hit ${hits} of your Pokémon for ${dmg}!`, "boss-move");
+      break;
+    }
+    case "transform":
+      state.boss.displayName = eff.displayName || bossName;
+      // Buff the boss's anchor card on the field if present.
+      for (const inst of ai.field) {
+        if (!inst) continue;
+        if (inst.card?.is_legendary) {
+          inst.attackBoost = (inst.attackBoost || 0) + (eff.attackBonus || 0);
+          inst.maxHp += (eff.attackBonus || 0) * 2;
+          inst.currentHp += (eff.attackBonus || 0) * 2;
+        }
+      }
+      // Stack a permanent global +attackBonus so even non-anchor cards feel the shift.
+      state.boss.attackBonus = (state.boss.attackBonus || 0) + Math.max(1, Math.round((eff.attackBonus || 0) / 2));
+      if (eff.note) log(state, eff.note, "boss-move");
+      break;
   }
 }
 

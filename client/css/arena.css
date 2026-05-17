@@ -1813,7 +1813,10 @@ h1, h2, h3,
   border: 1px dashed rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.02);
   transition: all 0.15s ease;
+  overflow: visible; /* Guardian shield + sleep pill extend off the top */
 }
+.field { overflow: visible; }
+.field-slot .card { overflow: visible; }
 .field-slot.ai { border-color: rgba(255, 90, 90, 0.15); }
 .field-slot.player { border-color: rgba(90, 220, 130, 0.15); }
 .slot-empty {

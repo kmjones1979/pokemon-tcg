@@ -1,179 +1,152 @@
-// Co-op Story Mode — server-authoritative.
+// Story Mode (rebuilt) — runs the REGULAR 1v1 engine with a custom boss
+// loaded as the AI side, just like a champion fight. The boss has more
+// trainer HP, a curated themed deck, and a small set of "phase effects"
+// the client applies at HP thresholds (heal, summon, attack buff, AoE).
 //
-// Routes (mounted at /api/story/*):
-//   GET    /api/story/chapters                — list chapters meta + which the user has unlocked
-//   POST   /api/story/start-solo              — { chapterId, deckSource } → returns view + sessionId
-//   POST   /api/story/host                    — { chapterId, deckSource } → returns code
-//   POST   /api/story/join                    — { code, deckSource } → matched
-//   GET    /api/story/match/:id               — ?playerId=&since=v poll
-//   POST   /api/story/match/:id/action        — { playerId, action, payload }
+// Routes:
+//   GET  /api/story/chapters             — list with unlock state
+//   GET  /api/story/chapter/:id/intro    — narrative lines
+//   GET  /api/story/chapter/:id/deck     — boss deck + phase rules
+//   POST /me/story/end                   — record clear, return reward offer
 //
-// Modes:
-//   solo: p1 = user, p2 = AI partner (Lucario). Only the user's actions are
-//         accepted; after the user ends their turn the server auto-runs the
-//         AI partner's turn and then the boss's turn before yielding back.
-//   coop: p1 = host, p2 = joiner. Each player can only act on their own turn.
-//         Boss turn runs after p2 ends.
-//
-// State for an active match lives in the shared Redis state-store under
-// ptcg:story:<id>. Solo unlocks are stored on the user row
-// (`story_progress` jsonb column, see migrations).
+// Story progress lives on users.story_progress (jsonb). Code degrades
+// gracefully if that column hasn't been added yet (try/catch).
 
-const { randomUUID } = require("crypto");
-const { buildDeck, toCard } = require("../shared/deck-builder");
-const { getChapter, chapterMeta, CHAPTERS } = require("../shared/story-chapters");
+const { toCard, buildDeck } = require("../shared/deck-builder");
+const { CHAPTERS, getChapter, chapterMeta } = require("../shared/story-chapters");
 const { rollPicks, createOffer } = require("./rewards");
-const store = require("./state-store");
 
-const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const ROOM_CODE_LEN = 6;
-const STORY_PREFIX = "story:";
+const STORY_CHAPTER_IDS = CHAPTERS.map((c) => c.id);
 
-let _engine = null;
-async function getEngine() {
-  if (!_engine) _engine = await import("../client/js/story-engine.js");
-  return _engine;
-}
-
-function randCode() {
-  let s = "";
-  for (let i = 0; i < ROOM_CODE_LEN; i++) {
-    s += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
-  }
-  return s;
-}
-
-// Wrap a state with player-perspective view + last animation.
-function viewFor(match, viewer) {
-  const s = match.state;
-  // Both players see each other's hands openly in coop (you're on the same team).
+// Boss "anchor card" overrides — applied on top of the regular toCard()
+// output so the chapter's centerpiece feels like a boss, not a regular
+// tier-X mon. Keys are pokemon ids.
+function bumpAnchorCard(card, chapter) {
+  const anchor = chapter.boss.anchorPokemonId;
+  if (card.id !== anchor) return card;
   return {
-    v: match.v,
-    matchId: match.id,
-    mode: match.mode,
-    youAre: viewer,
-    chapter: s.chapter,
-    turn: s.turn,
-    activeSide: s.activeSide,
-    phase: s.phase,
-    winner: s.winner,
-    log: s.log.slice(-30),
-    players: {
-      p1: viewerSafePlayer(s.players.p1, viewer === "p1"),
-      p2: viewerSafePlayer(s.players.p2, viewer === "p2"),
-    },
-    boss: s.boss,
-    lastAnim: match.lastAnim ? { ...match.lastAnim, v: match.lastAnimV } : null,
-    rewardOffer: viewer === "p1" ? match.rewardP1 : match.rewardP2,
+    ...card,
+    cardHp: Math.max(card.cardHp, Math.round(chapter.boss.maxHp / 4)),
+    cardAttack: Math.max(card.cardAttack, chapter.boss.attack),
+    // Brand it as legendary so it gets the holo treatment regardless of
+    // what the pokedex says about its rarity.
+    is_legendary: true,
   };
 }
 
-function viewerSafePlayer(p, isSelf) {
-  // In coop we still hide the partner's deck contents but show hand (open hands
-  // help coop coordination).
-  return {
-    ...p,
-    deck: [],
-    hand: p.hand,
-  };
-}
+async function buildBossDeck(supabase, chapter) {
+  const anchor = chapter.boss.anchorPokemonId;
+  // The 30-card boss deck: anchor card x2, plus thematic type-matched
+  // support, plus filler.
+  const typeFilter = chapter.boss.types;
+  const { data: anchorRow } = await supabase.from("pokemon").select("*").eq("id", anchor).maybeSingle();
+  const anchorCard = anchorRow ? bumpAnchorCard(toCard(anchorRow), chapter) : null;
 
-async function loadDeckForUser(supabase, userId, deckSource, dex) {
-  if (deckSource === "active" && userId && supabase) {
-    try {
-      const { data: deck } = await supabase
-        .from("decks")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("is_active", true)
-        .maybeSingle();
-      if (deck?.card_ids?.length === 30) {
-        const ids = [...new Set(deck.card_ids)];
-        const { data: rows } = await supabase.from("pokemon").select("*").in("id", ids);
-        const byId = new Map((rows || []).map((r) => [r.id, toCard(r)]));
-        const cards = deck.card_ids.map((id) => byId.get(id)).filter(Boolean);
-        if (cards.length === 30) return cards;
-      }
-    } catch (err) {
-      console.warn("[story] active-deck fetch failed:", err.message);
+  let { data: pool } = await supabase
+    .from("pokemon")
+    .select("*")
+    .overlaps("types", typeFilter)
+    .order("hp", { ascending: false })
+    .limit(200);
+  pool = (pool || []).map(toCard);
+  // Mix in some low-tier filler so the boss has cheap turn-1 plays.
+  let { data: filler } = await supabase
+    .from("pokemon")
+    .select("*")
+    .order("hp", { ascending: true })
+    .limit(60);
+  filler = (filler || []).map(toCard).filter((c) => c.tier <= 2);
+
+  const deck = [];
+  if (anchorCard) { deck.push(anchorCard, anchorCard); }
+  // Shuffle pool deterministically-enough.
+  const shuffleInPlace = (arr) => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
     }
+    return arr;
+  };
+  shuffleInPlace(pool);
+  shuffleInPlace(filler);
+  const seen = new Set([anchor]);
+  for (const c of pool) {
+    if (deck.length >= 22) break;
+    if (seen.has(c.id)) continue;
+    seen.add(c.id);
+    deck.push(c, c);
   }
-  return buildDeck(dex);
+  for (const c of filler) {
+    if (deck.length >= 30) break;
+    deck.push(c);
+  }
+  // Pad with the regular deck builder if we somehow ran short.
+  if (deck.length < 30) {
+    const { data: anything } = await supabase.from("pokemon").select("*").limit(60);
+    const extras = (anything || []).map(toCard);
+    while (deck.length < 30 && extras.length) deck.push(extras.shift());
+  }
+  return deck.slice(0, 30);
 }
 
-async function buildMinionPokedex(supabase, chapter) {
-  const ids = new Set();
+// Translate the chapter's phase data into a compact "phase rules" payload
+// the client can apply directly to its state object. We don't bring the
+// full story-engine pattern over — just the most flavorful effects:
+//   heal       — boss heals X HP when threshold crossed
+//   buff       — all boss field cards get +X attack permanently
+//   ignoreDef  — boss attacks ignore defense from this phase on
+//   summon     — add specific cards to boss hand (free plays)
+//   aoe        — deal X direct damage to every player field card
+//   transform  — replace the boss's anchor card with a stronger version
+function summarisePhaseRules(chapter) {
+  const rules = [];
   for (const phase of chapter.boss.phases) {
-    for (const id of phase.summonOnEntry?.pokemonIds || []) ids.add(id);
+    if (phase.fromHpFraction >= 1) continue; // skip phase 1 (always active)
+    const r = { fromHpFraction: phase.fromHpFraction, effects: [] };
+    if (phase.attackBonus) r.effects.push({ kind: "buff", amount: phase.attackBonus });
+    if (phase.ignoreDefense) r.effects.push({ kind: "ignoreDef" });
+    if (phase.summonOnEntry?.pokemonIds?.length) {
+      r.effects.push({ kind: "summon", pokemonIds: phase.summonOnEntry.pokemonIds, note: phase.summonOnEntry.note });
+    }
+    // Surface AoE if any move in the pattern targets "all"
+    const hasAoe = (phase.attackPattern || []).some((mk) => chapter.boss.moves?.[mk]?.target === "all");
+    if (hasAoe) r.effects.push({ kind: "aoe", amount: 3 });
+    rules.push(r);
   }
-  if (!ids.size || !supabase) return new Map();
-  const { data: rows } = await supabase.from("pokemon").select("*").in("id", [...ids]);
-  return new Map((rows || []).map((r) => [r.id, r]));
-}
-
-async function startSession({ chapter, p1, p2, mode, supabase }) {
-  const engine = await getEngine();
-  const state = engine.createStory({ chapter, p1, p2 });
-  // Inject minion pokedex so engine summons work.
-  state.minionPokedex = await buildMinionPokedex(supabase, chapter);
-  // Re-apply phase 0 with the populated pokedex (engine called applyPhase once already).
-  const match = {
-    id: randomUUID(),
-    mode,
-    chapterId: chapter.id,
-    v: 0,
-    state,
-    lastAnim: null,
-    lastAnimV: 0,
-    players: {
-      p1: { playerId: p1.playerId, userId: p1.userId, displayName: p1.displayName, ability: p1.ability },
-      p2: { playerId: p2.playerId, userId: p2.userId, displayName: p2.displayName, ability: p2.ability },
-    },
-    createdAt: Date.now(),
-  };
-  await store.roomSet(STORY_PREFIX + match.id, match);
-  if (p1.playerId) await store.playerBind(p1.playerId, STORY_PREFIX + match.id);
-  if (p2.playerId && !p2.isAi) await store.playerBind(p2.playerId, STORY_PREFIX + match.id);
-  return match;
-}
-
-function viewerOf(match, playerId) {
-  if (match.players.p1.playerId === playerId) return "p1";
-  if (match.players.p2.playerId === playerId) return "p2";
-  return null;
-}
-
-async function rollChapterReward(supabase, userId, chapter, getDex) {
-  if (!userId) return null;
-  const dex = await getDex();
-  if (!dex?.length) return null;
-  const reward = chapter.reward || { picks: 3 };
-  let picks = rollPicks(dex, reward.picks || 3, Math.random, { themeType: reward.themeType, themeBias: 0.5 });
-  if (reward.guaranteedLegendary && !picks.some((p) => p.is_legendary || p.is_mythical)) {
-    const rares = dex.filter((p) => p.is_legendary || p.is_mythical);
-    if (rares.length) picks[picks.length - 1] = rares[Math.floor(Math.random() * rares.length)];
+  // Mid-fight transformation (e.g. Onix → Steelix).
+  if (chapter.boss.transformTo) {
+    rules.push({
+      fromHpFraction: chapter.boss.transformAt || 0.5,
+      effects: [{
+        kind: "transform",
+        anchorPokemonId: chapter.boss.transformTo.anchorPokemonId,
+        displayName: chapter.boss.transformTo.displayName,
+        attackBonus: chapter.boss.transformTo.attackBonus || 0,
+        defenseBonus: chapter.boss.transformTo.defenseBonus || 0,
+        note: chapter.boss.transformTo.flavor,
+      }],
+    });
   }
-  const offerId = createOffer(userId, picks);
-  return {
-    offerId,
-    picks: picks.map((p) => ({
-      id: p.id, name: p.name, types: p.types, tier: p.tier,
-      energyCost: p.energyCost, cardHp: p.cardHp, cardAttack: p.cardAttack,
-      sprite_front: p.sprite_front,
-    })),
-  };
+  // Sort thresholds high → low so client matches "first crossed".
+  rules.sort((a, b) => b.fromHpFraction - a.fromHpFraction);
+  return rules;
 }
 
-// Persist a chapter as "completed" on the user's story_progress column.
+async function getUserProgress(supabase, userId) {
+  if (!supabase || !userId) return { completed: [] };
+  try {
+    const { data } = await supabase.from("users").select("story_progress").eq("id", userId).maybeSingle();
+    return data?.story_progress || { completed: [] };
+  } catch {
+    return { completed: [] };
+  }
+}
+
 async function recordChapterCompletion(supabase, userId, chapterId) {
   if (!supabase || !userId) return;
   try {
-    const { data: u } = await supabase
-      .from("users")
-      .select("story_progress")
-      .eq("id", userId)
-      .maybeSingle();
-    const progress = u?.story_progress || { completed: [] };
+    const { data } = await supabase.from("users").select("story_progress").eq("id", userId).maybeSingle();
+    const progress = data?.story_progress || { completed: [] };
     if (!progress.completed.includes(chapterId)) progress.completed.push(chapterId);
     progress.lastClearedAt = new Date().toISOString();
     await supabase.from("users").update({ story_progress: progress }).eq("id", userId);
@@ -182,50 +155,26 @@ async function recordChapterCompletion(supabase, userId, chapterId) {
   }
 }
 
-async function getUserProgress(supabase, userId) {
-  if (!supabase || !userId) return { completed: [] };
-  try {
-    const { data: u } = await supabase
-      .from("users")
-      .select("story_progress")
-      .eq("id", userId)
-      .maybeSingle();
-    return u?.story_progress || { completed: [] };
-  } catch {
-    return { completed: [] };
-  }
-}
-
 function chapterUnlocked(chapter, progress) {
   if (chapter.chapterNumber === 1) return true;
-  // Each chapter unlocks when the previous is completed.
   const prev = CHAPTERS.find((c) => c.chapterNumber === chapter.chapterNumber - 1);
   return prev ? progress.completed.includes(prev.id) : true;
 }
+
+// In-memory anti-cheat sessions for story matches (mirrors solo logic).
+const STORY_SESSIONS = new Map();
+const STORY_MIN_DURATION_MS = 30 * 1000;
+function sessionGc() {
+  const now = Date.now();
+  for (const [id, s] of STORY_SESSIONS) if (now - s.startedAt > 60 * 60 * 1000) STORY_SESSIONS.delete(id);
+}
+setInterval(sessionGc, 5 * 60 * 1000).unref?.();
 
 function mount(app, supabase, getPokedex) {
   async function loadDex() {
     const v = getPokedex();
     return v && typeof v.then === "function" ? await v : v;
   }
-
-  app.get("/api/story/chapter/:id/intro", (req, res) => {
-    const chapter = getChapter(req.params.id);
-    if (!chapter) return res.status(404).json({ error: "Unknown chapter." });
-    res.json({ intro: chapter.intro, flavor: chapter.flavor, locale: chapter.locale });
-  });
-
-  app.get("/api/story/match-status", async (req, res) => {
-    const playerId = String(req.query.playerId || req.user?.id || "");
-    if (!playerId) return res.json({ state: "waiting" });
-    const matchId = await store.playerLastRoom(playerId);
-    if (!matchId || !matchId.startsWith(STORY_PREFIX)) return res.json({ state: "waiting" });
-    const m = await store.roomGet(matchId);
-    if (!m) return res.json({ state: "waiting" });
-    const viewer = viewerOf(m, playerId);
-    if (!viewer) return res.json({ state: "waiting" });
-    res.json({ state: "matched", view: viewFor(m, viewer) });
-  });
 
   app.get("/api/story/chapters", async (req, res) => {
     const progress = await getUserProgress(supabase, req.user?.id);
@@ -237,182 +186,112 @@ function mount(app, supabase, getPokedex) {
     res.json({ chapters: list, progress });
   });
 
-  app.post("/api/story/start-solo", async (req, res) => {
-    if (!req.user) return res.status(401).json({ error: "Sign in to play story mode." });
-    const chapterId = String(req.body?.chapterId || "");
-    const chapter = getChapter(chapterId);
+  app.get("/api/story/chapter/:id/intro", (req, res) => {
+    const chapter = getChapter(req.params.id);
     if (!chapter) return res.status(404).json({ error: "Unknown chapter." });
-    const progress = await getUserProgress(supabase, req.user.id);
-    if (!chapterUnlocked(chapter, progress)) return res.status(403).json({ error: "Chapter locked. Complete the previous chapter first." });
-
-    const dex = await loadDex();
-    if (!dex?.length) return res.status(503).json({ error: "Pokédex not loaded." });
-    const deckSource = String(req.body?.deckSource || "active");
-    const p1Deck = await loadDeckForUser(supabase, req.user.id, deckSource, dex);
-    const p2Deck = await loadDeckForUser(supabase, null, "random", dex);
-
-    const p1 = {
-      playerId: req.user.id,
-      userId: req.user.id,
-      displayName: req.body?.displayName || req.user.display_name || "You",
-      ability: req.body?.ability || "brock",
-      deck: p1Deck,
-      isAi: false,
-    };
-    const p2 = {
-      playerId: `ai-partner-${randomUUID().slice(0, 8)}`,
-      userId: null,
-      displayName: "Lucario (AI Partner)",
-      ability: "lance",
-      deck: p2Deck,
-      isAi: true,
-    };
-    const match = await startSession({ chapter, p1, p2, mode: "solo", supabase });
-    res.json({ view: viewFor(match, "p1"), playerId: p1.playerId });
-  });
-
-  app.post("/api/story/host", async (req, res) => {
-    if (!req.user) return res.status(401).json({ error: "Sign in to host a co-op run." });
-    const chapterId = String(req.body?.chapterId || "");
-    const chapter = getChapter(chapterId);
-    if (!chapter) return res.status(404).json({ error: "Unknown chapter." });
-    const progress = await getUserProgress(supabase, req.user.id);
-    if (!chapterUnlocked(chapter, progress)) return res.status(403).json({ error: "Chapter locked." });
-    const code = randCode();
-    await store.privateRoomSet(`story-${code}`, {
-      playerId: req.user.id,
-      userId: req.user.id,
-      displayName: req.body?.displayName || req.user.display_name || "Host",
-      ability: req.body?.ability || "brock",
-      deckSource: req.body?.deckSource || "active",
-      chapterId,
-    });
-    res.json({ code });
-  });
-
-  app.post("/api/story/join", async (req, res) => {
-    if (!req.user) return res.status(401).json({ error: "Sign in to join a co-op run." });
-    const code = String(req.body?.code || "").toUpperCase().trim();
-    if (!code) return res.status(400).json({ error: "Code required." });
-    const host = await store.privateRoomTake(`story-${code}`);
-    if (!host) return res.status(404).json({ error: "Room not found or expired." });
-    if (host.playerId === req.user.id) {
-      await store.privateRoomSet(`story-${code}`, host);
-      return res.status(400).json({ error: "Can't join your own room." });
-    }
-    const chapter = getChapter(host.chapterId);
-    if (!chapter) return res.status(404).json({ error: "Chapter no longer available." });
-    const dex = await loadDex();
-    const p1Deck = await loadDeckForUser(supabase, host.userId, host.deckSource, dex);
-    const p2Deck = await loadDeckForUser(supabase, req.user.id, req.body?.deckSource || "active", dex);
-    const p1 = { ...host, deck: p1Deck, isAi: false };
-    const p2 = {
-      playerId: req.user.id, userId: req.user.id,
-      displayName: req.body?.displayName || req.user.display_name || "Partner",
-      ability: req.body?.ability || "erika",
-      deck: p2Deck, isAi: false,
-    };
-    const match = await startSession({ chapter, p1, p2, mode: "coop", supabase });
-    res.json({ view: viewFor(match, "p2"), playerId: req.user.id });
-  });
-
-  app.get("/api/story/match/:id", async (req, res) => {
-    const playerId = String(req.query.playerId || req.user?.id || "");
-    const since = Number(req.query.since || 0);
-    const m = await store.roomGet(STORY_PREFIX + req.params.id);
-    if (!m) return res.status(404).json({ error: "Match not found." });
-    const viewer = viewerOf(m, playerId);
-    if (!viewer) return res.status(403).json({ error: "Not in this match." });
-    if (m.v <= since) return res.status(204).end();
-    res.json({ view: viewFor(m, viewer) });
-  });
-
-  app.post("/api/story/match/:id/action", async (req, res) => {
-    const playerId = String(req.body?.playerId || req.user?.id || "");
-    const action = String(req.body?.action || "");
-    const payload = req.body?.payload || {};
-    const matchKey = STORY_PREFIX + req.params.id;
-
-    let outErr = null;
-    let outOver = false;
-    let outViewer = null;
-
-    await store.roomWithLock(matchKey, async (m) => {
-      if (!m) { outErr = "Match not found."; return; }
-      const viewer = viewerOf(m, playerId);
-      outViewer = viewer;
-      if (!viewer) { outErr = "Not in this match."; return; }
-      if (m.state.winner) { outErr = "Match is over."; return; }
-
-      const engine = await getEngine();
-      const chapter = getChapter(m.chapterId);
-      let r;
-      switch (action) {
-        case "play-card":
-          r = engine.playCard(m.state, viewer, payload.handIndex, { replaceSlot: payload.replaceSlot });
-          if (r?.ok) m.lastAnim = { kind: "play", side: viewer, slot: r.slot, cardName: r.instance?.card?.name };
-          break;
-        case "attack":
-          r = engine.attack(m.state, viewer, payload.fromSlot, payload.target || { kind: "boss" });
-          if (r?.ok) m.lastAnim = { kind: "attack", side: viewer, fromSlot: payload.fromSlot, target: payload.target, damage: r.damage, critical: !!r.critical };
-          break;
-        case "end-turn": {
-          if (m.state.activeSide !== viewer) { outErr = "Not your turn."; return; }
-          // p1 → p2 transition.
-          engine.endTurn(m.state, viewer, chapter);
-          m.lastAnim = { kind: "end-turn", side: viewer };
-          // Solo: auto-run AI partner's turn + boss turn until back to p1.
-          if (m.mode === "solo") {
-            // After p1 ends turn, state.activeSide = "p2". Run AI partner.
-            if (m.state.activeSide === "p2" && !m.state.winner) {
-              const aiActs = engine.aiPartnerTurn(m.state, chapter, "p2");
-              m.partnerActions = aiActs;
-            }
-          }
-          r = { ok: true };
-          break;
-        }
-        case "concede": {
-          m.state.winner = "boss";
-          m.state.phase = "over";
-          m.state.log.push({ id: m.state.log.length + 1, text: `${m.players[viewer].displayName} conceded.`, kind: "loss" });
-          r = { ok: true };
-          break;
-        }
-        default:
-          outErr = "Unknown action.";
-          return;
-      }
-      if (!r || !r.ok) { outErr = r?.reason || "Action rejected."; return; }
-      m.v += 1;
-      m.lastAnimV = m.v;
-
-      // Handle chapter-completion rewards on the action that ended it.
-      if (m.state.winner && !m.rewardsRolled) {
-        m.rewardsRolled = true;
-        outOver = true;
-        const chapterDone = m.state.winner === "team";
-        if (chapterDone) {
-          if (m.players.p1.userId) {
-            m.rewardP1 = await rollChapterReward(supabase, m.players.p1.userId, chapter, loadDex);
-            await recordChapterCompletion(supabase, m.players.p1.userId, chapter.id);
-          }
-          if (m.players.p2.userId) {
-            m.rewardP2 = await rollChapterReward(supabase, m.players.p2.userId, chapter, loadDex);
-            await recordChapterCompletion(supabase, m.players.p2.userId, chapter.id);
-          }
-        }
-      }
-    });
-    if (outErr) return res.status(400).json({ error: outErr });
-    const m = await store.roomGet(matchKey);
-    if (!m) return res.status(404).json({ error: "Match vanished." });
     res.json({
-      view: viewFor(m, outViewer),
-      gameOver: outOver || !!m.state.winner,
-      partnerActions: m.partnerActions || null,
+      intro: chapter.intro,
+      flavor: chapter.flavor,
+      locale: chapter.locale,
+      enemyTrainerName: chapter.enemyTrainerName,
+      bossName: chapter.boss.displayName,
+      bossSpriteId: chapter.boss.anchorPokemonId,
+    });
+  });
+
+  app.get("/api/story/chapter/:id/deck", async (req, res) => {
+    const chapter = getChapter(req.params.id);
+    if (!chapter) return res.status(404).json({ error: "Unknown chapter." });
+    if (!supabase) return res.status(503).json({ error: "DB unavailable." });
+    const progress = await getUserProgress(supabase, req.user?.id);
+    if (!chapterUnlocked(chapter, progress)) return res.status(403).json({ error: "Chapter locked." });
+    try {
+      const deck = await buildBossDeck(supabase, chapter);
+      // Pre-fetch any pokémon the boss can summon during phases so the
+      // client doesn't have to round-trip mid-fight.
+      const summonIds = new Set();
+      for (const phase of chapter.boss.phases) {
+        for (const id of phase.summonOnEntry?.pokemonIds || []) summonIds.add(id);
+      }
+      if (chapter.boss.transformTo?.anchorPokemonId) summonIds.add(chapter.boss.transformTo.anchorPokemonId);
+      let summonCards = {};
+      if (summonIds.size) {
+        const { data: rows } = await supabase.from("pokemon").select("*").in("id", [...summonIds]);
+        for (const r of rows || []) summonCards[r.id] = toCard(r);
+      }
+      res.json({
+        chapter: {
+          id: chapter.id, name: chapter.name, locale: chapter.locale,
+          isFinale: !!chapter.isFinale,
+          intro: chapter.intro,
+          enemyTrainerName: chapter.enemyTrainerName,
+          enemyAbility: chapter.enemyAbility || "lance",
+        },
+        boss: {
+          displayName: chapter.boss.displayName,
+          maxHp: chapter.boss.maxHp,
+          types: chapter.boss.types,
+          anchorPokemonId: chapter.boss.anchorPokemonId,
+        },
+        deck,
+        phaseRules: summarisePhaseRules(chapter),
+        summonCards,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/me/story/start", (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Sign in required." });
+    const chapterId = String(req.body?.chapterId || "");
+    const chapter = getChapter(chapterId);
+    if (!chapter) return res.status(404).json({ error: "Unknown chapter." });
+    const sessionId = require("crypto").randomBytes(12).toString("base64url");
+    STORY_SESSIONS.set(sessionId, {
+      userId: req.user.id, chapterId, startedAt: Date.now(), claimed: false,
+    });
+    res.json({ sessionId });
+  });
+
+  app.post("/me/story/end", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Sign in required." });
+    const { sessionId, won } = req.body || {};
+    const session = STORY_SESSIONS.get(sessionId);
+    if (!session) return res.json({ reward: null, reason: "no_session" });
+    if (session.userId !== req.user.id) return res.status(403).json({ error: "Wrong user." });
+    if (session.claimed) return res.json({ reward: null, reason: "already_claimed" });
+    if (Date.now() - session.startedAt < STORY_MIN_DURATION_MS) {
+      return res.json({ reward: null, reason: "too_short" });
+    }
+    session.claimed = true;
+    if (!won) return res.json({ reward: null, reason: "lost" });
+
+    const chapter = getChapter(session.chapterId);
+    if (!chapter) return res.json({ reward: null, reason: "bad_chapter" });
+    const pokedex = await loadDex();
+    if (!pokedex?.length) return res.status(503).json({ error: "Pokédex not loaded." });
+
+    const cfg = chapter.reward || { picks: 3 };
+    let picks = rollPicks(pokedex, cfg.picks || 3, Math.random, { themeType: cfg.themeType, themeBias: 0.5 });
+    if (cfg.guaranteedLegendary && !picks.some((p) => p.is_legendary || p.is_mythical)) {
+      const rares = pokedex.filter((p) => p.is_legendary || p.is_mythical);
+      if (rares.length) picks[picks.length - 1] = rares[Math.floor(Math.random() * rares.length)];
+    }
+    const offerId = createOffer(req.user.id, picks);
+    await recordChapterCompletion(supabase, req.user.id, session.chapterId);
+    res.json({
+      reward: {
+        offerId,
+        picks: picks.map((p) => ({
+          id: p.id, name: p.name, types: p.types, tier: p.tier,
+          energyCost: p.energyCost, cardHp: p.cardHp, cardAttack: p.cardAttack,
+          sprite_front: p.sprite_front,
+        })),
+      },
+      chapterId: session.chapterId,
     });
   });
 }
 
-module.exports = { mount };
+module.exports = { mount, buildBossDeck, summarisePhaseRules };
