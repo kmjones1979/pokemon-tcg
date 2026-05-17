@@ -1,6 +1,9 @@
 // Card rendering. Returns DOM elements; no game-state knowledge.
 
 import { TYPE_COLORS } from "./type-chart.js";
+import { isGuardian } from "./passives.js";
+
+function isGuardianCard(card) { return isGuardian(card); }
 
 const TYPE_GLYPH = {
   normal: "★",
@@ -70,6 +73,7 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
         <div class="card-level shiny-badge" title="Shiny L${card.shinyLevel} (+${card.shinyLevel} HP, +${card.shinyLevel} ATK)">★${card.shinyLevel}</div>
       ` : ""}
       ${card.is_legendary ? `<div class="card-rarity">★ LEGENDARY ★</div>` : card.is_mythical ? `<div class="card-rarity mythical">✦ MYTHICAL ✦</div>` : ""}
+      ${isGuardianCard(card) ? `<div class="card-guardian" title="Guardian — opponents must attack this first">🛡</div>` : ""}
     </div>
   `;
 

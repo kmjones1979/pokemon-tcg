@@ -180,6 +180,29 @@
   cursor: crosshair;
 }
 
+/* Guardian badge — top-right shield. Pulses subtly so it's noticeable. */
+.card .card-guardian {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #c2d4ff, #4a6fc4);
+  color: #0a1430;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 12px rgba(99, 144, 240, 0.7), 0 2px 4px rgba(0,0,0,0.5);
+  z-index: 4;
+  pointer-events: none;
+  animation: guardianPulse 2.2s ease-in-out infinite;
+}
+@keyframes guardianPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.1); }
+}
+
 /* Shiny tier — additional rainbow shimmer behind the holo sheen so shiny
    cards are immediately recognisable. */
 .card.shiny-1 .card-sheen,

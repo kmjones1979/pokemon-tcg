@@ -17,6 +17,42 @@ export function hasPassive(card, abilityName) {
   return Array.isArray(card.abilities) && card.abilities.includes(abilityName);
 }
 
+// Guardian — opposing attackers MUST target this card before any other on
+// the field. Granted to legendaries and to high-tier (≥ 4) Steel/Rock/Fighting
+// types that have the "sturdy" PokeAPI passive. Visualised as a 🛡 shield.
+export function isGuardian(card) {
+  if (!card) return false;
+  if (card.is_legendary) return true;
+  const t = card.types?.[0];
+  if (card.tier >= 4 && (t === "steel" || t === "rock" || t === "fighting") && hasPassive(card, "sturdy")) {
+    return true;
+  }
+  return false;
+}
+
+// Entrance ability — fires once when a Pokémon is summoned to the field.
+// Returns { kind, ... } describing the effect for the caller to apply, OR
+// null if no entrance ability applies.
+export function entranceAbility(card) {
+  if (card.is_legendary) {
+    return {
+      kind: "roar",
+      name: "Roar",
+      desc: "Deals 2 damage to every enemy field Pokémon.",
+      damage: 2,
+    };
+  }
+  if (card.is_mythical) {
+    return {
+      kind: "aurora",
+      name: "Aurora",
+      desc: "Heals 2 HP on every allied field Pokémon.",
+      heal: 2,
+    };
+  }
+  return null;
+}
+
 // Compute pinch-clause damage bonus for the attacker (blaze/torrent/overgrow).
 export function pinchAttackBonus(attackerInst) {
   const card = attackerInst.card;

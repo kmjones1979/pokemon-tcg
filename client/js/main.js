@@ -474,7 +474,9 @@ function render() {
     <div class="arena-bg"></div>
     <div class="trainer-row top">
       <div class="trainer-block ai${state.activePlayer === "ai" && !state.winner ? " is-turn" : ""}">
-        <div class="trainer-avatar" data-ability="${state.players.ai.ability}"></div>
+        <div class="trainer-avatar" data-ability="${state.players.ai.ability}">
+          ${trainerMascotUrl(state.players.ai.ability) ? `<img src="${trainerMascotUrl(state.players.ai.ability)}" alt="${escape(TRAINERS[state.players.ai.ability]?.name || "")}" loading="lazy">` : ""}
+        </div>
         <div class="trainer-meta">
           <div class="trainer-label">${escape(opponentLabel())} (${TRAINERS[state.players.ai.ability]?.name || state.players.ai.ability})</div>
           ${hpBar(state.players.ai.trainerHp)}
@@ -487,6 +489,7 @@ function render() {
       <div class="turn-banner">
         <div class="turn-label">Turn ${state.turn}</div>
         <div class="turn-active">${state.activePlayer === "player" ? "Your move" : "Rival is thinking…"}</div>
+        <div class="turn-timer" id="turn-timer"></div>
         <div class="turn-hint">${escape(turnHint())}</div>
       </div>
     </div>
@@ -496,7 +499,9 @@ function render() {
 
     <div class="trainer-row bottom">
       <div class="trainer-block player${state.activePlayer === "player" && !state.winner ? " is-turn" : ""}">
-        <div class="trainer-avatar" data-ability="${state.players.player.ability}"></div>
+        <div class="trainer-avatar" data-ability="${state.players.player.ability}">
+          ${trainerMascotUrl(state.players.player.ability) ? `<img src="${trainerMascotUrl(state.players.player.ability)}" alt="${escape(TRAINERS[state.players.player.ability]?.name || "")}" loading="lazy">` : ""}
+        </div>
         <div class="trainer-meta">
           <div class="trainer-label">${escape(youLabel())} (${TRAINERS[state.players.player.ability]?.name || state.players.player.ability})</div>
           ${hpBar(state.players.player.trainerHp)}
@@ -539,6 +544,7 @@ function render() {
 
   bindTrainerAttackTarget();
   bindItemBar();
+  startTurnTimer();
 
   // Long-hover preview anywhere a card is rendered in-arena.
   attachPreviewHandlers($("#arena"), cardLookup);
@@ -1765,6 +1771,40 @@ function handleMpAnim(anim) {
   }
 }
 
+// Turn-timer ticker — updates the countdown element every 250ms. Auto-ends
+// the player's turn when the deadline passes.
+let _turnTimerHandle = null;
+function startTurnTimer() {
+  stopTurnTimer();
+  const el = $("#turn-timer");
+  if (!el || !state || state.winner || !state.turnEndsAt) return;
+  const update = () => {
+    if (!state || state.winner) { stopTurnTimer(); return; }
+    const left = state.turnEndsAt - Date.now();
+    if (left <= 0) {
+      el.textContent = "0:00";
+      el.classList.add("expired");
+      // Only auto-end if it's the player's turn (mp + solo). In solo the
+      // AI runs synchronously so its turn can't expire here.
+      if (state.activePlayer === "player" && !state.winner) {
+        stopTurnTimer();
+        onEndTurn();
+      }
+      return;
+    }
+    const secs = Math.ceil(left / 1000);
+    el.textContent = `0:${String(secs).padStart(2, "0")}`;
+    el.classList.toggle("urgent", left < 10_000);
+    el.classList.toggle("crit-time", left < 5_000);
+  };
+  update();
+  _turnTimerHandle = setInterval(update, 250);
+}
+function stopTurnTimer() {
+  if (_turnTimerHandle) clearInterval(_turnTimerHandle);
+  _turnTimerHandle = null;
+}
+
 // "Your turn" cue — large banner + chime when control flips back to you.
 function showYourTurnBanner() {
   sfxYourTurn();
@@ -1797,6 +1837,7 @@ function handleMpGameOver(over) {
 
 function onGameOver() {
   stopBGM();
+  stopTurnTimer();
   if (state.winner === "player") sfxVictory();
   else sfxDefeat();
   // Grant XP based on outcome (signed-in users only).

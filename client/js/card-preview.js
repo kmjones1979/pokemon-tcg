@@ -6,6 +6,7 @@
 
 import { renderCard } from "./cards.js";
 import { abilitiesFor } from "./abilities.js";
+import { isGuardian, entranceAbility } from "./passives.js";
 
 const HOVER_DELAY_MS = 350;
 let _hoverTimer = null;
@@ -82,6 +83,7 @@ function showPreview(card, anchorEl) {
         <span class="cp-adesc">${escape(a.desc)}</span>
       </div>
     `).join("")}
+    ${renderTraitsSection(card)}
     ${renderPassivesSection(card)}
     ${card.flavor_text ? `
       <div class="cp-section">Pokédex entry</div>
@@ -125,6 +127,15 @@ const PASSIVE_DESCS = {
   torrent: "Torrent — +1 ATK to Water moves when below 1/3 HP.",
   overgrow: "Overgrow — +1 ATK to Grass moves when below 1/3 HP.",
 };
+function renderTraitsSection(card) {
+  const traits = [];
+  const entrance = entranceAbility(card);
+  if (entrance) traits.push(`<div class="cp-ability"><span class="cp-aname">Entrance: ${escape(entrance.name)}</span><span class="cp-adesc">${escape(entrance.desc)}</span></div>`);
+  if (isGuardian(card)) traits.push(`<div class="cp-ability"><span class="cp-aname">🛡 Guardian</span><span class="cp-adesc">Opposing attackers must target this first while it's on the field.</span></div>`);
+  if (!traits.length) return "";
+  return `<div class="cp-section">Special traits</div>${traits.join("")}`;
+}
+
 function renderPassivesSection(card) {
   if (!Array.isArray(card.abilities) || card.abilities.length === 0) return "";
   const active = card.abilities.filter((a) => PASSIVE_DESCS[a]);

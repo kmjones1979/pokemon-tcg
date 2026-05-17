@@ -22,7 +22,7 @@ import { computeDamage, rollStatus, isLockedOut, tickStatus } from "./battle.js"
 import { abilityById } from "./abilities.js";
 import {
   hasPassive, pinchAttackBonus, levitateBlocks,
-  staticTrigger, intimidateOnSummon,
+  staticTrigger, intimidateOnSummon, isGuardian, entranceAbility,
 } from "./passives.js";
 import { defaultKit, useItem as _useItem } from "./items.js";
 export const useItem = _useItem;
@@ -33,6 +33,7 @@ export const STARTING_HAND = 5;
 export const TRAINER_START_HP = 30;
 export const MAX_ENERGY = 10;
 export const MAX_HAND = 10;
+export const TURN_DURATION_MS = 60_000; // each player has 60s per turn
 
 let _instanceCounter = 0;
 const nextInstanceId = () => `i${++_instanceCounter}`;
@@ -204,6 +205,7 @@ function attackPhrase(attackerCard, ability, defenderName, damage, mult, turn = 
 function beginTurn(state) {
   state.turn += 1;
   state.phase = "draw";
+  state.turnEndsAt = Date.now() + TURN_DURATION_MS;
   const p = state.players[state.activePlayer];
 
   // Auto-loss: a player who has nothing left to do (no deck, no hand, no
@@ -327,6 +329,37 @@ export function playCard(state, side, handIndex, { rand = Math.random, replaceSl
     }
     if (n > 0) log(state, `🦁 ${card.name}'s Intimidate lowered ${n} foe${n === 1 ? "'s" : "s'"} attack.`, "status");
   }
+  // Entrance abilities for legendary / mythical cards.
+  const entrance = entranceAbility(card);
+  if (entrance) {
+    const otherSide = side === "player" ? "ai" : "player";
+    if (entrance.kind === "roar") {
+      // Damage every enemy on the field.
+      let hits = 0;
+      for (let i = 0; i < state.players[otherSide].field.length; i++) {
+        const enemy = state.players[otherSide].field[i];
+        if (!enemy) continue;
+        enemy.currentHp = Math.max(0, enemy.currentHp - entrance.damage);
+        hits++;
+        if (enemy.currentHp <= 0) {
+          state.players[otherSide].discard.push(enemy.card);
+          state.players[otherSide].field[i] = null;
+          log(state, `${enemy.card.name} fainted to ${card.name}'s Roar!`, "ko");
+        }
+      }
+      if (hits > 0) log(state, `🔊 ${card.name}'s entrance hit ${hits} foe${hits === 1 ? "" : "s"} for ${entrance.damage}.`, "status");
+    } else if (entrance.kind === "aurora") {
+      let healed = 0;
+      for (const ally of state.players[side].field) {
+        if (!ally) continue;
+        const cap = ally.maxHp ?? ally.card.cardHp;
+        const before = ally.currentHp;
+        ally.currentHp = Math.min(cap, ally.currentHp + entrance.heal);
+        if (ally.currentHp > before) healed += (ally.currentHp - before);
+      }
+      if (healed > 0) log(state, `✨ ${card.name}'s Aurora restored ${healed} HP across the field.`, "summon");
+    }
+  }
   return { ok: true, slot, instance: inst, sacrificed };
 }
 
@@ -364,6 +397,16 @@ export function attack(
   // Target: "trainer" or a slot index on the opponent's field.
   // If opponent has Pokémon on the field, must attack one of them (taunt-style).
   const hasField = o.field.some((s) => s != null);
+  // Guardian: if any opposing card has the Guardian trait, the attacker
+  // MUST target a Guardian first.
+  const guardians = o.field
+    .map((inst, slot) => ({ inst, slot }))
+    .filter(({ inst }) => inst && isGuardian(inst.card));
+  if (guardians.length > 0 && target !== "trainer") {
+    if (!guardians.some((g) => g.slot === target)) {
+      return { ok: false, reason: "Must attack a Guardian (🛡) first" };
+    }
+  }
 
   let result;
   if (target === "trainer") {
@@ -567,6 +610,13 @@ function chooseTarget(state, attackerInst, policy, rand) {
 
   if (fieldTargets.length === 0) return "trainer";
 
+  // Guardian taunt — must attack guardians first.
+  const guardians = fieldTargets.filter(({ inst }) => isGuardian(inst.card));
+  const reachable = guardians.length > 0 ? guardians : fieldTargets;
+  // Carry the filtered pool through the rest of the picker.
+  fieldTargets.length = 0;
+  fieldTargets.push(...reachable);
+
   switch (policy.pickTarget) {
     case "random":
       return fieldTargets[Math.floor(rand() * fieldTargets.length)].slot;
@@ -679,9 +729,12 @@ export async function aiTakeTurn(state, { rand = Math.random, difficulty = "medi
     let attackerSlot, attackerInst;
     if (policy.pickTarget === "bestDmg") {
       const opp = state.players.player;
-      const targets = opp.field
+      let targets = opp.field
         .map((inst, slot) => ({ inst, slot }))
         .filter(({ inst }) => inst != null);
+      // Honor Guardian taunt in the heuristic.
+      const guards = targets.filter(({ inst }) => isGuardian(inst.card));
+      if (guards.length > 0) targets = guards;
       if (targets.length === 0) {
         attackerSlot = attackers[0].slot;
         attackerInst = attackers[0].inst;

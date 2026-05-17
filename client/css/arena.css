@@ -1244,6 +1244,17 @@ h1, h2, h3,
   border: 2px solid #fff3;
   flex-shrink: 0;
   position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.trainer-avatar img {
+  width: 130%;
+  height: auto;
+  position: relative;
+  z-index: 1;
+  margin-bottom: -10px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
 }
 .trainer-avatar[data-ability="brock"]   { background: linear-gradient(140deg, #B6A136, #1a1a0a); }
 .trainer-avatar[data-ability="misty"]   { background: linear-gradient(140deg, #6390F0, #0a1430); }
@@ -1405,6 +1416,22 @@ h1, h2, h3,
 }
 .turn-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
 .turn-active { font-size: 11px; }
+.turn-timer {
+  font-family: "Press Start 2P", monospace;
+  font-size: 14px;
+  margin-top: 4px;
+  color: var(--good);
+  letter-spacing: 1px;
+}
+.turn-timer.urgent { color: var(--mid); }
+.turn-timer.crit-time {
+  color: var(--bad);
+  animation: timerPulse 0.7s ease-in-out infinite;
+}
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.15); }
+}
 
 .field {
   position: relative;
