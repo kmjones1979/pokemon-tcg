@@ -1,0 +1,80 @@
+{
+  "menu": {
+    "title": "Pokémon TCG",
+    "tagline": "Build a 30-card deck. Wield Legendary signature moves. Out-strategize your rival.",
+    "chooseTrainer": "Choose a trainer to begin",
+    "battleAs": "Battle as {name} ▸",
+    "findOnline": "Find online match",
+    "playFriend": "Play vs friend (code)",
+    "fightChampion": "Fight a Champion",
+    "storyMode": "📖 Story Mode",
+    "tradeCards": "🔄 Trade Cards",
+    "dailyPuzzle": "🧩 Daily Puzzle",
+    "howToPlay": "How to play",
+    "soloDifficulty": "Solo vs. AI difficulty",
+    "signInHint": "Sign in to unlock {feature}",
+    "pickTrainerHint": "Pick a trainer to begin {feature}"
+  },
+  "difficulty": {
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard",
+    "easyBio": "AI plays the cheapest card, sometimes passes, attacks randomly.",
+    "mediumBio": "AI picks the strongest affordable card and aims for type-effective targets.",
+    "hardBio": "AI ramps to its biggest card with signature awareness and chases guaranteed KOs."
+  },
+  "arena": {
+    "yourTurn": "Your move",
+    "rivalThinking": "Rival is thinking…",
+    "yourTurnBanner": "YOUR TURN",
+    "endTurn": "End turn ▸",
+    "concede": "Concede",
+    "concedeConfirm": "Concede this match?",
+    "showHand": "▲ Show hand",
+    "lowerHand": "▼ Lower hand"
+  },
+  "verdict": {
+    "superEffective": "Super effective",
+    "notVeryEffective": "Not very effective",
+    "noEffect": "No effect",
+    "critical": "CRITICAL!"
+  },
+  "rewards": {
+    "claimFailed": "Couldn't claim: {reason}",
+    "offerExpired": "Offer expired or unknown.",
+    "alreadyClaimed": "Already claimed today.",
+    "newCard": "+{name}!"
+  },
+  "daily": {
+    "tag": "Daily Challenge #{day}",
+    "oneAttempt": "One attempt today",
+    "takeChallenge": "Take the challenge ▸",
+    "leaderboard": "Leaderboard",
+    "viewLeaderboard": "View leaderboard ▸",
+    "shareResult": "📋 Share my result",
+    "comeBackTomorrow": "Come back tomorrow for a new boss!"
+  },
+  "puzzle": {
+    "tag": "Puzzle #{day}",
+    "moves": "Moves",
+    "restart": "↺ Restart",
+    "giveUp": "Give up",
+    "tapYourFirst": "Tap one of your Pokémon, then tap an enemy.",
+    "tapEnemy": "Tap an enemy to attack with {name}."
+  },
+  "share": {
+    "copy": "📋 Copy result",
+    "copied": "✓ Copied!",
+    "native": "📤 Share…"
+  },
+  "common": {
+    "back": "✕ Back",
+    "close": "✕ Close",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "networkError": "Network error.",
+    "tryAgain": "Try again",
+    "you": "You",
+    "rival": "Rival"
+  }
+}

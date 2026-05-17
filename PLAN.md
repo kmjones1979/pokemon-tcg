@@ -257,18 +257,22 @@ the most work for the North Star metrics:
 
 ---
 
-## What I need from you to start Phase 1
+## Phase 1 decisions (approved 2026-05-17)
 
-1. **Approval of the rebrand approach + creature style choice.** I'll
-   propose 3 visual-mood-board sketches via `ImagePreview` once
-   approved.
-2. **Analytics provider preference.** PostHog (hosted), Plausible
-   (self-hostable), or Vercel Analytics (built-in)?
-3. **Approval to add a minimal esbuild step** (still ESM, still
-   no-framework, just enables code-splitting + minification).
-4. **Confirmation to keep the existing supabase schema as the
-   guest-merge target** (i.e., when a guest signs up post-first-win,
-   we migrate their localStorage state into their new user row).
+1. **Art direction:** Cursed-cute (Yume Nikki / Frieren / Owl House).
+   Off-kilter pastels, slightly creepy edges. Distinct on TikTok,
+   hard to copy, screenshot-friendly. High memeability ceiling.
+2. **Analytics:** Vercel Analytics (zero-config). Free pageviews +
+   Web Vitals via their built-in product. Custom events stay on
+   the existing `/api/track` beacon for now — easy to swap in
+   PostHog later if event volume justifies the paid tier.
+3. **Build step:** Minimal esbuild. ESM output preserved, no
+   framework. Enables code-splitting (lazy-load story / trading /
+   deck-builder / puzzle / daily on demand) + minification.
+4. **Guest merge:** Existing `users` schema is the merge target.
+   On signup-from-guest, the client's localStorage state
+   (collection, deck draft, achievements progress) gets posted to
+   a new `/me/migrate-guest` endpoint and merged into the freshly-
+   created user row + related tables.
 
-Once those four are answered I start Phase 1 in small commits, each
-independently shippable.
+Phase 1 work starts immediately under these constraints.

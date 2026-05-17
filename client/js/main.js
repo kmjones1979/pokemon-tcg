@@ -39,6 +39,7 @@ import * as trading from "./trading.js";
 import * as daily from "./daily.js";
 import * as puzzle from "./puzzle.js";
 import { trackEvent } from "./analytics.js";
+import { init as initI18n } from "./i18n.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -85,6 +86,9 @@ document.addEventListener("click", (e) => {
 
 // --- Boot ------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
+  // Boot i18n shell in parallel with user + theme so localized copy is
+  // ready by first render. Failure is silent — strings degrade to keys.
+  initI18n().catch(() => {});
   try {
     const [user, themeRes] = await Promise.all([
       passkey.me(),

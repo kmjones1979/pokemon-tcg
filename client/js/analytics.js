@@ -29,6 +29,16 @@ function anonId() {
 
 export function trackEvent(name, props = {}) {
   if (!enabled || typeof name !== "string") return;
+  // Forward to Vercel Analytics if their script loaded. Pageviews are
+  // auto-tracked by their script; we only push custom events through `va`.
+  try {
+    if (typeof window !== "undefined" && typeof window.va === "function") {
+      window.va("event", { name, ...props });
+    }
+  } catch {}
+  // Always also send to our own beacon so we have a server-side log
+  // independent of Vercel's quota — single source of truth for funnels
+  // until we move to PostHog or similar.
   try {
     const body = JSON.stringify({
       name,
