@@ -92,9 +92,17 @@ function showPreview(card, anchorEl) {
   el.style.top = `${Math.max(8, Math.min(window.innerHeight - H - 8, r.top - 40))}px`;
 }
 
-function hidePreview() {
+export function hidePreview() {
+  if (_hoverTimer) { clearTimeout(_hoverTimer); _hoverTimer = null; }
   _previewEl?.remove();
   _previewEl = null;
+}
+
+// Any click anywhere dismisses an open preview immediately — otherwise the
+// hover-card lingers and can cover the ability popover that just opened.
+if (typeof document !== "undefined") {
+  document.addEventListener("mousedown", hidePreview, true);
+  document.addEventListener("touchstart", hidePreview, { capture: true, passive: true });
 }
 
 function escape(s) {

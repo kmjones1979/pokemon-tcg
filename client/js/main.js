@@ -949,7 +949,14 @@ function animateHit(attackerEl, defenderEl, attackerInst, result, done) {
     }
     if (result.knockedOut) {
       sfxKO();
-      knockOut(defenderEl).then(() => done && done());
+      knockOut(defenderEl).then(() => {
+        if (result.attackerLeveled && attackerEl) {
+          attackerEl.classList.add("leveled-up");
+          flashVerdict(`Evolved! L${result.attackerLeveled}`, "super");
+          setTimeout(() => attackerEl.classList.remove("leveled-up"), 850);
+        }
+        done && done();
+      });
     } else {
       setTimeout(() => done && done(), 350);
     }
@@ -1027,6 +1034,12 @@ async function handleAiAction(action) {
     if (r.knockedOut) {
       sfxKO();
       await knockOut(defenderEl);
+      if (r.attackerLeveled && attackerEl) {
+        attackerEl.classList.add("leveled-up");
+        flashVerdict(`Rival's ${action.attackerCard?.name || "Pokémon"} evolved!`, "weak");
+        await sleep(800);
+        attackerEl.classList.remove("leveled-up");
+      }
     } else {
       await sleep(500);
     }

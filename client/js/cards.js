@@ -63,6 +63,9 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
         <div class="card-status status-${instance.status.kind}">${instance.status.kind}</div>
         <div class="status-icon kind-${instance.status.kind}">${statusGlyph(instance.status.kind)}</div>
       ` : ""}
+      ${instance && instance.level ? `
+        <div class="card-level" title="Evolved level ${instance.level} (+${instance.level} HP, +${instance.attackBoost || instance.level} ATK)">★${instance.level}</div>
+      ` : ""}
       ${card.is_legendary ? `<div class="card-rarity">★ LEGENDARY ★</div>` : card.is_mythical ? `<div class="card-rarity mythical">✦ MYTHICAL ✦</div>` : ""}
     </div>
   `;

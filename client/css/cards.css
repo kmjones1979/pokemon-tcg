@@ -137,6 +137,38 @@
 }
 .card.ai-just-summoned { animation: aiSummon 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
 
+/* Level-up badge — small star pip in the top-left corner of evolved cards. */
+.card .card-level {
+  position: absolute;
+  top: -10px;
+  left: -8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff7c2, #f7d02c, #ee8130);
+  color: #1a0a00;
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 12px rgba(247, 208, 44, 0.7), 0 2px 4px rgba(0, 0, 0, 0.5);
+  z-index: 4;
+  pointer-events: none;
+  animation: levelPulse 2.4s ease-in-out infinite;
+}
+@keyframes levelPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.12); }
+}
+
+/* Level-up flash when a card KOs an enemy and grows. */
+@keyframes levelUp {
+  0%   { transform: scale(1); box-shadow: 0 0 0 0 #f7d02c; }
+  40%  { transform: scale(1.18); box-shadow: 0 0 35px 8px #f7d02c, 0 0 60px 12px #ee8130; }
+  100% { transform: scale(1); box-shadow: 0 6px 14px rgba(0,0,0,0.4); }
+}
+.card.leveled-up { animation: levelUp 0.85s ease-out; }
+
 /* Sparkle for legendary / mythical: animated tiny stars circle the card. */
 .card.type-rarity-legendary::before,
 .card .card-rarity::before {

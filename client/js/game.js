@@ -22,6 +22,7 @@ import { computeDamage, rollStatus, isLockedOut, tickStatus } from "./battle.js"
 import { abilityById } from "./abilities.js";
 import { defaultKit, useItem as _useItem } from "./items.js";
 export const useItem = _useItem;
+// _useItem is re-used by the AI item phase below.
 
 export const FIELD_SIZE = 5;
 export const STARTING_HAND = 5;
@@ -282,7 +283,7 @@ export function attack(
     if (hasField) {
       return { ok: false, reason: "must attack opposing Pokémon first" };
     }
-    const base = attackerInst.card.cardAttack + attackBonus;
+    const base = attackerInst.card.cardAttack + attackBonus + (attackerInst.attackBoost || 0);
     const damage = Math.max(1, Math.round(base * (ability.damageMult || 1)));
     o.trainerHp = Math.max(0, o.trainerHp - damage);
     log(state, attackPhrase(attackerInst.card, ability, o.name, damage, 1, state.turn), "attack");
@@ -293,7 +294,7 @@ export function attack(
     if (!defenderInst) return { ok: false, reason: "no defender in slot" };
     const { defenseBonus } = abilityModifiers(o, defenderInst.card);
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
-      abilityBonus: attackBonus,
+      abilityBonus: attackBonus + (attackerInst.attackBoost || 0),
       ability,
       rand,
     });
@@ -348,6 +349,19 @@ export function attack(
       o.discard.push(defenderInst.card);
       o.field[defenderSlot] = null;
       result.knockedOut = true;
+      // Level-up reward: the attacker grows +1 HP / +1 ATK for the rest of
+      // the match. Snowballs aggressive play and gives long-lived Pokémon a
+      // distinct identity ("Evolved x2"). Cap at +3 so it doesn't run away.
+      const lvls = (attackerInst.level || 0) + 1;
+      const cap = 3;
+      if (lvls <= cap) {
+        attackerInst.level = lvls;
+        attackerInst.maxHp = (attackerInst.maxHp ?? attackerInst.card.cardHp) + 1;
+        attackerInst.currentHp = Math.min(attackerInst.maxHp, attackerInst.currentHp + 1);
+        attackerInst.attackBoost = (attackerInst.attackBoost || 0) + 1;
+        result.attackerLeveled = lvls;
+        log(state, `⚡ ${attackerInst.card.name} evolved to L${lvls} (+1 HP, +1 ATK)`, "summon");
+      }
     }
   }
 
@@ -479,9 +493,45 @@ function chooseTarget(state, attackerInst, policy, rand) {
   }
 }
 
-export async function aiTakeTurn(state, { rand = Math.random, difficulty = "medium", onAction = null } = {}) {
+// Personalities bias the AI's preferences without overriding difficulty.
+// Picked at random per match so two consecutive runs feel different.
+const PERSONALITIES = ["aggressive", "balanced", "tactical"];
+
+export async function aiTakeTurn(state, { rand = Math.random, difficulty = "medium", onAction = null, personality = null } = {}) {
   const policy = POLICIES[difficulty] || POLICIES.medium;
   const ai = state.players.ai;
+  const mood = personality || PERSONALITIES[Math.floor(rand() * PERSONALITIES.length)];
+
+  // Item phase — opportunistic use of the AI's starter kit.
+  if (ai.items?.length) {
+    // Potion: heal a Pokémon below 50% HP (tactical/balanced).
+    if (mood !== "aggressive") {
+      const item = ai.items.find((i) => i.id === "potion" && i.uses > 0);
+      if (item && ai.energy >= 1) {
+        const lowSlot = ai.field.findIndex(
+          (inst) => inst && inst.currentHp < (inst.maxHp ?? inst.card.cardHp) * 0.5,
+        );
+        if (lowSlot !== -1) {
+          const r = _useItem(state, "ai", "potion", lowSlot);
+          if (r.ok && onAction) await onAction({ kind: "item", itemId: "potion", slot: lowSlot });
+        }
+      }
+    }
+    // Energy Crystal: spend if it unlocks a card we couldn't otherwise play.
+    {
+      const item = ai.items.find((i) => i.id === "energy" && i.uses > 0);
+      if (item) {
+        const stretchPlay = ai.hand.find((c) => {
+          const cost = effectiveCost(ai, c);
+          return cost > ai.energy && cost <= ai.energy + 2;
+        });
+        if (stretchPlay) {
+          const r = _useItem(state, "ai", "energy", null);
+          if (r.ok && onAction) await onAction({ kind: "item", itemId: "energy" });
+        }
+      }
+    }
+  }
 
   // Summon phase — keep summoning until field is full, hand empty, or we pass.
   for (let safety = 0; safety < 10; safety++) {
