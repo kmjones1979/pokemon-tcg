@@ -234,18 +234,37 @@ function mount(app, supabase, getPokedex) {
   app.post("/me/rewards/claim", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
     const { offerId, pokemonId } = req.body || {};
-    const offer = await consumeOffer(offerId, req.user.id);
-    if (!offer) return res.status(400).json({ error: "Offer expired or unknown." });
-    const matched = offer.picks.find((p) => p.id === Number(pokemonId));
-    if (!matched) return res.status(400).json({ error: "Card wasn't in this offer." });
+    if (!offerId || typeof offerId !== "string") {
+      return res.status(400).json({ error: "Missing offerId." });
+    }
+    const numericId = Number(pokemonId);
+    if (!Number.isInteger(numericId) || numericId < 1) {
+      return res.status(400).json({ error: "Invalid card id." });
+    }
+    let offer;
+    try {
+      offer = await consumeOffer(offerId, req.user.id);
+    } catch (err) {
+      console.error("[rewards] consumeOffer threw:", err);
+      return res.status(500).json({ error: "Reward storage error — try again." });
+    }
+    if (!offer) return res.status(400).json({ error: "Offer expired or unknown. The reward window is 10 minutes — please play again." });
+    const matched = offer.picks.find((p) => p.id === numericId);
+    if (!matched) return res.status(400).json({ error: `Card #${numericId} wasn't in this offer.` });
 
     // Upsert quantity (cap at 999, but really we just +1)
-    const { data: existing } = await supabase
-      .from("owned_cards")
-      .select("quantity")
-      .eq("user_id", req.user.id)
-      .eq("pokemon_id", matched.id)
-      .maybeSingle();
+    let existing;
+    try {
+      ({ data: existing } = await supabase
+        .from("owned_cards")
+        .select("quantity")
+        .eq("user_id", req.user.id)
+        .eq("pokemon_id", matched.id)
+        .maybeSingle());
+    } catch (err) {
+      console.error("[rewards] read owned_cards failed:", err);
+      return res.status(500).json({ error: `Couldn't read collection: ${err.message}` });
+    }
     const newQty = (existing?.quantity || 0) + 1;
     const { error } = await supabase
       .from("owned_cards")
@@ -258,7 +277,10 @@ function mount(app, supabase, getPokedex) {
         },
         { onConflict: "user_id,pokemon_id" },
       );
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error("[rewards] upsert owned_cards failed:", error);
+      return res.status(500).json({ error: `Couldn't save card: ${error.message} (code ${error.code || "?"})` });
+    }
     res.json({ card: matched, newQuantity: newQty });
   });
 

@@ -160,13 +160,33 @@ function mount(app, supabase, getPokedex) {
     // Roll picks and create an offer.
     const eligible = pokedex.filter((c) => c.tier >= q.minTier);
     const picks = rollPicks(eligible.length >= q.rewardCount ? eligible : pokedex, q.rewardCount);
-    const offerId = await createOffer(req.user.id, picks);
+    if (!picks.length) {
+      return res.status(500).json({ error: "Couldn't roll a reward — try again." });
+    }
+    let offerId;
+    try {
+      offerId = await createOffer(req.user.id, picks);
+    } catch (err) {
+      console.error("[quests] createOffer failed:", err);
+      return res.status(500).json({ error: "Reward offer couldn't be stashed. Please retry." });
+    }
 
-    await supabase.from("quest_claims").insert({
+    // Persist the claim AFTER the offer is durable. Surface the real
+    // Postgres error if the insert fails so we can diagnose instead of
+    // returning a silently-half-claimed reward.
+    const { error: claimErr } = await supabase.from("quest_claims").insert({
       user_id: req.user.id,
       quest_id: q.id,
       claim_date: dayKey,
     });
+    if (claimErr) {
+      console.error("[quests] claim insert failed:", claimErr);
+      // Duplicate key = the user already claimed (race / double-tap).
+      if (claimErr.code === "23505") {
+        return res.status(409).json({ error: "Already claimed today." });
+      }
+      return res.status(500).json({ error: `Couldn't record claim: ${claimErr.message}` });
+    }
 
     res.json({
       reward: {
