@@ -332,6 +332,15 @@ function attach(io, supabase, pokedexOrGetter) {
       });
     });
 
+    socket.on("game:use-item", async ({ itemId, target } = {}) => {
+      await inRoom(async (room, side) => {
+        const engine = await getEngine();
+        const r = engine.useItem(room.state, side, itemId, target);
+        if (!r.ok) { socket.emit("error", { error: r.reason }); return; }
+        broadcast(room);
+      });
+    });
+
     socket.on("game:end-turn", async () => {
       await inRoom(async (room, side) => {
         if (room.state.activePlayer !== side) { socket.emit("error", { error: "Not your turn." }); return; }

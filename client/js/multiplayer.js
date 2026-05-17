@@ -79,6 +79,7 @@ export function playCard(handIndex) { socket?.emit("game:play-card", { handIndex
 export function attack(fromSlot, target, abilityId = "basic") { socket?.emit("game:attack", { fromSlot, target, abilityId }); }
 export function endTurn() { socket?.emit("game:end-turn"); }
 export function concede() { socket?.emit("game:concede"); }
+export function useItem(itemId, target) { socket?.emit("game:use-item", { itemId, target }); }
 
 export function onStateUpdate(fn) { listeners.state.push(fn); return () => detach("state", fn); }
 export function onAnimation(fn) { listeners.anim.push(fn); return () => detach("anim", fn); }

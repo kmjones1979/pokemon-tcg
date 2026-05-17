@@ -28,6 +28,13 @@ function tierBoostForStreak(streak) {
 }
 
 function mount(app, supabase, getPokedex) {
+  // getPokedex may return either the array directly or a Promise<Array>
+  // (async ensure-loaded variant). Always await it before checking.
+  async function loadDex() {
+    const v = getPokedex();
+    return v && typeof v.then === "function" ? await v : v;
+  }
+
   app.get("/me/streak", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
     const { data: u } = await supabase
@@ -54,7 +61,7 @@ function mount(app, supabase, getPokedex) {
 
   app.post("/me/streak/claim", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
-    const pokedex = getPokedex();
+    const pokedex = await loadDex();
     if (!pokedex || pokedex.length === 0) {
       return res.status(503).json({ error: "Pokédex not loaded yet." });
     }

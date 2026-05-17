@@ -131,9 +131,9 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   });
   auth.mount(app, authSupabase);
   collection.mount(app, authSupabase);
-  rewards.mount(app, authSupabase, () => pokedex);
+  rewards.mount(app, authSupabase, ensurePokedex);
   achievements.mount(app, authSupabase);
-  dailyStreak.mount(app, authSupabase, () => pokedex);
+  dailyStreak.mount(app, authSupabase, ensurePokedex);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {

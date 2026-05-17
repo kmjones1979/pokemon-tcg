@@ -12,6 +12,7 @@ import {
   TRAINERS,
   FIELD_SIZE,
   TRAINER_START_HP,
+  trainerMascotUrl,
 } from "./game.js";
 import { renderCard } from "./cards.js";
 import { fireAttackTrail, floatDamage, knockOut, flashVerdict, shakeHit } from "./animations.js";
@@ -23,6 +24,7 @@ import { TYPE_COLORS } from "./type-chart.js";
 import { computeDamage } from "./battle.js";
 import { abilitiesFor, abilityById, basicAbility } from "./abilities.js";
 import { attachPreviewHandlers } from "./card-preview.js";
+import { ITEM_DEFS, useItem } from "./items.js";
 import * as passkey from "./passkey.js";
 import * as deckBuilder from "./deck-builder.js";
 import * as mp from "./multiplayer.js";
@@ -42,6 +44,7 @@ let mpOpponent = null;      // { displayName, ability } in multiplayer
 let chosenTrainer = null;   // remember during multiplayer matchmaking
 let soloSessionId = null;   // server-tracked anti-cheat session for solo matches
 let chosenAbilityId = "basic"; // ability the player will use on their next attack
+let pendingItem = null;        // when set, next slot click targets this item
 let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
 let _prevEnergy = null; // tracks your energy across renders so we can pip-refill the new ones
 
@@ -87,9 +90,12 @@ function renderMenu() {
 
   const trainerEls = Object.values(TRAINERS).map((t) => {
     const c = TYPE_COLORS[t.portrait] || "#888";
+    const art = trainerMascotUrl(t.id);
     return `
       <button class="trainer-card" data-trainer="${t.id}" style="--accent:${c}">
-        <div class="trainer-portrait" style="background:linear-gradient(140deg, ${c}, #1a1f2e)"></div>
+        <div class="trainer-portrait" style="background:linear-gradient(160deg, ${c}, #0c0d1a)">
+          ${art ? `<img src="${art}" alt="${escape(t.name)}" loading="lazy">` : ""}
+        </div>
         <div class="trainer-name">${t.name}</div>
         <div class="trainer-bio">${t.bio}</div>
       </button>`;
@@ -387,6 +393,7 @@ function render() {
             <span>📚 ${state.players.player.deck.length}</span>
             <span>🗑 ${state.players.player.discard.length}</span>
           </div>
+          ${renderItemBar(state.players.player)}
         </div>
       </div>
       <div class="action-bar">
@@ -417,6 +424,7 @@ function render() {
   });
 
   bindTrainerAttackTarget();
+  bindItemBar();
 
   // Long-hover preview anywhere a card is rendered in-arena.
   attachPreviewHandlers($("#arena"), cardLookup);
@@ -444,6 +452,72 @@ function render() {
 
 // Coach the player about what to do next. Reads state to figure out which
 // action is the most useful nudge.
+function renderItemBar(p) {
+  if (!p.items?.length) return "";
+  return `
+    <div class="item-bar">
+      ${p.items.map((it) => {
+        const def = ITEM_DEFS[it.id] || {};
+        const disabled = it.uses <= 0 || p.energy < (def.cost || 0);
+        const active = pendingItem === it.id;
+        return `
+          <button class="item-btn ${disabled ? "disabled" : ""} ${active ? "active" : ""}"
+                  data-item="${it.id}"
+                  title="${escape(def.name)} — ${escape(def.desc || "")}${def.cost ? ` (⚡${def.cost})` : ""}">
+            <span class="item-icon">${def.icon || "?"}</span>
+            <span class="item-uses">${it.uses}</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function bindItemBar() {
+  document.querySelectorAll(".item-bar .item-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("disabled")) {
+        flashVerdict("Item unavailable", "weak");
+        return;
+      }
+      if (state.activePlayer !== "player" || state.winner) {
+        flashVerdict("Wait for your turn", "weak");
+        return;
+      }
+      const id = btn.dataset.item;
+      const def = ITEM_DEFS[id];
+      if (def.target === "none") {
+        applyItem(id, null);
+      } else {
+        // Need a target — enter targeting mode.
+        pendingItem = id;
+        selectedAttacker = null;
+        hideAbilityPopover();
+        chosenAbilityId = "basic";
+        flashVerdict(`${def.name}: tap one of your Pokémon`, "super");
+        render();
+      }
+    });
+  });
+}
+
+function applyItem(itemId, target) {
+  if (gameMode === "mp") {
+    mp.useItem(itemId, target);
+    pendingItem = null;
+    return;
+  }
+  const r = useItem(state, "player", itemId, target);
+  if (!r.ok) {
+    flashVerdict(r.reason || "Item failed", "weak");
+    return;
+  }
+  pendingItem = null;
+  if (r.itemId === "potion") flashVerdict(`+${r.healed} HP`, "super");
+  if (r.itemId === "energy") flashVerdict(`+${r.gained} ⚡`, "super");
+  render();
+}
+
 function renderEnergyPips(have, max) {
   const total = Math.max(max, 1);
   // Pips index 0..total-1. Mark "refill" on pips that are newly lit since
@@ -561,6 +635,10 @@ function cardLookup(id) {
   return null;
 }
 
+// Document-level click-away handler — kept around so we can remove it when
+// the popover is hidden.
+let _popoverDismissHandler = null;
+
 function showAbilityPopover(attackerInst) {
   hideAbilityPopover();
   const abilities = abilitiesFor(attackerInst.card);
@@ -603,17 +681,42 @@ function showAbilityPopover(attackerInst) {
   }
 
   pop.querySelectorAll(".ap-row").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (btn.classList.contains("disabled")) return;
       chosenAbilityId = btn.dataset.ability;
       pop.querySelectorAll(".ap-row").forEach((b) => b.classList.remove("selected"));
       btn.classList.add("selected");
     });
   });
+  // Click anywhere else cancels the attack + closes the popover.
+  // Defer one frame so the click that opened the popover doesn't dismiss it.
+  setTimeout(() => {
+    _popoverDismissHandler = (e) => {
+      // Allow clicks inside the popover itself or on the selected attacker.
+      if (pop.contains(e.target)) return;
+      const onAttacker = e.target.closest(".player-field .field-slot .selected");
+      if (onAttacker) return;
+      // Allow clicks on attack targets (enemy cards / opposing trainer block).
+      const onEnemyField = e.target.closest(".ai-field .field-slot");
+      const onOpponentTrainer = e.target.closest(".trainer-block.ai");
+      if (onEnemyField || onOpponentTrainer) return;
+      // Otherwise cancel: drop the selection and close the popover.
+      selectedAttacker = null;
+      chosenAbilityId = "basic";
+      hideAbilityPopover();
+      render();
+    };
+    document.addEventListener("click", _popoverDismissHandler, true);
+  }, 0);
 }
 
 function hideAbilityPopover() {
   document.querySelector(".ability-popover")?.remove();
+  if (_popoverDismissHandler) {
+    document.removeEventListener("click", _popoverDismissHandler, true);
+    _popoverDismissHandler = null;
+  }
 }
 
 function showDamagePreview(slotEl, defenderInst) {
@@ -724,6 +827,21 @@ function onSlotClick(side, slot) {
   if (state.winner) return;
   if (state.activePlayer !== "player") {
     flashVerdict("Wait for your turn", "weak");
+    return;
+  }
+
+  // Item targeting takes priority over attack targeting.
+  if (pendingItem) {
+    if (side !== "player") {
+      flashVerdict("Tap one of YOUR Pokémon", "weak");
+      return;
+    }
+    const inst = state.players.player.field[slot];
+    if (!inst) {
+      flashVerdict("Tap an occupied slot", "weak");
+      return;
+    }
+    applyItem(pendingItem, slot);
     return;
   }
 
@@ -838,7 +956,7 @@ function animateHit(attackerEl, defenderEl, attackerInst, result, done) {
   }, 450);
 }
 
-function onEndTurn() {
+async function onEndTurn() {
   if (state.activePlayer !== "player" || state.winner) return;
   if (gameMode === "mp") {
     mp.endTurn();
@@ -847,12 +965,73 @@ function onEndTurn() {
   endTurn(state);
   render();
   if (state.winner) return;
-  // Give the player a beat to see the turn shift before AI plays.
-  setTimeout(() => {
-    if (state.winner) return;
-    aiTakeTurn(state, { difficulty: aiDifficulty });
+  // Brief pause for the turn shift before the AI starts acting visibly.
+  await sleep(500);
+  await aiTakeTurn(state, {
+    difficulty: aiDifficulty,
+    onAction: handleAiAction,
+  });
+  render();
+}
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+async function handleAiAction(action) {
+  if (state.winner) return;
+  if (action.kind === "summon") {
     render();
-  }, 700);
+    // Flash the freshly-summoned slot + play the cry so it feels like a move
+    // by a real opponent, not just state appearing.
+    const slot = $(`.ai-field .field-slot[data-slot="${action.slot}"] .card`);
+    if (slot) {
+      slot.classList.add("ai-just-summoned");
+      setTimeout(() => slot.classList.remove("ai-just-summoned"), 900);
+    }
+    sfxCardPlay();
+    if (action.instance?.card?.cry_url) playCry(action.instance.card.cry_url).catch(() => {});
+    await sleep(800);
+    return;
+  }
+  if (action.kind === "attack") {
+    render();
+    const r = action.result;
+    if (!r?.ok) { await sleep(200); return; }
+    const attackerEl = $(`.ai-field .field-slot[data-slot="${action.fromSlot}"] .card`);
+    let defenderEl;
+    if (action.target === "trainer") {
+      defenderEl = $(".trainer-row.bottom .trainer-block.player") || $(".trainer-row.bottom .trainer-block");
+    } else {
+      defenderEl = $(`.player-field .field-slot[data-slot="${action.target}"] .card`);
+    }
+    const aType = action.attackerCard?.types?.[0] || "normal";
+    fireAttackTrail(attackerEl, defenderEl, aType);
+    sfxAttack();
+    await sleep(450);
+    if (defenderEl) {
+      floatDamage(defenderEl, r.multiplier === 0 ? "MISS" : `-${r.damage}`, {
+        kind: r.critical ? "crit" : r.multiplier >= 2 ? "super" : r.multiplier < 1 ? "weak" : "hit",
+      });
+      if (r.multiplier !== 0) {
+        shakeHit(defenderEl);
+        sfxHit({ supereffective: r.multiplier >= 2 });
+      }
+      if (r.critical) {
+        sfxCrit();
+        flashVerdict("CRITICAL!", "super");
+        defenderEl.classList.add("crit-flash");
+        setTimeout(() => defenderEl.classList.remove("crit-flash"), 700);
+      } else if (r.verdict?.text) {
+        flashVerdict(r.verdict.text, r.verdict.tone);
+      }
+    }
+    if (r.knockedOut) {
+      sfxKO();
+      await knockOut(defenderEl);
+    } else {
+      await sleep(500);
+    }
+    return;
+  }
 }
 
 // Resolve the player's deck:

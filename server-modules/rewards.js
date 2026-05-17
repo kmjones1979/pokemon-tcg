@@ -113,6 +113,11 @@ function canClaimSolo(userId) {
 
 // Express routes — mounted at /me/rewards/*
 function mount(app, supabase, getPokedex) {
+  async function loadDex() {
+    const v = getPokedex();
+    return v && typeof v.then === "function" ? await v : v;
+  }
+
   // Start a solo session — call when the match begins. Returns a sessionId
   // that must be passed back to /me/solo/end. Without this handshake, no
   // reward will be issued, which gates the "lie about a win" attack.
@@ -136,9 +141,9 @@ function mount(app, supabase, getPokedex) {
   // session is real, owned by the same user, at least MIN_DURATION old, not
   // already claimed, and applies per-user rate limit. Returns an offer
   // shaped exactly like the multiplayer reward.
-  app.post("/me/solo/end", (req, res) => {
+  app.post("/me/solo/end", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
-    const pokedex = getPokedex();
+    const pokedex = await loadDex();
     if (!pokedex || pokedex.length === 0) {
       return res.status(503).json({ error: "Pokédex not loaded yet." });
     }
@@ -233,4 +238,4 @@ function offerForOutcome(userId, pokedex, didWin) {
   };
 }
 
-module.exports = { mount, offerForOutcome, rollPicks, weightedTier };
+module.exports = { mount, offerForOutcome, rollPicks, weightedTier, createOffer };

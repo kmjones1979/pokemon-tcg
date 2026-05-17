@@ -20,6 +20,8 @@
 
 import { computeDamage, rollStatus, isLockedOut, tickStatus } from "./battle.js";
 import { abilityById } from "./abilities.js";
+import { defaultKit, useItem as _useItem } from "./items.js";
+export const useItem = _useItem;
 
 export const FIELD_SIZE = 5;
 export const STARTING_HAND = 5;
@@ -29,14 +31,27 @@ export const MAX_ENERGY = 10;
 let _instanceCounter = 0;
 const nextInstanceId = () => `i${++_instanceCounter}`;
 
+// Trainer signature Pokémon — PokeAPI national dex ids of each trainer's
+// canonical mascot. We use the official artwork for the trainer's portrait
+// chip on the menu and arena, so each trainer has a distinct visual identity
+// (Brock = Onix, Misty = Starmie, etc) without us having to source human
+// trainer artwork.
 export const TRAINERS = {
-  brock:   { id: "brock",   name: "Brock",       bio: "+1 Defense to Rock/Ground",          portrait: "rock" },
-  misty:   { id: "misty",   name: "Misty",       bio: "Water cards cost 1 less (min 1)",    portrait: "water" },
-  pikachu: { id: "pikachu", name: "Pikachu Fan", bio: "+1 Attack to Electric Pokémon",      portrait: "electric" },
-  erika:   { id: "erika",   name: "Erika",       bio: "+1 HP to all Grass Pokémon",         portrait: "grass" },
-  sabrina: { id: "sabrina", name: "Sabrina",     bio: "Psychic specials cost 1 less",       portrait: "psychic" },
-  lance:   { id: "lance",   name: "Lance",       bio: "+1 Attack to Dragon Pokémon",        portrait: "dragon" },
+  brock:   { id: "brock",   name: "Brock",       bio: "+1 Defense to Rock/Ground",       portrait: "rock",     mascotId: 95  /* Onix    */ },
+  misty:   { id: "misty",   name: "Misty",       bio: "Water cards cost 1 less (min 1)", portrait: "water",    mascotId: 121 /* Starmie */ },
+  pikachu: { id: "pikachu", name: "Pikachu Fan", bio: "+1 Attack to Electric Pokémon",   portrait: "electric", mascotId: 25  /* Pikachu */ },
+  erika:   { id: "erika",   name: "Erika",       bio: "+1 HP to all Grass Pokémon",      portrait: "grass",    mascotId: 71  /* Victreebel */ },
+  sabrina: { id: "sabrina", name: "Sabrina",     bio: "Psychic specials cost 1 less",    portrait: "psychic",  mascotId: 65  /* Alakazam */ },
+  lance:   { id: "lance",   name: "Lance",       bio: "+1 Attack to Dragon Pokémon",     portrait: "dragon",   mascotId: 149 /* Dragonite */ },
 };
+
+// PokeAPI official-artwork URL helper — we use it directly, same source the
+// Pokédex cards pull from.
+export function trainerMascotUrl(trainer) {
+  const id = TRAINERS[trainer]?.mascotId;
+  if (!id) return null;
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+}
 
 function shuffle(arr, rand = Math.random) {
   const a = arr.slice();
@@ -127,6 +142,7 @@ export function createGame({
       hand,
       field: new Array(FIELD_SIZE).fill(null),
       discard: [],
+      items: defaultKit(),
     };
   }
   const firstSide = firstPlayer || (rand() < 0.5 ? "player" : "ai");
@@ -458,7 +474,7 @@ function chooseTarget(state, attackerInst, policy, rand) {
   }
 }
 
-export function aiTakeTurn(state, { rand = Math.random, difficulty = "medium" } = {}) {
+export async function aiTakeTurn(state, { rand = Math.random, difficulty = "medium", onAction = null } = {}) {
   const policy = POLICIES[difficulty] || POLICIES.medium;
   const ai = state.players.ai;
 
@@ -471,6 +487,7 @@ export function aiTakeTurn(state, { rand = Math.random, difficulty = "medium" } 
     if (idx === -1) break;
     const r = playCard(state, "ai", idx, { rand });
     if (!r.ok) break;
+    if (onAction) await onAction({ kind: "summon", slot: r.slot, instance: r.instance });
   }
 
   // Attack phase.
@@ -547,9 +564,11 @@ export function aiTakeTurn(state, { rand = Math.random, difficulty = "medium" } 
         }
       }
     }
-    attack(state, "ai", attackerSlot, target, { rand, abilityId });
+    const r = attack(state, "ai", attackerSlot, target, { rand, abilityId });
+    if (onAction) await onAction({ kind: "attack", fromSlot: attackerSlot, target, result: r, attackerCard: attackerInst.card });
   }
   endTurn(state);
+  if (onAction) await onAction({ kind: "end-turn" });
 }
 
 // Convenience: build a deck on the client from the /api/deck response.

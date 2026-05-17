@@ -713,12 +713,27 @@ h1, h2, h3,
   margin-bottom: 12px;
   position: relative;
   overflow: hidden;
+  display: grid;
+  place-items: center;
 }
 .trainer-portrait::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.2), transparent 60%);
+  background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.18), transparent 60%);
+  pointer-events: none;
+}
+.trainer-portrait img {
+  max-width: 88%;
+  max-height: 95%;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.6));
+  position: relative;
+  z-index: 1;
+  transition: transform 0.4s ease;
+}
+.trainer-card:hover .trainer-portrait img,
+.trainer-card.selected .trainer-portrait img {
+  transform: scale(1.08) translateY(-3px);
 }
 .trainer-name {
   font-family: "Press Start 2P", monospace;
@@ -1049,6 +1064,54 @@ h1, h2, h3,
   font-weight: 700;
 }
 
+/* Item bar — small icon row inside the player's trainer block. */
+.item-bar {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.item-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  color: var(--ink);
+  font-family: inherit;
+}
+.item-btn:hover:not(.disabled) {
+  background: rgba(247, 208, 44, 0.18);
+  border-color: rgba(247, 208, 44, 0.6);
+  transform: translateY(-1px);
+}
+.item-btn.active {
+  background: linear-gradient(90deg, #f7d02c, #ee8130);
+  color: #1a0a00;
+  border-color: transparent;
+  animation: itemPulse 1s ease-in-out infinite;
+}
+@keyframes itemPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(247, 208, 44, 0.6); }
+  50%      { box-shadow: 0 0 12px 2px rgba(247, 208, 44, 0.7); }
+}
+.item-btn.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.item-icon { font-size: 16px; line-height: 1; }
+.item-uses {
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  color: var(--muted);
+}
+.item-btn.active .item-uses { color: #1a0a00; }
+
 .energy-pips {
   display: inline-flex;
   gap: 2px;
@@ -1129,16 +1192,24 @@ h1, h2, h3,
   position: fixed;
   bottom: 0;
   left: 50%;
-  transform: translateX(-50%);
+  /* Peek-and-lift: at rest the hand sits low so the top ~40% of cards is
+     visible above the viewport bottom — your own field stays unobstructed.
+     Hover anywhere on the hand to lift it into full view. Mobile media
+     queries override this with an inline-flow layout. */
+  transform: translateX(-50%) translateY(45%);
+  transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.25, 1.15);
   display: flex;
   gap: 6px;
   padding: 24px 24px 12px;
   z-index: 4;
   pointer-events: auto;
-  /* Keep the hand within a width that doesn't collide with the trainer/
-     action bars on the sides. Cards overlap more tightly when crowded. */
   max-width: min(70vw, 900px);
   justify-content: center;
+}
+.hand:hover,
+.hand:focus-within,
+.hand.lifted {
+  transform: translateX(-50%) translateY(0);
 }
 .hand .card {
   transform:
