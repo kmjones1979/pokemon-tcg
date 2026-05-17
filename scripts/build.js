@@ -20,16 +20,15 @@ async function build() {
     entryPoints: [path.join(__dirname, "..", "client", "js", "main.js")],
     bundle: true,
     format: "esm",
-    splitting: true,         // emit shared chunks for any dynamic imports
+    // Single file. Code-splitting was emitting auxiliary chunks under
+    // /dist that Vercel's @vercel/node packager didn't always include
+    // → blank-page deploys. One ~180KB ESM file is well under the
+    // 200KB target and avoids the packaging fragility entirely.
+    splitting: false,
     minify: isProd,
     sourcemap: isProd ? false : "inline",
     target: ["es2022", "chrome108", "safari16", "firefox110"],
-    outdir: outDir,
-    entryNames: "main.bundle",
-    // Flat output (no chunks/ subdir) so Vercel's includeFiles glob
-    // can't miss recursive paths. Every emitted file lands directly
-    // in /dist.
-    chunkNames: "[name]-[hash]",
+    outfile: path.join(outDir, "main.bundle.js"),
     metafile: true,
     legalComments: "none",
     treeShaking: true,
