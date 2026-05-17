@@ -86,6 +86,7 @@ function consumeOffer(offerId, userId) {
 }
 
 const { currentTheme } = require("./theme");
+const { bumpDailyStats } = require("./quests");
 
 // Anti-cheat for solo rewards. Replaces the older "just trust the client"
 // payload with server-tracked sessions:
@@ -167,6 +168,10 @@ function mount(app, supabase, getPokedex) {
       return res.json({ reward: null, reason: "session_too_short" });
     }
     session.claimed = true;
+    // Daily quest tracking — solo matches don't write to the matches table,
+    // so this is the only place per-day play/win counters get incremented.
+    const koCount = Number(req.body?.kos) || 0;
+    await bumpDailyStats(supabase, req.user.id, { matches: 1, wins: won ? 1 : 0, kos: koCount });
 
     let count = 0;
     let guaranteeLegendary = false;

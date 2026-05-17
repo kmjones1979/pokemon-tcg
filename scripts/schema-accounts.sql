@@ -108,3 +108,8 @@ alter table users add column if not exists story_progress jsonb default '{"compl
 -- Defaults to empty array. Used by achievements.js to gate champion_one /
 -- champion_all unlocks.
 alter table users add column if not exists champion_wins text[] default '{}';
+
+-- Per-user per-day quest progress (Wave 23). Tracks solo + story match
+-- counts since the matches table only covers multiplayer. Capped at the
+-- last 14 days by the app layer to keep the row small.
+alter table users add column if not exists quest_progress jsonb default '{}'::jsonb;

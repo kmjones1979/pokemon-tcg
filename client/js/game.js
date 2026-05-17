@@ -731,7 +731,7 @@ import { basicAbility, specialAbility } from "./abilities.js";
 
 const POLICIES = {
   easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false, useSpecial: false },
-  medium: { pickCard: "random",    pickTarget: "lowestHp", passPlayChance: 0.15, skipAttackChance: 0.1,  useTypeEff: false, useSpecial: "sometimes" },
+  medium: { pickCard: "smart",     pickTarget: "lowestHp", passPlayChance: 0.06, skipAttackChance: 0.04, useTypeEff: true,  useSpecial: "sometimes" },
   hard:   { pickCard: "expensive", pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart" },
 };
 

@@ -146,7 +146,9 @@ async function startChapter(chapterId) {
   }
   // Intro cutscene before handing off.
   await playIntro(payload.chapter);
-  // Begin a server-tracked story session for the reward pipeline.
+  // Keep the story overlay visible with a "Entering battle…" message so the
+  // user never sees a flash of the home menu in between intro and arena.
+  _stage.innerHTML = `<div class="story-loading">Entering battle…</div>`;
   let sessionId = null;
   try {
     const r = await fetch("/me/story/start", {
@@ -156,8 +158,7 @@ async function startChapter(chapterId) {
     });
     if (r.ok) sessionId = (await r.json()).sessionId || null;
   } catch {}
-  // Close the story overlay and hand off to the regular arena flow.
-  closeOverlay();
+  // Set up the arena FIRST, then tear down the story overlay.
   try {
     await story.hooks.startBossFight({
       chapterId,
@@ -168,19 +169,25 @@ async function startChapter(chapterId) {
       phaseRules: payload.phaseRules,
       summonCards: payload.summonCards,
     });
+    closeOverlay();
   } catch (err) {
-    flashVerdict(`Couldn't start battle: ${err.message || "unknown"}`, "weak");
+    _stage.innerHTML = `
+      <div class="story-error">
+        <p>Couldn't start battle: ${escape(err.message || "unknown")}</p>
+        <button class="primary" data-action="hub">Back</button>
+      </div>`;
+    _stage.querySelector("[data-action=hub]")?.addEventListener("click", () => openStoryHub({ currentUser: { id: "anon" } }));
   }
 }
 
 // Called from main.js on game-over of a story fight.
-export async function finishChapter({ sessionId, won, chapterId }) {
+export async function finishChapter({ sessionId, won, chapterId, kos = 0 }) {
   if (!sessionId) return null;
   try {
     const r = await fetch("/me/story/end", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sessionId, won, chapterId }),
+      body: JSON.stringify({ sessionId, won, chapterId, kos }),
     });
     if (!r.ok) return null;
     const data = await r.json();

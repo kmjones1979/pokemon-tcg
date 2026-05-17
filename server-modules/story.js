@@ -15,6 +15,7 @@
 const { toCard, buildDeck } = require("../shared/deck-builder");
 const { CHAPTERS, getChapter, chapterMeta } = require("../shared/story-chapters");
 const { rollPicks, createOffer } = require("./rewards");
+const { bumpDailyStats } = require("./quests");
 
 const STORY_CHAPTER_IDS = CHAPTERS.map((c) => c.id);
 
@@ -265,6 +266,9 @@ function mount(app, supabase, getPokedex) {
       return res.json({ reward: null, reason: "too_short" });
     }
     session.claimed = true;
+    // Daily quest tracking — story matches count as a played match.
+    const koCount = Number(req.body?.kos) || 0;
+    await bumpDailyStats(supabase, req.user.id, { matches: 1, wins: won ? 1 : 0, kos: koCount });
     if (!won) return res.json({ reward: null, reason: "lost" });
 
     const chapter = getChapter(session.chapterId);

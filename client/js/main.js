@@ -55,6 +55,29 @@ let aiPersonality = null;      // chosen at match start so it stays consistent
 let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
 let _prevEnergy = null; // tracks your energy across renders so we can pip-refill the new ones
 let _prevActivePlayer = null; // tracks active player so we can fire a turn-start cue
+// Whether the player has explicitly lifted their hand to full view. Persists
+// across renders + game sessions so mobile users don't have to re-toggle
+// every turn.
+let _handLifted = false;
+try { _handLifted = localStorage.getItem("pokemon-tcg-hand-lifted") === "1"; } catch {}
+// Touch devices get a "tap-to-peek, tap-again-to-play" affordance so users
+// can read a card's abilities before committing. Desktop one-click play
+// stays unchanged.
+const _isTouch = typeof matchMedia === "function" && matchMedia("(hover: none) and (pointer: coarse)").matches;
+let _peekedHandIdx = null;
+function refreshHandPeek() {
+  document.querySelectorAll(".hand .card.peeked").forEach((c) => c.classList.remove("peeked"));
+  if (_peekedHandIdx == null) return;
+  const el = document.querySelector(`.hand .card[data-hand-index="${_peekedHandIdx}"]`);
+  if (el) el.classList.add("peeked");
+}
+function clearHandPeek() { _peekedHandIdx = null; refreshHandPeek(); }
+// Tapping outside the hand cancels the peek so it doesn't get stuck.
+document.addEventListener("click", (e) => {
+  if (_peekedHandIdx == null) return;
+  if (e.target.closest(".hand .card")) return;
+  clearHandPeek();
+});
 
 // --- Boot ------------------------------------------------------------------
 window.addEventListener("DOMContentLoaded", async () => {
@@ -154,7 +177,7 @@ function renderMenu() {
           <button class="mode-btn" id="mode-mp-match" disabled>Find online match</button>
           <button class="mode-btn" id="mode-mp-friend" disabled>Play vs friend (code)</button>
           <button class="mode-btn" id="mode-champion" disabled>Fight a Champion</button>
-          <button class="mode-btn story-launch" id="mode-story" ${currentUser ? "" : "disabled"} title="${currentUser ? "Begin the co-op story campaign" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
+          <button class="mode-btn story-launch" id="mode-story" disabled title="${currentUser ? "Pick a trainer to begin Story Mode" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -186,6 +209,7 @@ function renderMenu() {
       $("#mode-mp-match").disabled = false;
       $("#mode-mp-friend").disabled = false;
       $("#mode-champion").disabled = false;
+      if (currentUser) $("#mode-story").disabled = false;
 
       // QR auto-join: if we landed here via ?code=XXXXX, jump straight to
       // the friend-join flow now that a trainer is picked.
@@ -491,7 +515,12 @@ async function openChampionPicker() {
 let _storyContext = null; // { chapterId, sessionId, chapter } during a story fight
 
 async function startBossFight({ chapterId, sessionId, chapter, boss, deck, phaseRules, summonCards }) {
-  if (!chosenTrainer) { flashVerdict("Pick a trainer first", "weak"); return; }
+  // Story can be launched from a chapter card directly — be lenient about
+  // trainer pick. Default to the user's saved trainer ability or the first
+  // trainer in the registry so we never silently bounce back to the menu.
+  if (!chosenTrainer) {
+    chosenTrainer = currentUser?.trainer_ability || Object.keys(TRAINERS)[0];
+  }
   flashVerdict(`${chapter.enemyTrainerName} blocks your path!`, "super");
   const playerDeck = await loadPlayerDeck();
   gameMode = "story";
@@ -685,6 +714,10 @@ function render() {
         </div>
       </div>
       <div class="action-bar">
+        <button id="hand-toggle-btn" class="hand-toggle ${_handLifted ? "is-lifted" : ""}"
+                title="Lift / lower your hand (tap to see full cards)">
+          ${_handLifted ? "▼ Lower hand" : "▲ Show hand"}
+        </button>
         <button id="end-turn-btn" ${state.activePlayer !== "player" || state.winner ? "disabled" : ""}>End turn ▸</button>
         <button id="concede-btn">Concede</button>
       </div>
@@ -700,6 +733,9 @@ function render() {
   renderLog();
 
   $("#end-turn-btn").addEventListener("click", onEndTurn);
+  $("#hand-toggle-btn")?.addEventListener("click", toggleHandLift);
+  // Apply persisted hand-lift state to the freshly-rendered hand element.
+  if (_handLifted) $("#hand")?.classList.add("lifted");
   $("#concede-btn").addEventListener("click", () => {
     if (!confirm("Concede this match?")) return;
     if (gameMode === "mp") {
@@ -1265,6 +1301,16 @@ function onHandCardClick(handIndex) {
     flashVerdict("Wait for your turn", "weak");
     return;
   }
+  // Touch-device peek: first tap shows the full card big so abilities are
+  // legible; a second tap on the SAME card commits to playing it. Tapping
+  // outside the hand cancels. Skipped on desktop.
+  if (_isTouch && _peekedHandIdx !== handIndex) {
+    _peekedHandIdx = handIndex;
+    refreshHandPeek();
+    return;
+  }
+  _peekedHandIdx = null;
+  refreshHandPeek();
   const p = state.players.player;
   const card = p.hand[handIndex];
   if (!card) return;
@@ -1508,6 +1554,18 @@ async function onEndTurn() {
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+function toggleHandLift() {
+  _handLifted = !_handLifted;
+  try { localStorage.setItem("pokemon-tcg-hand-lifted", _handLifted ? "1" : "0"); } catch {}
+  const hand = $("#hand");
+  if (hand) hand.classList.toggle("lifted", _handLifted);
+  const btn = $("#hand-toggle-btn");
+  if (btn) {
+    btn.textContent = _handLifted ? "▼ Lower hand" : "▲ Show hand";
+    btn.classList.toggle("is-lifted", _handLifted);
+  }
+}
 
 // Render N face-down "card-back" cards so the player can SEE how many cards
 // the opponent is holding without being able to read them. Pokéball logo in
@@ -2328,6 +2386,7 @@ function onGameOver() {
       sessionId: _storyContext.sessionId,
       won,
       chapterId: _storyContext.chapterId,
+      kos: state.players.ai.discard.length,
     }).then((reward) => {
       if (reward) {
         rewards.showOffer(reward, {
@@ -2348,6 +2407,7 @@ function onGameOver() {
         sessionId: soloSessionId,
         won: state.winner === "player",
         championId: _championId || null,
+        kos: state.players.ai.discard.length,
       }),
     })
       .then((r) => r.json())

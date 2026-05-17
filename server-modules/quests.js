@@ -36,22 +36,55 @@ function pickTwoQuests(userId, dayKey) {
   return [QUEST_POOL[a], QUEST_POOL[b]];
 }
 
+// Per-user daily tallies — kept on users.quest_progress (jsonb) keyed by
+// the UTC date string. Bumped from anywhere that finishes a match (solo,
+// story, multiplayer). The matches table only covers multiplayer, so we
+// can't rely on it alone — most quest progress comes from here.
+async function bumpDailyStats(supabase, userId, delta = {}) {
+  if (!supabase || !userId) return;
+  try {
+    const { data } = await supabase
+      .from("users").select("quest_progress").eq("id", userId).maybeSingle();
+    const progress = data?.quest_progress || {};
+    const dayKey = todayKey();
+    const today = progress[dayKey] || { matches: 0, wins: 0, kos: 0 };
+    today.matches += delta.matches || 0;
+    today.wins    += delta.wins    || 0;
+    today.kos     += delta.kos     || 0;
+    progress[dayKey] = today;
+    // Garbage-collect: only keep the last 14 days so the column doesn't
+    // grow unbounded.
+    const cutoff = Date.now() - 14 * 86_400_000;
+    for (const k of Object.keys(progress)) {
+      if (new Date(k + "T00:00:00Z").getTime() < cutoff) delete progress[k];
+    }
+    await supabase.from("users").update({ quest_progress: progress }).eq("id", userId);
+  } catch (err) {
+    console.warn("[quests] bumpDailyStats failed:", err.message);
+  }
+}
+
 async function computeProgress(supabase, userId, dayKey) {
-  // Today's matches in UTC.
+  // Multiplayer matches (rows in the `matches` table).
   const { data: matches } = await supabase
     .from("matches")
-    .select("p1_user_id, p2_user_id, winner_id, started_at, ended_at, turns")
+    .select("p1_user_id, p2_user_id, winner_id, started_at")
     .or(`p1_user_id.eq.${userId},p2_user_id.eq.${userId}`)
     .gte("started_at", `${dayKey}T00:00:00.000Z`)
     .lt("started_at", `${dayKey}T23:59:59.999Z`);
+  const mpMatches = matches || [];
+  const mpPlay = mpMatches.length;
+  const mpWin  = mpMatches.filter((m) => m.winner_id === userId).length;
 
-  const myMatches = matches || [];
-  const playCount = myMatches.length;
-  const winCount = myMatches.filter((m) => m.winner_id === userId).length;
-
-  // KOs are not directly stored per match; approximate from turns of wins (rough).
-  // For an MVP we use turns as a stand-in. Better attribution can come later.
-  const kos = winCount * 3 + (playCount - winCount) * 1;
+  // Solo + story tallies stored on the user row's quest_progress JSONB.
+  let soloDay = { matches: 0, wins: 0, kos: 0 };
+  try {
+    const { data: u } = await supabase
+      .from("users").select("quest_progress").eq("id", userId).maybeSingle();
+    soloDay = (u?.quest_progress?.[dayKey]) || soloDay;
+  } catch {
+    // Column may not exist yet — degrade silently.
+  }
 
   // newCards today: count owned_cards rows acquired today.
   const { count: newCardsCount } = await supabase
@@ -61,7 +94,12 @@ async function computeProgress(supabase, userId, dayKey) {
     .gte("acquired_at", `${dayKey}T00:00:00.000Z`)
     .lt("acquired_at", `${dayKey}T23:59:59.999Z`);
 
-  return { matches: playCount, wins: winCount, kos, newCards: newCardsCount || 0 };
+  return {
+    matches: mpPlay + (soloDay.matches || 0),
+    wins:    mpWin  + (soloDay.wins    || 0),
+    kos:     (soloDay.kos || 0) + (mpWin * 3 + (mpPlay - mpWin)),
+    newCards: newCardsCount || 0,
+  };
 }
 
 function mount(app, supabase, getPokedex) {
@@ -143,4 +181,4 @@ function mount(app, supabase, getPokedex) {
   });
 }
 
-module.exports = { mount };
+module.exports = { mount, bumpDailyStats };
