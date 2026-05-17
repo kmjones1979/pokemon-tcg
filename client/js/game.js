@@ -127,7 +127,12 @@ function abilityModifiers(playerState, card) {
   let hpBonus = 0;
   if (a === "misty" && card.types?.includes("water")) costMod -= 1;
   if (a === "pikachu" && card.types?.includes("electric")) attackBonus += 1;
-  if (a === "brock" && (card.types?.includes("rock") || card.types?.includes("ground"))) defenseBonus += 1;
+  // Brock — boosted: now also adds +1 max HP to Rock/Ground for parity with
+  // Erika / Lance.
+  if (a === "brock" && (card.types?.includes("rock") || card.types?.includes("ground"))) {
+    defenseBonus += 1;
+    hpBonus += 1;
+  }
   if (a === "erika" && card.types?.includes("grass")) hpBonus += 1;
   if (a === "lance" && card.types?.includes("dragon")) attackBonus += 1;
   // Sabrina's discount is applied per-ability (Psychic specials only), see
@@ -285,6 +290,18 @@ function beginTurn(state) {
     if (!inst) continue;
     const sig = signatureFor(inst.card);
     if (sig?.onTurnStart) sig.onTurnStart(state, state.activePlayer, inst);
+  }
+  // Erika's trainer ability: heal 1 HP per turn for every Grass Pokémon on
+  // the field. Tuned to make Grass decks feel sustainable.
+  if (p.ability === "erika") {
+    for (const inst of p.field) {
+      if (!inst) continue;
+      if (!inst.card.types?.includes("grass")) continue;
+      const cap = inst.maxHp ?? inst.card.cardHp;
+      if (inst.currentHp < cap) {
+        inst.currentHp = Math.min(cap, inst.currentHp + 1);
+      }
+    }
   }
   state.phase = "main";
   log(state, `Turn ${state.turn} — ${p.name} to move (${p.energy} Energy)`, "turn");
@@ -476,6 +493,9 @@ export function attack(
     const auraPenalty = enemyFieldAttackPenaltyFor(o.field, attackerInst.card);
     // Zapdos Thunderstorm-style aura crit boost.
     const critBoost = fieldCritBonus(p.field);
+    const ignoreDefenseFlag =
+      sigPassive?.ignoreDefense ||
+      (sigPassive?.ignoreDefenseSpecial && ability?.id === "special");
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
       abilityBonus:
         attackBonus +
@@ -487,7 +507,7 @@ export function attack(
       ability,
       rand,
       themeType: state.themeType || null,
-      ignoreDefense: sigPassive?.ignoreDefense || false,
+      ignoreDefense: ignoreDefenseFlag,
       critBoost,
     });
     if (comboBonus > 0) calc.comboBonus = comboBonus;

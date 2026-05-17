@@ -57,9 +57,13 @@ function toCard(row) {
     tier: t.tier,
     energyCost: t.cost,
     cardHp: Math.max(1, Math.round((row.hp || 10) / 10)),
+    // Tier 4+ get a slightly steeper Attack scale (/28 instead of /30) to
+    // make their high Energy cost feel worth it.
     cardAttack: Math.max(
       1,
-      Math.round(((row.attack || 0) + (row.sp_attack || 0)) / 30),
+      Math.round(
+        ((row.attack || 0) + (row.sp_attack || 0)) / (t.tier >= 4 ? 28 : 30),
+      ),
     ),
   };
 }

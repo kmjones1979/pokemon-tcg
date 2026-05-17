@@ -46,8 +46,8 @@ export function entranceAbility(card) {
     return {
       kind: "aurora",
       name: "Aurora",
-      desc: "Heals 2 HP on every allied field Pokémon.",
-      heal: 2,
+      desc: "Heals 3 HP on every allied field Pokémon.",
+      heal: 3,
     };
   }
   return null;
@@ -100,8 +100,8 @@ export const SIGNATURE_ABILITIES = {
   249: {
     // Lugia
     name: "Aeroblast",
-    desc: "All of its attacks ignore defender's defense.",
-    passive: { ignoreDefense: true },
+    desc: "Its Special attacks ignore the defender's defense.",
+    passive: { ignoreDefenseSpecial: true },
   },
   250: {
     // Ho-Oh
