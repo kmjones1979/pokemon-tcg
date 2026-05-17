@@ -22,15 +22,22 @@ export function showOffer(offer, { onClaim, didWin } = {}) {
     </div>
   `;
   const picksEl = overlay.querySelector(".reward-picks");
-  for (const card of offer.picks) {
+  offer.picks.forEach((card, i) => {
     const wrap = document.createElement("div");
     wrap.className = "reward-pick";
+    wrap.style.setProperty("--pick-i", String(i));
+    wrap.style.setProperty("--pick-delay", `${i * 220}ms`);
     const cardEl = renderCard({ ...card, raw: { hp: card.cardHp * 10, attack: card.cardAttack * 15 } });
     wrap.appendChild(cardEl);
     const badge = document.createElement("div");
     badge.className = `reward-tier tier-${card.tier}`;
     badge.textContent = `Tier ${card.tier}`;
     wrap.appendChild(badge);
+    // Sparkle particle layer behind the card.
+    const sparkle = document.createElement("div");
+    sparkle.className = "reward-sparkle";
+    sparkle.innerHTML = "✦ ✧ ✦ ✧ ✦".split(" ").map((s) => `<span>${s}</span>`).join("");
+    wrap.appendChild(sparkle);
     wrap.addEventListener("click", async () => {
       // Visually mark this one
       [...picksEl.children].forEach((c) => c.classList.remove("chosen"));
@@ -59,7 +66,7 @@ export function showOffer(offer, { onClaim, didWin } = {}) {
       }
     });
     picksEl.appendChild(wrap);
-  }
+  });
   overlay.querySelector(".reward-skip").addEventListener("click", () => {
     overlay.remove();
     onClaim?.(null);

@@ -112,6 +112,7 @@ function renderMenu() {
     <div class="menu-stage">
       <h1 class="game-title">Pokémon TCG</h1>
       <div class="menu-tagline">Pick your trainer. First to drop the opposing trainer to 0 HP wins.</div>
+      <div id="daily-streak-banner"></div>
       <div class="trainer-grid">${trainerEls.join("")}</div>
       <div class="section-label">Solo vs. AI difficulty</div>
       <div class="difficulty-grid">${difficultyEls.join("")}</div>
@@ -224,6 +225,9 @@ function renderMenu() {
   $("#mode-mp-friend").addEventListener("click", () => startMultiplayer({ mode: "friend" }));
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
+  // Daily streak banner (signed-in users only).
+  if (currentUser) loadAndRenderStreak();
+
   // First-time helper: nudge new visitors who haven't started a game yet.
   if (!localStorage.getItem("pokemon-tcg-seen-howto")) {
     setTimeout(() => {
@@ -231,6 +235,58 @@ function renderMenu() {
         $("#how-to-play-btn").classList.add("can-act");
       }
     }, 800);
+  }
+}
+
+async function loadAndRenderStreak() {
+  const slot = $("#daily-streak-banner");
+  if (!slot) return;
+  try {
+    const r = await fetch("/me/streak");
+    if (!r.ok) return;
+    const s = await r.json();
+    const next = s.nextRewardTier || { count: 1, minTier: 1 };
+    slot.innerHTML = `
+      <div class="streak-banner ${s.canClaim ? "ready" : "locked"}">
+        <div class="streak-flame">${s.canClaim ? "🔥" : "💤"}</div>
+        <div class="streak-text">
+          <div class="streak-current">
+            Day ${s.canClaim ? s.current + 1 : s.current} streak
+          </div>
+          <div class="streak-sub">
+            ${s.canClaim
+              ? `Claim today's bonus — ${next.count} card${next.count > 1 ? "s" : ""}${next.minTier > 1 ? `, tier ${next.minTier}+` : ""}`
+              : `Come back tomorrow for day ${s.current + 1}`}
+          </div>
+        </div>
+        ${s.canClaim
+          ? `<button class="streak-claim primary">Claim</button>`
+          : `<div class="streak-longest">Best: ${s.longest}</div>`}
+      </div>
+    `;
+    if (s.canClaim) {
+      slot.querySelector(".streak-claim").addEventListener("click", claimStreak);
+    }
+  } catch {}
+}
+
+async function claimStreak() {
+  const btn = document.querySelector(".streak-claim");
+  if (btn) { btn.disabled = true; btn.textContent = "Claiming…"; }
+  try {
+    const r = await fetch("/me/streak/claim", { method: "POST" });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "claim failed");
+    rewards.showOffer(data.reward, {
+      didWin: true,
+      onClaim: (card) => {
+        if (card) flashVerdict(`+${card.name}!`, "super");
+        loadAndRenderStreak();
+      },
+    });
+  } catch (err) {
+    alert("Couldn't claim: " + (err.message || "unknown"));
+    if (btn) { btn.disabled = false; btn.textContent = "Claim"; }
   }
 }
 

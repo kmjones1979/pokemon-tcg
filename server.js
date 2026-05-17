@@ -15,6 +15,7 @@ const collection = require("./server-modules/collection");
 const multiplayer = require("./server-modules/multiplayer");
 const rewards = require("./server-modules/rewards");
 const achievements = require("./server-modules/achievements");
+const dailyStreak = require("./server-modules/daily-streak");
 
 const app = express();
 const server = http.createServer(app);
@@ -132,6 +133,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   collection.mount(app, authSupabase);
   rewards.mount(app, authSupabase, () => pokedex);
   achievements.mount(app, authSupabase);
+  dailyStreak.mount(app, authSupabase, () => pokedex);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {
