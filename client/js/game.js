@@ -166,11 +166,12 @@ export function effectiveCost(playerState, card) {
   const { costMod } = abilityModifiers(playerState, card);
   let cost = (card.energyCost || 1) + costMod;
   // Comeback mechanic: when you're below 25% trainer HP, every card
-  // play costs 1 less energy (floor 1). Keeps losing matches alive,
-  // makes high-cost emergency drops feasible.
+  // play costs 1 less energy (floor 1). Last-Stand match modifier
+  // raises the threshold to 40% so the comeback fires earlier.
   if (playerState && playerState.trainerHp != null && playerState.maxTrainerHp != null) {
     const ratio = playerState.trainerHp / playerState.maxTrainerHp;
-    if (ratio > 0 && ratio < 0.25) cost -= 1;
+    const threshold = playerState._comebackThreshold || 0.25;
+    if (ratio > 0 && ratio < threshold) cost -= 1;
   }
   return Math.max(1, cost);
 }
@@ -537,7 +538,9 @@ export function attack(
     const auraBonus = fieldAttackBonusFor(p.field, attackerInst.card);
     const auraPenalty = enemyFieldAttackPenaltyFor(o.field, attackerInst.card);
     // Zapdos Thunderstorm-style aura crit boost.
-    const critBoost = fieldCritBonus(p.field);
+    // Crit boost: signature passive (Zapdos Thunderstorm) + match
+    // modifier (Crit Carnival) stack additively.
+    const critBoost = fieldCritBonus(p.field) + (state.modifier_critBoost || 0);
     const ignoreDefenseFlag =
       sigPassive?.ignoreDefense ||
       (sigPassive?.ignoreDefenseSpecial && ability?.id === "special") ||
@@ -545,6 +548,13 @@ export function attack(
     // Boss-mode bonus: in story chapters, the boss's attacks get a flat
     // +attackBonus from active phase rules.
     const bossSideBonus = (side === "ai" && state.boss?.attackBonus) || 0;
+    // Type-storm match modifier: cards of the rolled type get a flat
+    // +N to abilityBonus when their primary type matches.
+    let typeStormBonus = 0;
+    if (state.modifier_typeAtkBonus
+        && attackerInst.card.types?.[0] === state.modifier_typeAtkBonus.type) {
+      typeStormBonus = state.modifier_typeAtkBonus.bonus || 0;
+    }
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
       abilityBonus:
         attackBonus +
@@ -553,7 +563,8 @@ export function attack(
         comboBonus +
         auraBonus -
         auraPenalty +
-        bossSideBonus,
+        bossSideBonus +
+        typeStormBonus,
       ability,
       rand,
       themeType: state.themeType || null,
@@ -561,6 +572,10 @@ export function attack(
       critBoost,
       forceCrit,
     });
+    // Match-modifier damage multiplier (Glass Cannon / Iron Wall).
+    if (state.modifier_damageMult && calc.multiplier !== 0) {
+      calc.damage = Math.max(1, Math.round(calc.damage * state.modifier_damageMult));
+    }
     if (comboBonus > 0) calc.comboBonus = comboBonus;
     if (levitated) {
       calc.damage = 0;

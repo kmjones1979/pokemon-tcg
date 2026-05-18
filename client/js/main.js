@@ -27,6 +27,7 @@ import { computeDamage } from "./battle.js";
 import { abilitiesFor, abilityById, basicAbility } from "./abilities.js";
 import { attachPreviewHandlers } from "./card-preview.js";
 import { ITEM_DEFS, useItem } from "./items.js";
+import { rollModifier, applyModifier } from "./match-modifiers.js";
 import * as passkey from "./passkey.js";
 import * as deckBuilder from "./deck-builder.js";
 import * as mp from "./multiplayer.js";
@@ -413,6 +414,10 @@ function renderMenu() {
         masteryById,
       });
       if (currentTheme?.type) state.themeType = currentTheme.type;
+      // Roll a random match modifier (~30% of matches). When one fires
+      // a fanfare banner pops on turn-1 + the VS subtitle shows the name.
+      const _mod = applyModifier(state, rollModifier());
+      if (_mod) trackEvent("modifier_rolled", { id: _mod.id });
       // Friend-challenge attribution — when this is a /v/<code> battle,
       // attach the deck-code to state so onGameOver can post the result
       // back to the deck owner's inbox.
@@ -460,8 +465,14 @@ function renderMenu() {
         aiName: TRAINERS[aiTrainer].name,
         aiSprite: trainerMascotUrl(aiTrainer),
         aiColor: TYPE_COLORS[TRAINERS[aiTrainer].portrait] || "#888",
-        subtitle: isFirstMatch ? "Your first rival" : `${({ aggressive: "Aggressive", balanced: "Balanced", tactical: "Tactical" })[aiPersonality]} Rival`,
+        subtitle: state.modifierActive
+          ? `${state.modifierActive.icon} ${state.modifierActive.name}`
+          : (isFirstMatch ? "Your first rival" : `${({ aggressive: "Aggressive", balanced: "Balanced", tactical: "Tactical" })[aiPersonality]} Rival`),
       });
+      // Modifier flash on turn 1 so the player sees the rule clearly.
+      if (state.modifierActive) {
+        setTimeout(() => flashVerdict(`${state.modifierActive.icon} ${state.modifierActive.name}`, "super"), 900);
+      }
       // First-match auto-skip: brand-new players don't yet know what
       // mulligan IS, and the 15s decision adds friction without
       // benefit.  Skip it on match #1 only — they keep their dealt hand.
