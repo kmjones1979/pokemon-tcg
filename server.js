@@ -71,12 +71,11 @@ const PORT = Number(process.env.PORT) || 3000;
 // Generate server URL (still needed for console output)
 const serverUrl = `http://${localIp}:${PORT}`;
 
-// Site-password gate — soft gate over the landing page. Static assets
-// + API routes stay open so the gate form itself can submit, and so
-// that any signed-in user keeps working. Cookie-based, 30-day TTL.
+// Site-password gate disabled — module + routes left in place so the
+// gate can be re-enabled by uncommenting `app.use(siteGate.gateMiddleware)`.
 siteGate.parseFormBody(app);
 siteGate.mount(app);
-app.use(siteGate.gateMiddleware);
+// app.use(siteGate.gateMiddleware);
 
 // Serve static files from the current directory
 app.use(express.static(path.join(__dirname)));
