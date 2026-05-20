@@ -312,11 +312,13 @@ function beginTurn(state) {
     }
   }
   // Match-length governor: long matches start chipping both trainers
-  // past turn 12 even if both still have deck. Pushes average match
-  // length toward 2.5–4 min (per PLAN.md exit criteria). Tick is small
-  // so it's a tiebreaker, not a kill.
-  if (state.turn >= 13) {
-    const tick = Math.min(4, Math.floor((state.turn - 12) / 2) + 1);
+  // so they conclude in reasonable time. Starts at turn 18 (was 13)
+  // and ramps every 3 turns capped at 3/turn — boss fights need room
+  // to chew through 80+ HP and the previous schedule was punishing
+  // legitimate long matches before they finished.
+  // Schedule: T18-19=1, T20-22=2, T23+=3 (cap).
+  if (state.turn >= 18) {
+    const tick = Math.min(3, Math.floor((state.turn - 17) / 3) + 1);
     p.trainerHp = Math.max(0, p.trainerHp - tick);
     log(state, `⏱ Stalemate (turn ${state.turn}): both trainers chip −${tick} HP this turn — end the match!`, "warn");
   }
