@@ -17,6 +17,7 @@
 // same fight.
 
 const { toCard, buildDeck } = require("../shared/deck-builder");
+const { bumpDailyStats } = require("./quests");
 
 // Curated daily-boss pool. The day index modulo POOL_SIZE picks the boss.
 // Each entry is a high-tier or iconic Pokémon with a phase-rule kit. We
@@ -215,6 +216,13 @@ function mount(app, supabase, getPokedex) {
           hp_left: Math.max(0, Number(hpLeft) || 0),
           kos: Math.max(0, Number(kos) || 0),
         }, { onConflict: "user_id,challenge_date" });
+      // Daily boss counts toward the per-day quest counters — without
+      // this, "Win N matches today" never ticked for daily-boss players.
+      await bumpDailyStats(supabase, req.user.id, {
+        matches: 1,
+        wins: won ? 1 : 0,
+        kos: Math.max(0, Number(kos) || 0),
+      });
     }
     const stars = starsForResult({ won: !!won, turns, hpLeft, hpMax: 30 });
     // Build the share string + URL — kept short and spoiler-free.

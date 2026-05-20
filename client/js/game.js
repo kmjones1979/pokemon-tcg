@@ -1073,14 +1073,47 @@ async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality 
   }
 
   // Summon phase — keep summoning until field is full, hand empty, or we pass.
+  // The passPlayChance roll is gated on `playsThisTurn > 0` so the AI always
+  // attempts at least one summon when it has the energy + a slot; otherwise
+  // ~6% of medium-mode turns ended with the AI sitting on a full hand for no
+  // visible reason. If the field is full but the AI has a clear upgrade (the
+  // best hand card outscores the worst board card), it sacrifices to replace.
+  let playsThisTurn = 0;
   for (let safety = 0; safety < 10; safety++) {
     if (state.phase !== "main") break;
-    if (emptySlot(ai.field) === -1) break;
-    if (rand() < policy.passPlayChance) break; // sometimes just pass
+    if (playsThisTurn > 0 && rand() < policy.passPlayChance) break;
+    let replaceSlot = null;
+    if (emptySlot(ai.field) === -1) {
+      // Field full — only the smart policies consider replacing.
+      if (policy.pickCard !== "smartSig" && policy.pickCard !== "smart") break;
+      const idx = chooseHandIndex(ai, policy, rand, state);
+      if (idx === -1) break;
+      const handCard = ai.hand[idx];
+      const handScore = scoreCardForSummon(ai, state.players.player, handCard);
+      // Find the weakest board card to replace.
+      let worstSlot = -1;
+      let worstScore = Infinity;
+      for (let i = 0; i < ai.field.length; i++) {
+        const inst = ai.field[i];
+        if (!inst) continue;
+        const score = scoreCardForSummon(ai, state.players.player, inst.card) - 6;
+        const hpFrac = inst.currentHp / ((inst.maxHp ?? inst.card.cardHp) || 1);
+        const adj = score - (1 - hpFrac) * 5;
+        if (adj < worstScore) { worstScore = adj; worstSlot = i; }
+      }
+      if (worstSlot === -1 || handScore <= worstScore + 4) break;
+      replaceSlot = worstSlot;
+      const r = playCard(state, "ai", idx, { rand, replaceSlot });
+      if (!r.ok) break;
+      playsThisTurn++;
+      if (onAction) await onAction({ kind: "summon", slot: r.slot, instance: r.instance, replaced: true });
+      continue;
+    }
     const idx = chooseHandIndex(ai, policy, rand, state);
     if (idx === -1) break;
     const r = playCard(state, "ai", idx, { rand });
     if (!r.ok) break;
+    playsThisTurn++;
     if (onAction) await onAction({ kind: "summon", slot: r.slot, instance: r.instance });
   }
 

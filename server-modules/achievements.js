@@ -233,7 +233,7 @@ async function computeFor(supabase, userId, getPokedex) {
       .order("ended_at", { ascending: false, nullsFirst: false })
       .limit(50),
     supabase.from("owned_cards").select("pokemon_id, quantity, shiny_level").eq("user_id", userId),
-    supabase.from("users").select("story_progress, champion_wins").eq("id", userId).maybeSingle(),
+    supabase.from("users").select("story_progress, champion_wins, quest_progress").eq("id", userId).maybeSingle(),
   ]);
 
   const stats = statsRes.data || {
@@ -241,6 +241,28 @@ async function computeFor(supabase, userId, getPokedex) {
   };
   // user_stats might not echo user_id, attach it.
   stats.user_id = userId;
+  // user_stats is a SQL view over the `matches` table, which only stores
+  // multiplayer games. Solo/story/daily-boss wins live on users.quest_progress
+  // (bumped via bumpDailyStats). Roll those into the stats so achievements
+  // like "Win 25 matches" count every win, not just multiplayer ones.
+  {
+    const qp = userRes.data?.quest_progress || {};
+    let soloWins = 0;
+    let soloMatches = 0;
+    for (const k of Object.keys(qp)) {
+      const d = qp[k];
+      if (!d) continue;
+      soloWins   += Number(d.wins    || 0);
+      soloMatches += Number(d.matches || 0);
+    }
+    stats.wins           = Number(stats.wins || 0) + soloWins;
+    stats.matches_played = Number(stats.matches_played || 0) + soloMatches;
+    const losses = Math.max(0, stats.matches_played - stats.wins);
+    stats.losses  = losses;
+    stats.win_pct = stats.matches_played > 0
+      ? Math.round((1000 * stats.wins) / stats.matches_played) / 10
+      : 0;
+  }
   const matches = matchesRes.data || [];
   const owned = ownedRes.data || [];
   const storyProgress = (userRes.data?.story_progress) || { completed: [] };

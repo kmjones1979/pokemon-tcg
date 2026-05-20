@@ -105,14 +105,16 @@ test("Glass Cannon: damage multiplied by 1.5x", () => {
   playCard(s, "player", 0);
   s.players.player.field.forEach((i) => { if (i) i.summoningSickness = false; });
   const before = s.players.ai.field[0].currentHp;
-  // First: vanilla attack baseline.
-  const r1 = attack(s, "player", 0, 0, { abilityId: "basic" });
+  // Deterministic rand=0.99 keeps crits out of both attacks so we're
+  // comparing pure damage multipliers, not crit luck.
+  const noCrit = () => 0.99;
+  const r1 = attack(s, "player", 0, 0, { abilityId: "basic", rand: noCrit });
   const vanillaDmg = before - s.players.ai.field[0].currentHp;
   // Reset and apply Glass Cannon.
   s.players.ai.field[0].currentHp = 30;
   s.players.player.field[0].attackedThisTurn = false;
   applyModifier(s, MODIFIERS.find((x) => x.id === "glass-cannon"));
-  attack(s, "player", 0, 0, { abilityId: "basic" });
+  attack(s, "player", 0, 0, { abilityId: "basic", rand: noCrit });
   const glassDmg = 30 - s.players.ai.field[0].currentHp;
   assert.ok(glassDmg > vanillaDmg, `glass cannon should hit harder (${glassDmg} vs ${vanillaDmg})`);
 });

@@ -2858,6 +2858,9 @@ function onGameOver() {
       } else if (won) {
         flashVerdict("Chapter cleared!", "super");
       }
+      // Server has now persisted bumpDailyStats — refresh the quest panel
+      // so progress bars update without a manual page reload.
+      try { loadAndRenderQuests?.(); } catch {}
     }).catch(() => {});
   }
   // In solo mode, finalise the server-tracked session and ask for a reward.
@@ -2880,6 +2883,9 @@ function onGameOver() {
             onClaim: (card) => { if (card) flashVerdict(`+${card.name}!`, "super"); },
           });
         }
+        // Refresh quests now that bumpDailyStats has persisted — otherwise
+        // Play Again → renderMenu races the write and shows stale counts.
+        try { loadAndRenderQuests?.(); } catch {}
       })
       .catch(() => {});
     soloSessionId = null;
