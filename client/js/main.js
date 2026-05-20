@@ -1045,7 +1045,10 @@ function render() {
   _prevActivePlayer = state.activePlayer;
 
   // Trainer HP flash: if either side's HP dropped vs the previous render,
-  // run the damage animation on that bar.
+  // run the damage animation on that bar. When the PLAYER's HP drops
+  // also fire a full-screen red vignette + scream the damage as a
+  // big floating number on the trainer block — without this, time-
+  // pressure ticks and trainer-targeted attacks were easy to miss.
   for (const side of ["player", "ai"]) {
     const cur = state.players[side].trainerHp;
     const prev = _prevHps[side];
@@ -1053,10 +1056,18 @@ function render() {
       const bar = $(`.trainer-block.${side} .hp-bar`);
       if (bar) {
         bar.classList.remove("damaged");
-        // Force reflow to replay the animation on consecutive hits.
         // eslint-disable-next-line no-unused-expressions
         bar.offsetHeight;
         bar.classList.add("damaged");
+      }
+      if (side === "player") {
+        const lost = prev - cur;
+        const block = $(".trainer-block.player");
+        if (block) {
+          floatDamage(block, `-${lost}`, { kind: lost >= 6 ? "crit" : "hit" });
+          shakeHit(block);
+        }
+        triggerPlayerHitVignette(lost >= 6);
       }
     }
     _prevHps[side] = cur;
@@ -2661,6 +2672,17 @@ function showYourTurnBanner() {
     el.classList.remove("show");
     setTimeout(() => el.remove(), 350);
   }, 1100);
+}
+
+// Red-vignette pulse from the screen edges. Fired whenever the player's
+// trainer HP drops so trainer-targeted attacks + time-pressure ticks
+// can't be missed. `heavy=true` for big-damage hits + KOs.
+function triggerPlayerHitVignette(heavy = false) {
+  document.querySelectorAll(".player-hit-vignette").forEach((n) => n.remove());
+  const v = document.createElement("div");
+  v.className = "player-hit-vignette" + (heavy ? " heavy" : "");
+  document.body.appendChild(v);
+  setTimeout(() => v.remove(), heavy ? 950 : 650);
 }
 
 function handleMpGameOver(over) {
