@@ -318,7 +318,7 @@ function beginTurn(state) {
   if (state.turn >= 13) {
     const tick = Math.min(4, Math.floor((state.turn - 12) / 2) + 1);
     p.trainerHp = Math.max(0, p.trainerHp - tick);
-    log(state, `⏱ Time pressure — ${p.name} loses ${tick} HP.`, "warn");
+    log(state, `⏱ Stalemate (turn ${state.turn}): both trainers chip −${tick} HP this turn — end the match!`, "warn");
   }
   if (isFirstSecondMoverTurn) {
     log(state, `${p.name} drew an extra card (going second).`, "info");

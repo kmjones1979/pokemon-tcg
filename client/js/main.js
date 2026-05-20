@@ -1572,11 +1572,23 @@ function renderHand() {
 
 function renderLog() {
   const panel = $("#log-panel");
+  if (!panel) return;
+  // Keep the user's scroll position if they've manually scrolled up to
+  // read earlier turns — otherwise auto-pin to the bottom so the most
+  // recent line is always visible. "stickiness" tolerance is 24px.
+  const scrollEl = panel;
+  const wasNearBottom =
+    scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 24;
+  // Render up to the last 200 lines so very long matches don't explode
+  // the DOM but the player can scroll back through plenty of history.
   panel.innerHTML = `<div class="log-title">Combat Log</div>` +
     state.log
-      .slice(-12)
+      .slice(-200)
       .map((e) => `<div class="log-line tone-${e.kind}">${escape(e.text)}</div>`)
       .join("");
+  if (wasNearBottom) {
+    scrollEl.scrollTop = scrollEl.scrollHeight;
+  }
 }
 
 function escape(s) {
@@ -2848,7 +2860,12 @@ function onGameOver() {
     }).catch(() => {});
   }
   // Daily boss outcome → finishDaily + share dialog (highest viral leverage).
-  if (gameMode === "story" && _storyContext?.daily) {
+  // Fires INSTEAD of the regular story-chapter reward flow but still falls
+  // through to the regular game-over overlay so the player has a Play
+  // Again / Back-to-Menu button. Previously this branch returned early,
+  // leaving the user stranded on the post-game board.
+  const isDailyBoss = gameMode === "story" && _storyContext?.daily;
+  if (isDailyBoss) {
     const won = state.winner === "player";
     const result = {
       sessionId: _storyContext.sessionId,
@@ -2860,11 +2877,14 @@ function onGameOver() {
     daily.finishDaily(result).then((data) => {
       trackEvent("daily_finished", { won, turns: result.turns });
       if (data) setTimeout(() => daily.showShareDialog(data), 1200);
+      // Quest counters were just bumped server-side; refresh the panel
+      // so a "Back to menu" click finds fresh numbers.
+      try { loadAndRenderQuests?.(); } catch {}
     }).catch(() => {});
-    return; // skip the regular story path
   }
   // Story chapter: post outcome → roll reward → record progress.
-  if (gameMode === "story" && _storyContext) {
+  // Daily-boss already handled above; don't double-fire here.
+  if (!isDailyBoss && gameMode === "story" && _storyContext) {
     const won = state.winner === "player";
     story.finishChapter({
       sessionId: _storyContext.sessionId,
@@ -2965,7 +2985,7 @@ function onGameOver() {
       </div>
       <div class="game-over-cta-row">
         <button id="share-highlight-btn" class="secondary">📷 Share highlight</button>
-        <button id="play-again-btn">Play again</button>
+        <button id="play-again-btn">${isDailyBoss ? "Back to menu" : "Play again"}</button>
       </div>
     </div>
   `;
@@ -3007,6 +3027,7 @@ function onGameOver() {
       // overlay should release it, but belt-and-suspenders).
       document.body.classList.remove("modal-open");
       const wasStory = gameMode === "story";
+      const wasDailyBoss = isDailyBoss;
       const wasMp    = gameMode === "mp";
       state = null;
       selectedAttacker = null;
@@ -3018,7 +3039,11 @@ function onGameOver() {
       gameMode = "solo";
       _championId = null;
       _storyContext = null;
-      if (wasStory) {
+      if (wasDailyBoss) {
+        // Daily boss is one-attempt-per-day — back to the main menu so
+        // the user can see the freshly-updated daily card + quest panel.
+        renderMenu();
+      } else if (wasStory) {
         await story.openStoryHub({ currentUser });
       } else {
         // renderMenu is sync but the panel widgets (daily card, quests
