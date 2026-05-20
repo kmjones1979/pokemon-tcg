@@ -311,17 +311,10 @@ function beginTurn(state) {
       p.trainerHp = Math.max(0, p.trainerHp - dmg);
     }
   }
-  // Match-length governor: long matches start chipping both trainers
-  // so they conclude in reasonable time. Starts at turn 18 (was 13)
-  // and ramps every 3 turns capped at 3/turn — boss fights need room
-  // to chew through 80+ HP and the previous schedule was punishing
-  // legitimate long matches before they finished.
-  // Schedule: T18-19=1, T20-22=2, T23+=3 (cap).
-  if (state.turn >= 18) {
-    const tick = Math.min(3, Math.floor((state.turn - 17) / 3) + 1);
-    p.trainerHp = Math.max(0, p.trainerHp - tick);
-    log(state, `⏱ Stalemate (turn ${state.turn}): both trainers chip −${tick} HP this turn — end the match!`, "warn");
-  }
+  // Stalemate damage moved out of beginTurn — it now fires symmetrically
+  // at endTurn so both trainers take it at the exact same instant. That
+  // means a 1-HP-vs-1-HP situation actually resolves as a TIE instead
+  // of whichever side happened to have their beginTurn run first.
   if (isFirstSecondMoverTurn) {
     log(state, `${p.name} drew an extra card (going second).`, "info");
   }
@@ -769,6 +762,30 @@ export function endTurn(state) {
   }
   // Reset attackedThisTurn flag on your own cards.
   for (const inst of p.field) if (inst) inst.attackedThisTurn = false;
+
+  // Match-length governor: starting turn 30, both trainers take the
+  // SAME damage at the SAME moment so the outcome is symmetric — if
+  // both bars hit 0 on the same tick, the match resolves as a draw
+  // (not "whoever's beginTurn ran first wins"). Schedule:
+  //   T30-33  -1
+  //   T34-37  -2
+  //   T38+    -3 (cap)
+  if (state.turn >= 30) {
+    const tick = Math.min(3, Math.floor((state.turn - 30) / 4) + 1);
+    state.players.player.trainerHp = Math.max(0, state.players.player.trainerHp - tick);
+    state.players.ai.trainerHp     = Math.max(0, state.players.ai.trainerHp     - tick);
+    log(state, `⏱ Stalemate (turn ${state.turn}): both trainers chip −${tick} HP simultaneously — end the match!`, "warn");
+    const playerOut = state.players.player.trainerHp <= 0;
+    const aiOut     = state.players.ai.trainerHp     <= 0;
+    if (playerOut && aiOut) {
+      state.winner = "tie";
+      state.phase = "over";
+      log(state, "Both trainers fell at the same instant — it's a draw!", "win");
+      return;
+    }
+  }
+  if (checkWinner(state)) return;
+
   // Switch sides.
   state.activePlayer = state.activePlayer === "player" ? "ai" : "player";
   beginTurn(state);

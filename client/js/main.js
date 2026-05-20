@@ -2962,12 +2962,18 @@ function onGameOver() {
           <div class="go-badge-desc">${escape(b.desc)}</div>
         </div>`).join("")}
     </div>` : "";
-  overlay.innerHTML = `
-    <div class="game-over-card ${state.winner === "player" ? "win" : "loss"}">
-      <h2>${state.winner === "player" ? "Victory!" : "Defeat"}</h2>
-      <p class="go-sub">${state.winner === "player"
+  const isTie = state.winner === "tie";
+  const goClass = isTie ? "draw" : (state.winner === "player" ? "win" : "loss");
+  const goTitle = isTie ? "Draw" : (state.winner === "player" ? "Victory!" : "Defeat");
+  const goSub = isTie
+    ? "Both trainers fell at the same moment."
+    : (state.winner === "player"
         ? "Your rival's trainer has been knocked out."
-        : "Your trainer has been knocked out."}</p>
+        : "Your trainer has been knocked out.");
+  overlay.innerHTML = `
+    <div class="game-over-card ${goClass}">
+      <h2>${goTitle}</h2>
+      <p class="go-sub">${goSub}</p>
       ${badgesHtml}
       <div class="go-stats">
         <div class="go-stat"><span>Turns played</span><strong data-count-to="${state.turn}">0</strong></div>
