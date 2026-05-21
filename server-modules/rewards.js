@@ -100,20 +100,14 @@ const { bumpDailyStats } = require("./quests");
 //   POST /me/solo/start    -> records { userId, difficulty, startedAt }, returns sessionId
 //   POST /me/solo/end      -> validates session is real + ≥MIN_DURATION old, then rolls.
 // Plus a rolling rate limit so a determined attacker can't loop.
-const SOLO_SESSIONS = new Map(); // sessionId → { userId, difficulty, startedAt, claimed }
+// Sessions stored in the shared KV (Redis or in-memory fallback) so the
+// /me/solo/end POST can read state regardless of which Vercel Fluid
+// Compute instance the /me/solo/start request landed on.
 const SOLO_HISTORY = new Map();   // userId → array of timestamps (claimed)
 const SOLO_MIN_DURATION_MS = 30 * 1000;  // games shorter than this are suspect
 const SOLO_MIN_GAP_MS = 30 * 1000;       // 1 reward per 30s
 const SOLO_HOURLY_CAP = 30;              // 30 rewards/hour ceiling
-const SESSION_TTL_MS = 60 * 60 * 1000;
-
-function gcSoloSessions() {
-  const now = Date.now();
-  for (const [id, s] of SOLO_SESSIONS) {
-    if (now - s.startedAt > SESSION_TTL_MS) SOLO_SESSIONS.delete(id);
-  }
-}
-setInterval(gcSoloSessions, 5 * 60 * 1000).unref?.();
+const SESSION_TTL_SEC = 60 * 60;          // 1 hour
 
 function canClaimSolo(userId) {
   const now = Date.now();
@@ -138,19 +132,18 @@ function mount(app, supabase, getPokedex) {
   // Start a solo session — call when the match begins. Returns a sessionId
   // that must be passed back to /me/solo/end. Without this handshake, no
   // reward will be issued, which gates the "lie about a win" attack.
-  app.post("/me/solo/start", (req, res) => {
+  app.post("/me/solo/start", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
     const difficulty = String(req.body?.difficulty || "easy");
     if (!["easy", "medium", "hard"].includes(difficulty)) {
       return res.status(400).json({ error: "Invalid difficulty." });
     }
     const sessionId = require("crypto").randomBytes(12).toString("base64url");
-    SOLO_SESSIONS.set(sessionId, {
+    await store.kvSet(`solo-sess:${sessionId}`, {
       userId: req.user.id,
       difficulty,
       startedAt: Date.now(),
-      claimed: false,
-    });
+    }, SESSION_TTL_SEC);
     res.json({ sessionId });
   });
 
@@ -165,16 +158,16 @@ function mount(app, supabase, getPokedex) {
       return res.status(503).json({ error: "Pokédex not loaded yet." });
     }
     const { sessionId, won, championId } = req.body || {};
-    const session = SOLO_SESSIONS.get(sessionId);
+    // kvTake = atomic get+delete. If the player retries the request,
+    // the second call hits "no_session" instead of re-issuing a reward.
+    const session = await store.kvTake(`solo-sess:${sessionId}`);
     if (!session) return res.json({ reward: null, reason: "no_session" });
     if (session.userId !== req.user.id) {
       return res.status(403).json({ error: "Session belongs to another user." });
     }
-    if (session.claimed) return res.json({ reward: null, reason: "already_claimed" });
     if (Date.now() - session.startedAt < SOLO_MIN_DURATION_MS) {
       return res.json({ reward: null, reason: "session_too_short" });
     }
-    session.claimed = true;
     // Daily quest tracking — solo matches don't write to the matches table,
     // so this is the only place per-day play/win counters get incremented.
     const koCount = Number(req.body?.kos) || 0;

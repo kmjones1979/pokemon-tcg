@@ -162,14 +162,11 @@ function chapterUnlocked(chapter, progress) {
   return prev ? progress.completed.includes(prev.id) : true;
 }
 
-// In-memory anti-cheat sessions for story matches (mirrors solo logic).
-const STORY_SESSIONS = new Map();
+// Anti-cheat sessions stored in the shared KV so /me/story/end can read
+// state regardless of which Vercel instance handled /me/story/start.
+const store = require("./state-store");
 const STORY_MIN_DURATION_MS = 30 * 1000;
-function sessionGc() {
-  const now = Date.now();
-  for (const [id, s] of STORY_SESSIONS) if (now - s.startedAt > 60 * 60 * 1000) STORY_SESSIONS.delete(id);
-}
-setInterval(sessionGc, 5 * 60 * 1000).unref?.();
+const STORY_SESSION_TTL_SEC = 60 * 60;
 
 function mount(app, supabase, getPokedex) {
   async function loadDex() {
@@ -243,29 +240,28 @@ function mount(app, supabase, getPokedex) {
     }
   });
 
-  app.post("/me/story/start", (req, res) => {
+  app.post("/me/story/start", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
     const chapterId = String(req.body?.chapterId || "");
     const chapter = getChapter(chapterId);
     if (!chapter) return res.status(404).json({ error: "Unknown chapter." });
     const sessionId = require("crypto").randomBytes(12).toString("base64url");
-    STORY_SESSIONS.set(sessionId, {
-      userId: req.user.id, chapterId, startedAt: Date.now(), claimed: false,
-    });
+    await store.kvSet(`story-sess:${sessionId}`, {
+      userId: req.user.id, chapterId, startedAt: Date.now(),
+    }, STORY_SESSION_TTL_SEC);
     res.json({ sessionId });
   });
 
   app.post("/me/story/end", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
     const { sessionId, won } = req.body || {};
-    const session = STORY_SESSIONS.get(sessionId);
+    // kvTake atomically consumes the session so a retry can't double-claim.
+    const session = await store.kvTake(`story-sess:${sessionId}`);
     if (!session) return res.json({ reward: null, reason: "no_session" });
     if (session.userId !== req.user.id) return res.status(403).json({ error: "Wrong user." });
-    if (session.claimed) return res.json({ reward: null, reason: "already_claimed" });
     if (Date.now() - session.startedAt < STORY_MIN_DURATION_MS) {
       return res.json({ reward: null, reason: "too_short" });
     }
-    session.claimed = true;
     // Daily quest tracking — story matches count as a played match.
     const koCount = Number(req.body?.kos) || 0;
     await bumpDailyStats(supabase, req.user.id, { matches: 1, wins: won ? 1 : 0, kos: koCount });

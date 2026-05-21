@@ -120,8 +120,13 @@ function starsForResult({ won, turns, hpLeft, hpMax }) {
   return "★".repeat(stars) + "☆".repeat(5 - stars);
 }
 
-const DAILY_SESSIONS = new Map(); // sessionId -> { userId, dateKey, startedAt }
+// Sessions were a per-process Map, which broke on Vercel Fluid Compute:
+// /me/daily/start would land on instance A but /me/daily/end could route
+// to instance B, which had no record of the session → "No session." Now
+// stored in the shared KV (Redis or in-memory fallback) keyed by id.
+const store = require("./state-store");
 const DAILY_MIN_DURATION_MS = 30 * 1000;
+const DAILY_SESSION_TTL_SEC = 60 * 60; // 1 hour — same as the in-memory GC
 
 function mount(app, supabase, getPokedex) {
   async function loadDex() {
@@ -189,20 +194,22 @@ function mount(app, supabase, getPokedex) {
       if (data) return res.status(409).json({ error: "Already played today. Come back tomorrow." });
     }
     const sessionId = require("crypto").randomBytes(12).toString("base64url");
-    DAILY_SESSIONS.set(sessionId, { userId: req.user.id, dateKey, startedAt: Date.now() });
+    await store.kvSet(`daily-sess:${sessionId}`, {
+      userId: req.user.id, dateKey, startedAt: Date.now(),
+    }, DAILY_SESSION_TTL_SEC);
     res.json({ sessionId, dateKey });
   });
 
   app.post("/me/daily/end", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
     const { sessionId, won, turns = 0, hpLeft = 0, kos = 0 } = req.body || {};
-    const session = DAILY_SESSIONS.get(sessionId);
+    // kvTake = atomic get+delete so a retry can't double-count.
+    const session = await store.kvTake(`daily-sess:${sessionId}`);
     if (!session) return res.status(400).json({ error: "No session." });
     if (session.userId !== req.user.id) return res.status(403).json({ error: "Wrong user." });
     if (Date.now() - session.startedAt < DAILY_MIN_DURATION_MS) {
       return res.status(400).json({ error: "Match too short." });
     }
-    DAILY_SESSIONS.delete(sessionId);
     const dayNumber = dayNumberFor(session.dateKey);
     const boss = bossForDay(dayNumber);
     if (supabase) {
