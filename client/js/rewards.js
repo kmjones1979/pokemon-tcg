@@ -29,9 +29,13 @@ export function showOffer(offer, { onClaim, didWin } = {}) {
     wrap.style.setProperty("--pick-delay", `${i * 220}ms`);
     const cardEl = renderCard({ ...card, raw: { hp: card.cardHp * 10, attack: card.cardAttack * 15 } });
     wrap.appendChild(cardEl);
+    const rarity = card.rarity || "common";
+    const rarityLabel = rarity.charAt(0).toUpperCase() + rarity.slice(1);
     const badge = document.createElement("div");
-    badge.className = `reward-tier tier-${card.tier}`;
-    badge.textContent = `Tier ${card.tier}`;
+    // Keep tier-N class so existing CSS rules still apply; rarity-X is
+    // the new word-based class for future styling.
+    badge.className = `reward-tier tier-${card.tier} rarity-${rarity}`;
+    badge.textContent = rarityLabel;
     wrap.appendChild(badge);
     // Sparkle particle layer behind the card.
     const sparkle = document.createElement("div");

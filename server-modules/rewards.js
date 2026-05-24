@@ -13,18 +13,37 @@ const store = require("./state-store");
 
 const OFFER_TTL_SEC = 10 * 60;       // 10 minutes
 
-// Tier weights — heavy lean on T1-T3 with a small chance at T4/5.
-const WEIGHTS = { 1: 30, 2: 32, 3: 22, 4: 11, 5: 5 };
+// Default tier weights — heavy lean on T1-T3 with a small chance at T4/5.
+// Used by multiplayer / champion / unrestricted rolls.
+const DEFAULT_WEIGHTS = { 1: 30, 2: 32, 3: 22, 4: 11, 5: 5 };
 
-function weightedTier(rand = Math.random) {
+// Difficulty-restricted weights for solo rewards. Medium can only roll the
+// bottom of the ladder (common/uncommon); hard rolls the top of the ladder
+// (rare/epic/legendary) — legendaries are the slim-chance jackpot.
+const MEDIUM_WEIGHTS = { 1: 60, 2: 40 };
+const HARD_WEIGHTS   = { 3: 65, 4: 25, 5: 10 };
+
+// Player-facing rarity ladder. The internal `tier` (BST bucket 1-5) is a
+// stat tier; the rarity is the word the UI shows.
+const RARITY_BY_TIER = { 1: "common", 2: "uncommon", 3: "rare", 4: "epic", 5: "legendary" };
+
+function rarityForCard(card) {
+  // Flagged legendaries/mythicals always read as "legendary" regardless of
+  // their BST tier — keeps the player-facing ladder consistent.
+  if (card.is_legendary || card.is_mythical) return "legendary";
+  return RARITY_BY_TIER[card.tier] || "common";
+}
+
+function weightedTier(rand = Math.random, weights = DEFAULT_WEIGHTS) {
+  const keys = Object.keys(weights);
   let total = 0;
-  for (const t of Object.keys(WEIGHTS)) total += WEIGHTS[t];
+  for (const t of keys) total += weights[t];
   let r = rand() * total;
-  for (const t of Object.keys(WEIGHTS)) {
-    r -= WEIGHTS[t];
+  for (const t of keys) {
+    r -= weights[t];
     if (r <= 0) return Number(t);
   }
-  return 1;
+  return Number(keys[0]);
 }
 
 function pickFromTier(pokedex, tier, exclude, rand = Math.random) {
@@ -34,23 +53,36 @@ function pickFromTier(pokedex, tier, exclude, rand = Math.random) {
 }
 
 function rollPicks(pokedex, count, rand = Math.random, opts = {}) {
-  const { themeType = currentTheme(), themeBias = 0.3 } = opts;
+  const {
+    themeType = currentTheme(),
+    themeBias = 0.3,
+    weights = DEFAULT_WEIGHTS,
+    // Optional candidate-pool filter applied BEFORE tier rolling. Used by
+    // medium-difficulty drops to exclude is_legendary cards that happen to
+    // live at tier 1-2.
+    rarityFilter = null,
+  } = opts;
+  const allowedTiers = new Set(Object.keys(weights).map(Number));
+  const pool = rarityFilter ? pokedex.filter(rarityFilter) : pokedex;
   const picks = [];
   const seen = new Set();
   let safety = 0;
   while (picks.length < count && safety++ < 100) {
-    const tier = weightedTier(rand);
-    // With probability themeBias, try to draw a themed-type card of any
-    // tier first; if none, fall through to the regular tier pick.
+    const tier = weightedTier(rand, weights);
+    // With probability themeBias, try to draw a themed-type card from the
+    // allowed tiers; if none, fall through to the regular tier pick.
     let card = null;
     if (themeType && rand() < themeBias) {
-      const themed = pokedex.filter((c) => !seen.has(c.id) && c.types?.includes(themeType));
+      const themed = pool.filter((c) => !seen.has(c.id) && c.types?.includes(themeType) && allowedTiers.has(c.tier));
       if (themed.length > 0) card = themed[Math.floor(rand() * themed.length)];
     }
-    if (!card) card = pickFromTier(pokedex, tier, seen, rand);
+    if (!card) card = pickFromTier(pool, tier, seen, rand);
     if (!card) {
-      for (const t of [3, 2, 4, 1, 5]) {
-        card = pickFromTier(pokedex, t, seen, rand);
+      // Fallback walks the ALLOWED tiers only — never bleed into a
+      // disallowed rarity bucket (e.g. don't give a medium-difficulty
+      // player a legendary because tier 1 was momentarily exhausted).
+      for (const t of Array.from(allowedTiers).sort()) {
+        card = pickFromTier(pool, t, seen, rand);
         if (card) break;
       }
     }
@@ -61,6 +93,20 @@ function rollPicks(pokedex, count, rand = Math.random, opts = {}) {
   return picks;
 }
 
+// Shape a pokedex row into the offer-pick payload sent to the client.
+// Includes rarity + is_legendary/is_mythical so the reward modal can
+// render the rarity word and apply holo styling.
+function toPickPayload(p) {
+  return {
+    id: p.id, name: p.name, types: p.types, tier: p.tier,
+    rarity: rarityForCard(p),
+    is_legendary: !!p.is_legendary,
+    is_mythical: !!p.is_mythical,
+    energyCost: p.energyCost, cardHp: p.cardHp, cardAttack: p.cardAttack,
+    sprite_front: p.sprite_front,
+  };
+}
+
 // createOffer stores the picks in shared KV under an opaque id. The
 // returned id is what we ship to the client; only that id can redeem.
 // Awaits the KV write so callers can guarantee the offer is durable
@@ -69,11 +115,7 @@ async function createOffer(userId, picks) {
   const id = randomUUID();
   const offer = {
     userId,
-    picks: picks.map((p) => ({
-      id: p.id, name: p.name, types: p.types, tier: p.tier,
-      energyCost: p.energyCost, cardHp: p.cardHp, cardAttack: p.cardAttack,
-      sprite_front: p.sprite_front,
-    })),
+    picks: picks.map(toPickPayload),
     expiresAt: Date.now() + OFFER_TTL_SEC * 1000,
   };
   try {
@@ -173,11 +215,16 @@ function mount(app, supabase, getPokedex) {
     const koCount = Number(req.body?.kos) || 0;
     await bumpDailyStats(supabase, req.user.id, { matches: 1, wins: won ? 1 : 0, kos: koCount });
 
+    // Drop policy by difficulty (wins only — losses get nothing):
+    //   easy   → 0 cards (signal effort, not luck)
+    //   medium → 1 card from common/uncommon pool (T1-T2, no legendaries)
+    //   hard   → 1 card from rare/epic/legendary pool (T3-T5)
+    //   champion override → 5 picks, full pool, one guaranteed legendary
     let count = 0;
     let guaranteeLegendary = false;
+    let rollOpts = {};
     const difficulty = session.difficulty;
     if (championId && won) {
-      // Champion victory — chunky reward: 5 picks, one guaranteed legendary.
       count = 5;
       guaranteeLegendary = true;
       // Persist champion_wins for achievements (best-effort, ignore failures
@@ -194,16 +241,23 @@ function mount(app, supabase, getPokedex) {
       } catch (err) {
         console.warn("[rewards] champion_wins persist failed:", err.message);
       }
-    } else if (won && difficulty === "medium") count = 1;
-    else if (won && difficulty === "hard") count = 2;
-    else if (!won && difficulty === "hard") count = 1;
+    } else if (won && difficulty === "medium") {
+      count = 1;
+      rollOpts = {
+        weights: MEDIUM_WEIGHTS,
+        rarityFilter: (c) => !c.is_legendary && !c.is_mythical,
+      };
+    } else if (won && difficulty === "hard") {
+      count = 1;
+      rollOpts = { weights: HARD_WEIGHTS };
+    }
     if (count === 0) {
       return res.json({ reward: null, reason: "no_drop_for_difficulty" });
     }
     const gate = canClaimSolo(req.user.id);
     if (!gate.ok) return res.json({ reward: null, reason: gate.reason, retryAfterMs: gate.retryAfterMs });
 
-    let picks = rollPicks(pokedex, count);
+    let picks = rollPicks(pokedex, count, Math.random, rollOpts);
     if (guaranteeLegendary && !picks.some((p) => p.is_legendary || p.is_mythical)) {
       // Swap one pick out for a random legendary/mythical.
       const rares = pokedex.filter((p) => p.is_legendary || p.is_mythical);
@@ -215,11 +269,7 @@ function mount(app, supabase, getPokedex) {
     res.json({
       reward: {
         offerId,
-        picks: picks.map((p) => ({
-          id: p.id, name: p.name, types: p.types, tier: p.tier,
-          energyCost: p.energyCost, cardHp: p.cardHp, cardAttack: p.cardAttack,
-          sprite_front: p.sprite_front,
-        })),
+        picks: picks.map(toPickPayload),
       },
     });
   });
@@ -259,20 +309,34 @@ function mount(app, supabase, getPokedex) {
       return res.status(500).json({ error: `Couldn't read collection: ${err.message}` });
     }
     const newQty = (existing?.quantity || 0) + 1;
-    const { error } = await supabase
-      .from("owned_cards")
-      .upsert(
-        {
-          user_id: req.user.id,
-          pokemon_id: matched.id,
-          quantity: newQty,
-          acquired_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,pokemon_id" },
-      );
-    if (error) {
-      console.error("[rewards] upsert owned_cards failed:", error);
-      return res.status(500).json({ error: `Couldn't save card: ${error.message} (code ${error.code || "?"})` });
+    let upsertError;
+    try {
+      // supabase-js returns { error } on REST errors but can THROW on
+      // network failures, auth refresh issues, or timeouts. Catch both
+      // shapes so the client always gets JSON (not Express's default
+      // HTML 500), and so we don't burn the offer without explaining why.
+      ({ error: upsertError } = await supabase
+        .from("owned_cards")
+        .upsert(
+          {
+            user_id: req.user.id,
+            pokemon_id: matched.id,
+            quantity: newQty,
+            acquired_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,pokemon_id" },
+        ));
+    } catch (err) {
+      console.error("[rewards] upsert owned_cards threw:", err);
+      return res.status(500).json({
+        error: `Couldn't save card (network): ${err.message || "unknown error"}`,
+      });
+    }
+    if (upsertError) {
+      console.error("[rewards] upsert owned_cards failed:", upsertError);
+      return res.status(500).json({
+        error: `Couldn't save card: ${upsertError.message} (code ${upsertError.code || "?"})`,
+      });
     }
     res.json({ card: matched, newQuantity: newQty });
   });
@@ -288,13 +352,13 @@ async function offerForOutcome(userId, pokedex, didWin) {
   const offerId = await createOffer(userId, picks);
   return {
     offerId,
-    picks: picks.map((p) => ({
-      id: p.id, name: p.name, types: p.types, tier: p.tier,
-      energyCost: p.energyCost, cardHp: p.cardHp, cardAttack: p.cardAttack,
-      sprite_front: p.sprite_front,
-    })),
-    expiresAt: Date.now() + OFFER_TTL_MS,
+    picks: picks.map(toPickPayload),
+    expiresAt: Date.now() + OFFER_TTL_SEC * 1000,
   };
 }
 
-module.exports = { mount, offerForOutcome, rollPicks, weightedTier, createOffer };
+module.exports = {
+  mount, offerForOutcome, rollPicks, weightedTier, createOffer,
+  rarityForCard, toPickPayload,
+  DEFAULT_WEIGHTS, MEDIUM_WEIGHTS, HARD_WEIGHTS, RARITY_BY_TIER,
+};
