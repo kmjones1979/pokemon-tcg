@@ -187,8 +187,27 @@ function mount(app, supabase, getPokedex) {
   app.get("/api/story/chapter/:id/intro", (req, res) => {
     const chapter = getChapter(req.params.id);
     if (!chapter) return res.status(404).json({ error: "Unknown chapter." });
+    // Hydrate readAlong sections with audioUrls from the TTS manifest
+    // (same pattern as Reading Mode). Sections without audio still
+    // surface with audioUrl=null so the UI can show "Audio coming
+    // soon" gracefully.
+    let readAlong = null;
+    if (Array.isArray(chapter.readAlong)) {
+      const { loadManifest } = require("./reading-mode");
+      const manifest = loadManifest();
+      readAlong = chapter.readAlong.map((sec) => {
+        const entry = manifest[`chapter-intro/${chapter.id}/${sec.id}`];
+        return entry?.audioUrl
+          ? { ...sec, audioUrl: entry.audioUrl }
+          : { ...sec, audioUrl: null };
+      });
+    }
     res.json({
-      intro: chapter.intro,
+      // Kid-friendly read-along (slice 5d). Pre-existing
+      // `intro_v1` is also returned as `intro` for backwards
+      // compatibility — old clients still see the auto-timed lines.
+      readAlong,
+      intro: chapter.intro_v1 || chapter.intro || [],
       flavor: chapter.flavor,
       locale: chapter.locale,
       enemyTrainerName: chapter.enemyTrainerName,
@@ -217,11 +236,29 @@ function mount(app, supabase, getPokedex) {
         const { data: rows } = await supabase.from("pokemon").select("*").in("id", [...summonIds]);
         for (const r of rows || []) summonCards[r.id] = toCard(r);
       }
+      // Hydrate readAlong sections with audioUrl from the TTS manifest
+      // so the client doesn't need a second round-trip to /intro.
+      let readAlong = null;
+      if (Array.isArray(chapter.readAlong)) {
+        const { loadManifest } = require("./reading-mode");
+        const manifest = loadManifest();
+        readAlong = chapter.readAlong.map((sec) => {
+          const entry = manifest[`chapter-intro/${chapter.id}/${sec.id}`];
+          return entry?.audioUrl
+            ? { ...sec, audioUrl: entry.audioUrl }
+            : { ...sec, audioUrl: null };
+        });
+      }
       res.json({
         chapter: {
           id: chapter.id, name: chapter.name, locale: chapter.locale,
           isFinale: !!chapter.isFinale,
-          intro: chapter.intro,
+          // intro: legacy dramatic lines (intro_v1) for backwards
+          //        compat with older client builds.
+          // readAlong: kid-friendly section-by-section read-along
+          //        (slice 5d). Client prefers this when present.
+          intro: chapter.intro_v1 || chapter.intro || [],
+          readAlong,
           enemyTrainerName: chapter.enemyTrainerName,
           enemyAbility: chapter.enemyAbility || "lance",
         },

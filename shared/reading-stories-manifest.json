@@ -163,5 +163,110 @@
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-aoe-1.mp3",
     "voiceId": "JBFqnCBsd6RMkjVDRZzb",
     "generatedAt": "2026-05-24T14:37:43.926Z"
+  },
+  "chapter-intro/ch1_viridian/1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch1_viridian/1.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:32.974Z"
+  },
+  "chapter-intro/ch1_viridian/2": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch1_viridian/2.mp3",
+    "voiceId": "N2lVS1w4EtoT3dr4eOWO",
+    "generatedAt": "2026-05-24T14:54:33.533Z"
+  },
+  "chapter-intro/ch1_viridian/3": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch1_viridian/3.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:34.067Z"
+  },
+  "chapter-intro/ch1_viridian/4": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch1_viridian/4.mp3",
+    "voiceId": "Xb7hH8MSUJpSbSDYk0k2",
+    "generatedAt": "2026-05-24T14:54:34.568Z"
+  },
+  "chapter-intro/ch1_viridian/5": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch1_viridian/5.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:35.414Z"
+  },
+  "chapter-intro/ch2_mt_moon/1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch2_mt_moon/1.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:36.060Z"
+  },
+  "chapter-intro/ch2_mt_moon/2": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch2_mt_moon/2.mp3",
+    "voiceId": "XrExE9yKIg1WjnnlVkGX",
+    "generatedAt": "2026-05-24T14:54:36.563Z"
+  },
+  "chapter-intro/ch2_mt_moon/3": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch2_mt_moon/3.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:37.389Z"
+  },
+  "chapter-intro/ch2_mt_moon/4": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch2_mt_moon/4.mp3",
+    "voiceId": "XrExE9yKIg1WjnnlVkGX",
+    "generatedAt": "2026-05-24T14:54:37.859Z"
+  },
+  "chapter-intro/ch2_mt_moon/5": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch2_mt_moon/5.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:38.421Z"
+  },
+  "chapter-intro/ch3_cerulean_cave/1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch3_cerulean_cave/1.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:38.973Z"
+  },
+  "chapter-intro/ch3_cerulean_cave/2": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch3_cerulean_cave/2.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:39.947Z"
+  },
+  "chapter-intro/ch3_cerulean_cave/3": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch3_cerulean_cave/3.mp3",
+    "voiceId": "cjVigY5qzO86Huf0OWal",
+    "generatedAt": "2026-05-24T14:54:40.480Z"
+  },
+  "chapter-intro/ch3_cerulean_cave/4": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch3_cerulean_cave/4.mp3",
+    "voiceId": "cjVigY5qzO86Huf0OWal",
+    "generatedAt": "2026-05-24T14:54:40.964Z"
+  },
+  "chapter-intro/ch3_cerulean_cave/5": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch3_cerulean_cave/5.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:41.430Z"
+  },
+  "chapter-intro/finale_dragons_den/1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/finale_dragons_den/1.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:41.990Z"
+  },
+  "chapter-intro/finale_dragons_den/2": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/finale_dragons_den/2.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:42.533Z"
+  },
+  "chapter-intro/finale_dragons_den/3": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/finale_dragons_den/3.mp3",
+    "voiceId": "IKne3meq5aSn9XLyUdCD",
+    "generatedAt": "2026-05-24T14:54:43.076Z"
+  },
+  "chapter-intro/finale_dragons_den/4": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/finale_dragons_den/4.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:43.859Z"
+  },
+  "chapter-intro/finale_dragons_den/5": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/finale_dragons_den/5.mp3",
+    "voiceId": "IKne3meq5aSn9XLyUdCD",
+    "generatedAt": "2026-05-24T14:54:44.342Z"
+  },
+  "chapter-intro/finale_dragons_den/6": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/finale_dragons_den/6.mp3",
+    "voiceId": "JBFqnCBsd6RMkjVDRZzb",
+    "generatedAt": "2026-05-24T14:54:44.891Z"
   }
 }

@@ -31,6 +31,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { READING_STORIES } = require("../shared/reading-stories");
 const { BATTLE_EMOTES, EMOTE_VOICES } = require("../shared/battle-emotes");
+const { CHAPTERS } = require("../shared/story-chapters");
 
 const SECRETS_FILE = path.join(process.env.HOME || "", ".secrets", "pokemon.env");
 const MANIFEST_PATH = path.join(__dirname, "..", "shared", "reading-stories-manifest.json");
@@ -54,6 +55,11 @@ const SPEAKER_VOICES = {
   pidgey:     "N2lVS1w4EtoT3dr4eOWO", // Callum — husky trickster
   weedle:     "Xb7hH8MSUJpSbSDYk0k2", // Alice — small, clear
   snorlax:    "cjVigY5qzO86Huf0OWal", // Eric — smooth, trustworthy (deeper)
+  // Story Mode chapter speakers — boss + Champion characters.
+  beedrill:   "SOYHLrjzK2X1ezoPC6cr", // Harry — fierce warrior
+  onix:       "cjVigY5qzO86Huf0OWal", // Eric — deep, slow
+  mewtwo:     "cjVigY5qzO86Huf0OWal", // Eric — smooth, mysterious
+  lance:      "IKne3meq5aSn9XLyUdCD", // Charlie — deep, confident
 };
 
 const ELEVEN_MODEL = "eleven_turbo_v2_5"; // cheapest model that sounds good
@@ -132,26 +138,6 @@ async function ensureBucket(supabaseUrl, serviceKey) {
   console.log(`[tts] created Supabase Storage bucket "${BUCKET}" (public)`);
 }
 
-async function uploadMp3(supabaseUrl, serviceKey, storyId, sectionId, buf) {
-  const objectPath = `reading-stories/${storyId}/${sectionId}.mp3`;
-  // Use upsert so re-runs overwrite without 409.
-  const res = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${objectPath}`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${serviceKey}`,
-      "apikey": serviceKey,
-      "Content-Type": "audio/mpeg",
-      "x-upsert": "true",
-    },
-    body: buf,
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`upload failed ${res.status}: ${body.slice(0, 200)}`);
-  }
-  return `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${objectPath}`;
-}
-
 async function main() {
   loadDotEnv(SECRETS_FILE);
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -202,6 +188,25 @@ async function main() {
     });
     totalChars += emote.text.length;
   }
+  // Story Mode chapter intros (read-along).
+  for (const chapter of CHAPTERS) {
+    if (!Array.isArray(chapter.readAlong)) continue;
+    for (const sec of chapter.readAlong) {
+      const key = `chapter-intro/${chapter.id}/${sec.id}`;
+      const cached = manifest[key];
+      if (cached && !force) continue;
+      const voiceId = SPEAKER_VOICES[sec.speaker] || SPEAKER_VOICES.narrator;
+      plan.push({
+        kind: "chapter-intro",
+        chapterId: chapter.id,
+        sectionId: sec.id,
+        speaker: sec.speaker,
+        voiceId,
+        text: sec.text,
+      });
+      totalChars += sec.text.length;
+    }
+  }
 
   console.log(`[tts] Reading Mode TTS generation`);
   console.log(`[tts] Stories: ${READING_STORIES.length}`);
@@ -215,9 +220,9 @@ async function main() {
     console.log(`[tts] DRY RUN — re-run with --confirm to actually call ElevenLabs + upload to Supabase.`);
     console.log(`[tts] Sample plan items:`);
     for (const item of plan.slice(0, 5)) {
-      const id = item.kind === "story" ? `${item.storyId}/${item.sectionId}` : `emotes/${item.emoteId}`;
-      const speaker = item.kind === "story" ? item.speaker : item.event;
-      console.log(`        ${id} [${speaker} → ${item.voiceId}] "${item.text.slice(0, 60)}…"`);
+      const id = describePlanItem(item).id;
+      const label = describePlanItem(item).label;
+      console.log(`        ${id} [${label} → ${item.voiceId}] "${item.text.slice(0, 60)}…"`);
     }
     return;
   }
@@ -226,19 +231,11 @@ async function main() {
 
   let done = 0;
   for (const item of plan) {
-    const id = item.kind === "story"
-      ? `${item.storyId}/${item.sectionId}`
-      : `emotes/${item.emoteId}`;
-    const label = item.kind === "story" ? item.speaker : item.event;
+    const { id, label, objectPath } = describePlanItem(item);
     process.stdout.write(`[tts] ${done + 1}/${plan.length}  ${id} [${label}] … `);
     try {
       const mp3 = await elevenLabsTTS(apiKey, item.voiceId, item.text);
-      let url;
-      if (item.kind === "story") {
-        url = await uploadMp3(supabaseUrl, serviceKey, item.storyId, item.sectionId, mp3);
-      } else {
-        url = await uploadEmoteMp3(supabaseUrl, serviceKey, item.emoteId, mp3);
-      }
+      const url = await uploadAt(supabaseUrl, serviceKey, objectPath, mp3);
       manifest[id] = {
         audioUrl: url,
         voiceId: item.voiceId,
@@ -256,8 +253,37 @@ async function main() {
   console.log(`[tts] Done. Generated ${done} items. Manifest: ${MANIFEST_PATH}`);
 }
 
-async function uploadEmoteMp3(supabaseUrl, serviceKey, emoteId, buf) {
-  const objectPath = `emotes/${emoteId}.mp3`;
+// Plan items come in three flavours (story section, emote, chapter-
+// intro section). describePlanItem centralises how each renders for
+// log lines + which object path to upload to.
+function describePlanItem(item) {
+  if (item.kind === "story") {
+    return {
+      id:         `${item.storyId}/${item.sectionId}`,
+      label:      item.speaker,
+      objectPath: `reading-stories/${item.storyId}/${item.sectionId}.mp3`,
+    };
+  }
+  if (item.kind === "emote") {
+    return {
+      id:         `emotes/${item.emoteId}`,
+      label:      item.event,
+      objectPath: `emotes/${item.emoteId}.mp3`,
+    };
+  }
+  if (item.kind === "chapter-intro") {
+    return {
+      id:         `chapter-intro/${item.chapterId}/${item.sectionId}`,
+      label:      item.speaker,
+      objectPath: `chapter-intros/${item.chapterId}/${item.sectionId}.mp3`,
+    };
+  }
+  throw new Error(`unknown plan item kind: ${item.kind}`);
+}
+
+// Generic uploader — replaces uploadMp3 + uploadEmoteMp3, which were
+// nearly identical. Pass the full object path under the bucket.
+async function uploadAt(supabaseUrl, serviceKey, objectPath, buf) {
   const res = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${objectPath}`, {
     method: "POST",
     headers: {
@@ -270,7 +296,7 @@ async function uploadEmoteMp3(supabaseUrl, serviceKey, emoteId, buf) {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`emote upload failed ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(`upload ${objectPath} failed ${res.status}: ${body.slice(0, 200)}`);
   }
   return `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${objectPath}`;
 }

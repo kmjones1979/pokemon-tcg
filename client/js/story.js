@@ -97,7 +97,109 @@ function renderHub(chapters, progress) {
     b.addEventListener("click", () => startChapter(b.dataset.chapter)));
 }
 
+// Speaker → Pokédex ID for portraits. Mirrors the map in reading-mode.js
+// — kept separate so each module has zero cross-import for what's a
+// tiny static table.
+const INTRO_SPEAKER_TO_POKEMON_ID = {
+  narrator: null,
+  pikachu: 25, squirtle: 7, bulbasaur: 1, charmander: 4,
+  caterpie: 10, pidgey: 16, weedle: 13,
+  snorlax: 143, jigglypuff: 39, clefairy: 35,
+  beedrill: 15, mewtwo: 150, onix: 95,
+  lance: null, // human trainer — show a generic glyph instead
+};
+const POKEMON_SPRITE_URL = (id) =>
+  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+
+// Read-along chapter intro: section-by-section with Read Aloud TTS.
+// Kid-friendly fallback to the legacy line-by-line `intro` array if no
+// `readAlong` field is present on the chapter payload.
 async function playIntro(chapter) {
+  if (Array.isArray(chapter.readAlong) && chapter.readAlong.length > 0) {
+    return playReadAlong(chapter);
+  }
+  return playLegacyIntro(chapter);
+}
+
+function playReadAlong(chapter) {
+  return new Promise((resolve) => {
+    const sections = chapter.readAlong;
+    let idx = 0;
+    let audioEl = null;
+    const total = sections.length;
+
+    const stopAudio = () => { if (audioEl) { try { audioEl.pause(); } catch {} audioEl = null; } };
+
+    const renderSection = () => {
+      const sec = sections[idx];
+      const speaker = sec.speaker || "narrator";
+      const pokeId = INTRO_SPEAKER_TO_POKEMON_ID[speaker];
+      const sprite = pokeId ? POKEMON_SPRITE_URL(pokeId) : null;
+      const speakerName = speaker === "narrator" ? "Story" : speaker.charAt(0).toUpperCase() + speaker.slice(1);
+      const hasAudio = !!sec.audioUrl;
+      const audioBtnHtml = hasAudio
+        ? `<button class="reading-audio-btn" id="story-intro-audio">▶ Read aloud</button>`
+        : `<button class="reading-audio-btn disabled" disabled>🔇 Audio coming soon</button>`;
+      const nextLabel = idx === total - 1 ? "Begin battle ▸" : "Next ▶";
+
+      _stage.innerHTML = `
+        <div class="reading-mode story-intro-readalong">
+          <header class="reading-header reading-header-active">
+            <div class="intro-locale">${escape(chapter.locale)}</div>
+          </header>
+          <div class="reading-progress">
+            <div class="reading-progress-bar" style="width: ${Math.round(((idx + 1) / total) * 100)}%"></div>
+            <span class="reading-progress-label">Page ${idx + 1} of ${total}</span>
+          </div>
+          <article class="reading-section">
+            <div class="reading-speaker">
+              ${sprite ? `<img class="reading-speaker-portrait" src="${escape(sprite)}" alt="">`
+                       : `<div class="reading-speaker-glyph">📖</div>`}
+              <div class="reading-speaker-name">${escape(speakerName)}</div>
+            </div>
+            <p class="reading-text">${escape(sec.text)}</p>
+            <div class="reading-prompt">Read the words above out loud. Then press the button to hear them.</div>
+            <div class="reading-controls">${audioBtnHtml}</div>
+          </article>
+          <nav class="reading-nav">
+            <button class="reading-prev" ${idx === 0 ? "disabled" : ""}>◀ Previous</button>
+            <button class="reading-next">${nextLabel}</button>
+          </nav>
+        </div>
+      `;
+
+      const audioBtn = _stage.querySelector("#story-intro-audio");
+      if (audioBtn) {
+        audioBtn.addEventListener("click", () => {
+          if (!sec.audioUrl) return;
+          stopAudio();
+          audioEl = new Audio(sec.audioUrl);
+          audioEl.volume = 0.85;
+          audioEl.play().catch(() => {});
+        });
+      }
+      _stage.querySelector(".reading-prev").addEventListener("click", () => {
+        if (idx === 0) return;
+        stopAudio();
+        idx -= 1;
+        renderSection();
+      });
+      _stage.querySelector(".reading-next").addEventListener("click", () => {
+        stopAudio();
+        if (idx >= total - 1) { resolve(); return; }
+        idx += 1;
+        renderSection();
+      });
+    };
+
+    renderSection();
+  });
+}
+
+// Legacy auto-timed intro — fallback for chapters without readAlong.
+// Kept so newer chapter writers can ship dramatic-tone variants if
+// needed without breaking the contract.
+function playLegacyIntro(chapter) {
   return new Promise((resolve) => {
     const lines = chapter.intro || [];
     _stage.innerHTML = `
