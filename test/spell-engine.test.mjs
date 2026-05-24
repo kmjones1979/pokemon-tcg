@@ -178,3 +178,185 @@ test("Freeze → enemy attack attempt fails (engine refuses to attack while lock
   const atk = attack(state, "ai", 0, 0);
   assert.equal(atk.ok, false, "frozen attacker shouldn't be allowed to attack");
 });
+
+// =====================================================================
+// Slice 2 — additional effects: Paralyze, Heal, Defender, Evolve, AOE
+// =====================================================================
+
+const PARALYZE = spellToCard(SPELL_CARDS.find((s) => s.effect === "paralyze"));
+const HEAL     = spellToCard(SPELL_CARDS.find((s) => s.effect === "heal"));
+const DEFENDER = spellToCard(SPELL_CARDS.find((s) => s.effect === "defender"));
+const EVOLVE   = spellToCard(SPELL_CARDS.find((s) => s.effect === "evolve"));
+const AOE      = spellToCard(SPELL_CARDS.find((s) => s.effect === "aoe"));
+
+// Helper: put an instance on the player's field at slot N so we can
+// target it with own-field spells.
+function placeAlly(state, slot, card, currentHp = null) {
+  state.players.player.field[slot] = {
+    instanceId: "i" + card.id,
+    card,
+    currentHp: currentHp ?? card.cardHp,
+    maxHp: card.cardHp,
+    summoningSickness: false,
+    attackedThisTurn: false,
+    status: null,
+    attackBoost: 0,
+    level: 0,
+  };
+}
+
+// --- PARALYZE --------------------------------------------------------
+
+test("Paralyze applies paralyze status (locks enemy for 1 turn)", () => {
+  const enemy = pokemon(101);
+  const state = makeMatch({ playerHand: [PARALYZE], aiField: [enemy] });
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  const t = state.players.ai.field[0];
+  assert.equal(t.status.kind, "paralyze");
+  assert.equal(t.status.turnsLeft, 1);
+  assert.ok(isLockedOut(t), "paralyzed pokémon should be locked out");
+});
+
+// --- HEAL ------------------------------------------------------------
+
+test("Heal restores an ally to full HP (capped at maxHp)", () => {
+  const ally = pokemon(102, { hp: 10 });
+  const state = makeMatch({ playerHand: [HEAL] });
+  placeAlly(state, 0, ally, 3); // 3/10 HP
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  assert.equal(state.players.player.field[0].currentHp, 10);
+  assert.equal(r.healed, 7);
+});
+
+test("Heal on full-HP ally is a no-op (still consumes the spell)", () => {
+  // Intentional: the user spent the card; they don't get to take it
+  // back if they over-heal. Match the items/Potion contract.
+  const ally = pokemon(103, { hp: 8 });
+  const state = makeMatch({ playerHand: [HEAL] });
+  placeAlly(state, 0, ally, 8);
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  assert.equal(r.healed, 0);
+  assert.equal(state.players.player.hand.length, 0, "card still consumed");
+});
+
+test("Heal rejects an empty ally slot", () => {
+  const state = makeMatch({ playerHand: [HEAL] });
+  const r = playCard(state, "player", 0, { spellTarget: 2 });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /empty/i);
+});
+
+// --- DEFENDER --------------------------------------------------------
+
+test("Defender boosts max HP and marks the instance as a Defender", () => {
+  const ally = pokemon(104, { hp: 8 });
+  const state = makeMatch({ playerHand: [DEFENDER] });
+  placeAlly(state, 0, ally, 8);
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  const inst = state.players.player.field[0];
+  assert.equal(inst.maxHp, 8 + (DEFENDER.defenderHpBonus || 5));
+  assert.equal(inst.currentHp, 8 + (DEFENDER.defenderHpBonus || 5));
+  assert.equal(inst.isDefender, true);
+});
+
+test("Defender pulls aggro — opponents must attack the Defender first", () => {
+  // Two allies on the field. Spell-mark the second one as Defender.
+  // Enemy tries to attack the unmarked one (slot 0) → engine refuses
+  // with "must attack Guardian" reason.
+  const decoyAlly = pokemon(105, { hp: 6, atk: 3 });
+  const defAlly   = pokemon(106, { hp: 6, atk: 3 });
+  const enemy     = pokemon(107, { hp: 6, atk: 3 });
+  const state = makeMatch({ playerHand: [DEFENDER], aiField: [enemy] });
+  placeAlly(state, 0, decoyAlly);
+  placeAlly(state, 1, defAlly);
+  const r1 = playCard(state, "player", 0, { spellTarget: 1 });
+  assert.equal(r1.ok, true);
+
+  // Switch to AI turn and try attacking the decoy (slot 0). Should
+  // refuse — Defender at slot 1 must be attacked first.
+  state.activePlayer = "ai";
+  state.players.ai.field[0].summoningSickness = false;
+  const r2 = attack(state, "ai", 0, 0);
+  assert.equal(r2.ok, false, "should be forced to attack the Defender first");
+  // Attacking the Defender (slot 1) succeeds.
+  const r3 = attack(state, "ai", 0, 1);
+  assert.equal(r3.ok, true);
+});
+
+// --- EVOLVE ----------------------------------------------------------
+
+test("Evolve multiplies max HP by 1.5 and adds attack boost (≥ +1)", () => {
+  const ally = pokemon(108, { hp: 8, atk: 4 });
+  const state = makeMatch({ playerHand: [EVOLVE], playerEnergy: 5 });
+  placeAlly(state, 0, ally, 8);
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  const inst = state.players.player.field[0];
+  assert.equal(inst.maxHp, Math.ceil(8 * 1.5)); // 12
+  assert.equal(inst.attackBoost, Math.ceil(4 * 0.5)); // +2
+  assert.equal(inst.evolved, true);
+});
+
+test("Evolve heals proportionally (not just maxHp bump on paper)", () => {
+  // If a 5/10 ally evolves to maxHp 15, currentHp should go to 10 — they
+  // GAIN the hp delta (15-10 = +5). Avoids the bug where "max +50%"
+  // looks great on paper but the pokémon stays low-HP.
+  const ally = pokemon(109, { hp: 10, atk: 4 });
+  const state = makeMatch({ playerHand: [EVOLVE], playerEnergy: 5 });
+  placeAlly(state, 0, ally, 5);
+  playCard(state, "player", 0, { spellTarget: 0 });
+  const inst = state.players.player.field[0];
+  assert.equal(inst.maxHp, 15);
+  assert.equal(inst.currentHp, 10, "currentHp should rise by the same delta as maxHp");
+});
+
+// --- AOE -------------------------------------------------------------
+
+test("AOE deals damage to every enemy on the field", () => {
+  const e1 = pokemon(120, { hp: 10 });
+  const e2 = pokemon(121, { hp: 10 });
+  const e3 = pokemon(122, { hp: 10 });
+  const state = makeMatch({ playerHand: [AOE], aiField: [e1, e2, e3], playerEnergy: 5 });
+  const r = playCard(state, "player", 0, {});
+  assert.equal(r.ok, true);
+  const dmg = AOE.aoeDamage;
+  assert.equal(state.players.ai.field[0].currentHp, 10 - dmg);
+  assert.equal(state.players.ai.field[1].currentHp, 10 - dmg);
+  assert.equal(state.players.ai.field[2].currentHp, 10 - dmg);
+  assert.equal(r.hits, 3);
+});
+
+test("AOE KO's low-HP enemies and pushes their cards to discard", () => {
+  const lowHp = pokemon(123, { hp: 2 }); // ≤ AOE damage (4)
+  const tank  = pokemon(124, { hp: 10 });
+  const state = makeMatch({ playerHand: [AOE], aiField: [lowHp, tank], playerEnergy: 5 });
+  const r = playCard(state, "player", 0, {});
+  assert.equal(r.ok, true);
+  assert.equal(r.kos, 1);
+  assert.equal(state.players.ai.field[0], null, "KO'd slot should clear");
+  assert.equal(state.players.ai.discard.length, 1);
+});
+
+test("AOE on an empty enemy board is refused (no wasted card)", () => {
+  const state = makeMatch({ playerHand: [AOE], playerEnergy: 5 });
+  const before = state.players.player.energy;
+  const r = playCard(state, "player", 0, {});
+  assert.equal(r.ok, false);
+  // No state mutation if refused.
+  assert.equal(state.players.player.energy, before);
+  assert.equal(state.players.player.hand.length, 1);
+});
+
+test("AOE doesn't need a target slot (target = none)", () => {
+  // Sanity check: passing a spellTarget to AOE should be ignored, not
+  // rejected. The catalog says target=none.
+  const e = pokemon(125, { hp: 10 });
+  const state = makeMatch({ playerHand: [AOE], aiField: [e], playerEnergy: 5 });
+  const r = playCard(state, "player", 0, { spellTarget: 999 }); // bogus
+  assert.equal(r.ok, true);
+  assert.equal(state.players.ai.field[0].currentHp, 10 - AOE.aoeDamage);
+});

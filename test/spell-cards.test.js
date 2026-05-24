@@ -94,28 +94,27 @@ test("isSpellCard distinguishes spells from Pokémon", () => {
   assert.equal(isSpellCard(undefined), false);
 });
 
-test("isActiveSpellEffect gates ship-readiness", () => {
-  // Slice 1 ships only freeze. The other five effects are designed but
-  // not yet wired into the engine — they MUST report inactive so the
-  // catalog doesn't surface them to drops / decks.
+test("isActiveSpellEffect: all six designed effects are active in slice 2", () => {
   assert.equal(isActiveSpellEffect("freeze"), true);
-  assert.equal(isActiveSpellEffect("paralyze"), false);
-  assert.equal(isActiveSpellEffect("heal"), false);
-  assert.equal(isActiveSpellEffect("defender"), false);
-  assert.equal(isActiveSpellEffect("evolve"), false);
-  assert.equal(isActiveSpellEffect("aoe"), false);
-  // Unknown effect names report false (not a crash).
+  assert.equal(isActiveSpellEffect("paralyze"), true);
+  assert.equal(isActiveSpellEffect("heal"), true);
+  assert.equal(isActiveSpellEffect("defender"), true);
+  assert.equal(isActiveSpellEffect("evolve"), true);
+  assert.equal(isActiveSpellEffect("aoe"), true);
+  // Unknown effect names still report false (not a crash).
   assert.equal(isActiveSpellEffect("unknown"), false);
 });
 
-test("allSpellCards() returns ONLY active effects, never the designed-but-unwired ones", () => {
+test("allSpellCards() returns all six active spells", () => {
   const cards = allSpellCards();
   for (const c of cards) {
     assert.ok(ACTIVE_EFFECTS.has(c.effect), `${c.name} (${c.effect}) leaked into active spells`);
   }
-  // Slice 1: exactly one card ships.
-  assert.equal(cards.length, 1);
-  assert.equal(cards[0].effect, "freeze");
+  assert.equal(cards.length, 6);
+  const effects = new Set(cards.map((c) => c.effect));
+  for (const e of ["freeze", "paralyze", "heal", "defender", "evolve", "aoe"]) {
+    assert.ok(effects.has(e), `missing ${e} from active spell catalog`);
+  }
 });
 
 test("spellById looks up by Pokémon-card id and returns a card-shaped object", () => {

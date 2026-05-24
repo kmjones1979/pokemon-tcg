@@ -100,14 +100,14 @@ test("a player can override spellCount (e.g. 0 disables spells for a draft mode)
   assert.equal(deck.filter(isSpellCard).length, 0);
 });
 
-test("during slice 1, every spell in the deck is Freeze (only active effect)", () => {
-  // Pins the slice-1 contract: only freeze is wired, so the catalog's
-  // active-spell filter means no other spell can sneak into a deck.
+test("with all six spells active, decks include a mix (not just Freeze)", () => {
+  // Slice 2 contract: any of the six effects can appear in a deck.
+  // Across 30 trials we should see at least 3 distinct effects.
   const dex = [...synthPokemon(100), ...allSpellCards()];
-  const deck = buildDeck(dex, { seed: "slice-1-pin" });
-  const spells = deck.filter(isSpellCard);
-  assert.equal(spells.length, 10);
-  for (const s of spells) {
-    assert.equal(s.effect, "freeze", `unexpected spell effect: ${s.effect}`);
+  const seenEffects = new Set();
+  for (let i = 0; i < 30 && seenEffects.size < 6; i++) {
+    const deck = buildDeck(dex, { seed: `mix-${i}` });
+    for (const s of deck.filter(isSpellCard)) seenEffects.add(s.effect);
   }
+  assert.ok(seenEffects.size >= 3, `expected ≥3 distinct spell effects across 30 decks, got ${seenEffects.size}: ${[...seenEffects].join(", ")}`);
 });

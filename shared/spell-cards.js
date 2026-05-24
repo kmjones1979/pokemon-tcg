@@ -37,8 +37,12 @@ const SPELL_BASE_ID = 10000;
 // next vertical slice has a target, but won't drop until their engine
 // + UI integration ships.
 const ACTIVE_EFFECTS = new Set([
-  "freeze", // slice 1: lock one enemy for 1 turn
-  // TODO future slices: paralyze, heal, defender, evolve, aoe
+  "freeze",   // slice 1: lock one enemy for 1 turn
+  "paralyze", // slice 2: paralyze one enemy for 1 turn
+  "heal",     // slice 2: restore one ally to full HP
+  "defender", // slice 2: +5 max HP + force opponents to target this ally
+  "evolve",   // slice 2: +50% max HP and +50% attack on one ally
+  "aoe",      // slice 2: deal flat damage to every enemy on field
 ]);
 
 const SPELL_CARDS = [

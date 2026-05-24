@@ -376,38 +376,160 @@ export function mulliganHand(state, side, indices = [], { rand = Math.random } =
 // error reason if invalid, and (c) on success pay energy + remove from
 // hand + push to discard. Logging happens INSIDE each branch so the
 // message references the right card/target.
+// Helpers for spell handlers. Each spell does three things on success:
+// (1) mutate state, (2) pay energy, (3) move the card from hand →
+// discard. consumeSpell wraps (2)+(3) so each handler only has to
+// worry about the unique mutation.
+function consumeSpell(p, handIndex, card, cost) {
+  p.energy -= cost;
+  p.hand.splice(handIndex, 1);
+  p.discard.push(card);
+}
+
+function requireEnemyTarget(state, side, spellTarget, verb) {
+  if (!Number.isInteger(spellTarget) || spellTarget < 0 || spellTarget >= FIELD_SIZE) {
+    return { err: { ok: false, reason: `Pick an enemy Pokémon to ${verb}` } };
+  }
+  const otherSide = side === "player" ? "ai" : "player";
+  const enemy = state.players[otherSide].field[spellTarget];
+  if (!enemy) return { err: { ok: false, reason: "That slot is empty" } };
+  return { enemy, otherSide };
+}
+
+function requireAllyTarget(state, side, spellTarget, verb) {
+  if (!Number.isInteger(spellTarget) || spellTarget < 0 || spellTarget >= FIELD_SIZE) {
+    return { err: { ok: false, reason: `Pick one of your Pokémon to ${verb}` } };
+  }
+  const ally = state.players[side].field[spellTarget];
+  if (!ally) return { err: { ok: false, reason: "That slot is empty" } };
+  return { ally };
+}
+
 function playSpellCard(state, side, handIndex, card, cost, { spellTarget = null } = {}) {
   const p = state.players[side];
   const otherSide = side === "player" ? "ai" : "player";
   switch (card.effect) {
+
+    // -------- FREEZE --------------------------------------------------
+    // Lock one enemy Pokémon for 1 turn. Reuses the same status pipe
+    // paralyze/sleep use — battle.isLockedOut() recognises "freeze"
+    // and tickStatus expires it after one tick.
     case "freeze": {
-      if (!Number.isInteger(spellTarget) || spellTarget < 0 || spellTarget >= FIELD_SIZE) {
-        return { ok: false, reason: "Pick an enemy Pokémon to freeze" };
-      }
-      const enemy = state.players[otherSide].field[spellTarget];
-      if (!enemy) return { ok: false, reason: "That slot is empty" };
-      // Apply freeze status — battle.isLockedOut() recognises "freeze"
-      // and gates the enemy's next attack. tickStatus decrements
-      // turnsLeft each turn and removes the status when it hits 0.
-      enemy.status = { kind: "freeze", turnsLeft: 1 };
-      p.energy -= cost;
-      p.hand.splice(handIndex, 1);
-      p.discard.push(card);
-      log(state, `❄ ${card.name}: ${enemy.card.name} was frozen solid!`, "status");
-      return {
-        ok: true,
-        spell: card,
-        effect: "freeze",
-        targetSide: otherSide,
-        targetSlot: spellTarget,
-        targetName: enemy.card.name,
-      };
+      const r = requireEnemyTarget(state, side, spellTarget, "freeze");
+      if (r.err) return r.err;
+      r.enemy.status = { kind: "freeze", turnsLeft: 1 };
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `❄ ${card.name}: ${r.enemy.card.name} was frozen solid!`, "status");
+      return { ok: true, spell: card, effect: "freeze", targetSide: r.otherSide, targetSlot: spellTarget, targetName: r.enemy.card.name };
     }
+
+    // -------- PARALYZE -----------------------------------------------
+    // Same lockout shape as freeze, different status kind so the
+    // animation + log read as paralysis. Both decrement via tickStatus.
+    case "paralyze": {
+      const r = requireEnemyTarget(state, side, spellTarget, "paralyze");
+      if (r.err) return r.err;
+      r.enemy.status = { kind: "paralyze", turnsLeft: 1 };
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `⚡ ${card.name}: ${r.enemy.card.name} is paralyzed!`, "status");
+      return { ok: true, spell: card, effect: "paralyze", targetSide: r.otherSide, targetSlot: spellTarget, targetName: r.enemy.card.name };
+    }
+
+    // -------- HEAL ----------------------------------------------------
+    // Restore one ally to its current max HP. Cheap to compute, doesn't
+    // overheal past maxHp (the cap a Defender / Evolve has already
+    // raised, if applicable).
+    case "heal": {
+      const r = requireAllyTarget(state, side, spellTarget, "heal");
+      if (r.err) return r.err;
+      const cap = r.ally.maxHp ?? r.ally.card.cardHp;
+      const before = r.ally.currentHp;
+      r.ally.currentHp = cap;
+      const healed = r.ally.currentHp - before;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `💚 ${card.name}: ${r.ally.card.name} restored ${healed} HP (full).`, "status");
+      return { ok: true, spell: card, effect: "heal", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name, healed };
+    }
+
+    // -------- DEFENDER -----------------------------------------------
+    // Raises one ally's max HP and marks the instance as a Defender so
+    // attack() routes incoming damage to it first. The marker lives on
+    // the instance (not the card), so it travels with this specific
+    // copy on the field and doesn't bleed to other instances of the
+    // same Pokémon. Stacking: a second Defender re-applies the bonus
+    // (incremental, by design — you can pile guard on the same target).
+    case "defender": {
+      const r = requireAllyTarget(state, side, spellTarget, "defend");
+      if (r.err) return r.err;
+      const bonus = Math.max(1, card.defenderHpBonus || 5);
+      const oldMax = r.ally.maxHp ?? r.ally.card.cardHp;
+      r.ally.maxHp = oldMax + bonus;
+      r.ally.currentHp = r.ally.currentHp + bonus;
+      r.ally.isDefender = true;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `🛡 ${card.name}: ${r.ally.card.name} braces (+${bonus} HP, must be attacked first).`, "status");
+      return { ok: true, spell: card, effect: "defender", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name };
+    }
+
+    // -------- EVOLVE --------------------------------------------------
+    // Multiplies one ally's max HP and adds an attack boost. The boost
+    // rides on the instance's attackBoost field (same as shiny/level
+    // mechanics) so attack-damage math stays unified. Marks evolved=
+    // true so the UI can show a sparkle.
+    case "evolve": {
+      const r = requireAllyTarget(state, side, spellTarget, "evolve");
+      if (r.err) return r.err;
+      const hpMult  = card.evolveHpMult  || 1.5;
+      const atkMult = card.evolveAtkMult || 1.5;
+      const oldMax = r.ally.maxHp ?? r.ally.card.cardHp;
+      const newMax = Math.max(oldMax + 1, Math.ceil(oldMax * hpMult));
+      const hpGain = newMax - oldMax;
+      r.ally.maxHp = newMax;
+      r.ally.currentHp = r.ally.currentHp + hpGain;
+      const baseAtk = r.ally.card.cardAttack || 0;
+      const atkGain = Math.max(1, Math.ceil(baseAtk * (atkMult - 1)));
+      r.ally.attackBoost = (r.ally.attackBoost || 0) + atkGain;
+      r.ally.evolved = true;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `✨ ${card.name}: ${r.ally.card.name} evolved! +${hpGain} HP, +${atkGain} ATK.`, "status");
+      return { ok: true, spell: card, effect: "evolve", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name, hpGain, atkGain };
+    }
+
+    // -------- AOE -----------------------------------------------------
+    // Deal flat damage to every enemy on the field. No target picker
+    // (target=null). KO'd Pokémon land in the opponent's discard pile.
+    // Damage scaling is intentionally low (4 HP default) — most card
+    // HPs are 3-10 so tier-1s die but tier-3+ survive the wipe.
+    case "aoe": {
+      const dmg = Math.max(1, card.aoeDamage || 4);
+      const enemies = state.players[otherSide].field;
+      let hits = 0;
+      let kos = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (!e) continue;
+        const dealt = Math.min(e.currentHp, dmg);
+        e.currentHp -= dealt;
+        hits++;
+        if (e.currentHp <= 0) {
+          state.players[otherSide].discard.push(e.card);
+          enemies[i] = null;
+          kos++;
+        }
+      }
+      if (hits === 0) {
+        // Refuse to fire if there's nothing to hit (no wasted card).
+        return { ok: false, reason: "No enemies on the field to hit." };
+      }
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `💥 ${card.name}: dealt ${dmg} to ${hits} enemy Pokémon${kos > 0 ? ` (${kos} KO)` : ""}.`, "status");
+      return { ok: true, spell: card, effect: "aoe", targetSide: otherSide, damage: dmg, hits, kos };
+    }
+
     default:
-      // Slice 1 only ships Freeze. Other effects in the catalog are
-      // "designed" but not yet wired; refuse to play them so a player
-      // who somehow has one in hand sees a clear error instead of a
-      // silent failure.
+      // Catalog effect that the engine hasn't been taught about yet.
+      // Shouldn't be reachable while ACTIVE_EFFECTS gates the catalog,
+      // but the safety net keeps any future addition from crashing.
       return { ok: false, reason: `${card.name} isn't ready to cast yet.` };
   }
 }
@@ -540,7 +662,11 @@ export function attack(
   // MUST target a Guardian first.
   const guardians = o.field
     .map((inst, slot) => ({ inst, slot }))
-    .filter(({ inst }) => inst && isGuardian(inst.card));
+    // A slot is "guardian-routed" if either the CARD has Guardian
+    // (legendary / tank / type-passive) OR the INSTANCE has been
+    // turned into a Defender by the spell. Same routing rule applies
+    // to both: opponents must clear guardians/defenders first.
+    .filter(({ inst }) => inst && (isGuardian(inst.card) || inst.isDefender));
   if (guardians.length > 0 && target !== "trainer") {
     if (!guardians.some((g) => g.slot === target)) {
       return { ok: false, reason: "Must attack a Guardian (🛡) first" };
