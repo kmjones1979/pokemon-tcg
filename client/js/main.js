@@ -320,6 +320,7 @@ function renderMenu() {
           <button class="mode-btn" id="mode-trade" ${currentUser ? "" : "disabled"} title="${currentUser ? "Trade cards with other trainers" : "Sign in to trade"}">🔄 Trade Cards</button>
           <button class="mode-btn puzzle-launch" id="mode-puzzle" title="Today's chess-style card puzzle">🧩 Daily Puzzle</button>
           <button class="mode-btn" id="mode-reading" title="Read along with Pokémon friends">📚 Story Time</button>
+          <button class="mode-btn" id="mode-explore" title="Browse every Pokémon in the Pokédex">🔍 Explore</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -506,6 +507,7 @@ function renderMenu() {
   $("#mode-trade")?.addEventListener("click", () => trading.openTradeMarket({ currentUser }));
   $("#mode-puzzle")?.addEventListener("click", () => puzzle.openPuzzle({ currentUser }));
   $("#mode-reading")?.addEventListener("click", openReadingMode);
+  $("#mode-explore")?.addEventListener("click", openExplore);
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).
@@ -884,6 +886,13 @@ async function startChampionFight(championId) {
   } catch (err) {
     alert("Couldn't start: " + (err.message || "unknown"));
   }
+}
+
+// Opens the Pokédex Explore overlay. Lazy-loads so the ~6KB module +
+// CSS only ship when the player actually clicks Explore.
+async function openExplore() {
+  const mod = await import("./explore.js");
+  await mod.open();
 }
 
 // Opens the kid-friendly read-along Reading Mode as an overlay. The

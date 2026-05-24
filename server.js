@@ -238,6 +238,42 @@ app.get("/api/pokedex/size", async (_req, res) => {
 // Lightweight Pokédex search — used by the trade UI's "what do you want"
 // picker. Returns up to 50 matches by case-insensitive name substring or
 // by ID. No auth.
+// Public "Explore" endpoint — every Pokémon in the in-memory pokedex
+// with the full detail set the detail panel needs (sprite, types,
+// tier, rarity, card stats, raw stats, flavor, abilities, legendary
+// flags). Excludes spell cards via the kind filter. Cached in-memory
+// already; the response is ~1MB so we lean on HTTP cache headers
+// rather than hand-rolling pagination.
+app.get("/api/pokedex/all", async (_req, res) => {
+  await ensurePokedex();
+  const rows = pokedex
+    .filter((c) => c.kind !== "spell")
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      sprite_front: c.sprite_front,
+      sprite_back: c.sprite_back,
+      types: c.types,
+      generation: c.generation,
+      bst: c.bst,
+      tier: c.tier,
+      rarity: c.rarity,
+      energyCost: c.energyCost,
+      cardHp: c.cardHp,
+      cardAttack: c.cardAttack,
+      is_legendary: !!c.is_legendary,
+      is_mythical: !!c.is_mythical,
+      flavor_text: c.flavor_text,
+      abilities: c.abilities || [],
+      raw: c.raw,
+    }));
+  // Cache for 10 minutes — the dex doesn't change at runtime, so even
+  // long-tab users don't need fresh data.
+  res.set("Cache-Control", "public, max-age=600");
+  res.json({ count: rows.length, rows });
+});
+
 app.get("/api/pokedex/search", async (req, res) => {
   await ensurePokedex();
   const q = String(req.query.q || "").trim().toLowerCase();
