@@ -344,7 +344,14 @@ function mount(app, supabase, getPokedex) {
       let r;
       switch (action) {
         case "play-card":
-          r = engine.playCard(m.state, side, payload.handIndex, { replaceSlot: payload.replaceSlot });
+          // spellTarget is only meaningful for spell cards; the engine
+          // ignores it for Pokémon plays. Forwarding it unconditionally
+          // keeps the MP server thin — the client decides which fields
+          // are relevant per card kind.
+          r = engine.playCard(m.state, side, payload.handIndex, {
+            replaceSlot: payload.replaceSlot,
+            spellTarget: payload.spellTarget,
+          });
           if (r?.ok) m.lastAnim = { kind: "summon", side, slot: r.slot, cardName: r.instance?.card?.name, type: r.instance?.card?.types?.[0] };
           break;
         case "attack":

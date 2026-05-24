@@ -7,7 +7,7 @@
 //   cancelMatch()
 //   createPrivateRoom(opts)
 //   joinPrivateRoom(code, opts)
-//   playCard(handIndex, replaceSlot?)
+//   playCard(handIndex, replaceSlot?, spellTarget?)
 //   attack(fromSlot, target, abilityId)
 //   endTurn()
 //   concede()
@@ -241,8 +241,13 @@ async function postAction(action, payload) {
   }
 }
 
-export function playCard(handIndex, replaceSlot = null) {
-  postAction("play-card", { handIndex, replaceSlot });
+export function playCard(handIndex, replaceSlot = null, spellTarget = null) {
+  // replaceSlot — only meaningful for Pokémon plays when the field is
+  //   full (the slot to sacrifice).
+  // spellTarget — only meaningful for spell cards (the slot to target
+  //   on the enemy or own field). The server forwards both to the
+  //   engine; the engine ignores irrelevant ones per card kind.
+  postAction("play-card", { handIndex, replaceSlot, spellTarget });
 }
 export function attack(fromSlot, target, abilityId = "basic") {
   postAction("attack", { fromSlot, target, abilityId });

@@ -1705,11 +1705,11 @@ async function onSlotClick(side, slot) {
     const { handIndex } = pendingSpell;
     pendingSpell = null;
     if (gameMode === "mp") {
-      // Multiplayer not wired for spells in slice 1 — fall back to
-      // local resolution so single-player still works. Solo + story
-      // are the primary surfaces for spells until the MP path lands.
-      flashVerdict("Spells aren't supported in multiplayer yet", "weak");
-      render();
+      // Server resolves the play and broadcasts the canonical state.
+      // We pass slot as spellTarget; replaceSlot stays null (spells
+      // never replace a field slot).
+      sfxCardPlay();
+      mp.playCard(handIndex, null, slot);
       return;
     }
     const r = playCard(state, "player", handIndex, { spellTarget: slot });

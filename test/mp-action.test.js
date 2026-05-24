@@ -406,3 +406,82 @@ test("every action response across all failure modes is JSON", async () => {
     assert.ok(r.json !== null, `expected parseable JSON, got: ${r.body.slice(0, 100)}`);
   }
 });
+
+// =====================================================================
+// Slice 4 — spell-card payload plumbing through MP action handler
+// =====================================================================
+
+test("MP play-card forwards spellTarget to engine.playCard", async () => {
+  // Set up a match where the player holds a Freeze spell and the AI
+  // has a Pokémon on field. Then send a play-card action with
+  // payload.spellTarget = 0. After the action, the AI's slot 0 should
+  // have status.kind = "freeze".
+  const { spellToCard, SPELL_CARDS } = require("../shared/spell-cards");
+  const FREEZE = spellToCard(SPELL_CARDS.find((s) => s.effect === "freeze"));
+  const matchId = "m-mp-spell-fwd";
+  const enemyInst = {
+    instanceId: "i-enemy",
+    card: { id: 200, name: "Foe", types: ["normal"], tier: 2, cardHp: 8, cardAttack: 4,
+            energyCost: 1, raw: { hp: 80, attack: 60, defense: 30, sp_attack: 0, sp_defense: 30, speed: 30 } },
+    currentHp: 8, maxHp: 8, summoningSickness: false, attackedThisTurn: false, status: null,
+    attackBoost: 0, level: 0,
+  };
+  const seedMatch = makeMatchRecord(matchId, "p1", { playerUserId: "u1" });
+  seedMatch.players.ai.userId = "u-ai";
+  // Engine expects 5-slot fields and phase "main" — the stub
+  // makeMatchRecord ships 3-slot + "play" so we expand here.
+  seedMatch.state.players.player.field = [null, null, null, null, null];
+  seedMatch.state.players.ai.field = [null, null, null, null, null];
+  seedMatch.state.players.player.hand = [FREEZE];
+  seedMatch.state.players.player.energy = 5;
+  seedMatch.state.players.player.maxEnergy = 10;
+  seedMatch.state.players.player.discard = [];
+  seedMatch.state.players.ai.field[0] = enemyInst;
+  // Make 'player' the active side so the play-card action passes the
+  // engine's turn check.
+  seedMatch.state.activePlayer = "player";
+  seedMatch.state.phase = "main";
+
+  store.roomWithLock = async (_id, fn) => { await fn(seedMatch); };
+  store.roomGet = async () => seedMatch;
+
+  const r = await postJson(`/api/mp/match/${matchId}/action`, {
+    playerId: "p1",
+    action: "play-card",
+    payload: { handIndex: 0, spellTarget: 0 },
+  });
+  resetStore();
+  assert.equal(r.status, 200, `expected 200, got ${r.status}, body: ${r.body.slice(0,200)}`);
+  // Engine should have applied the freeze status to enemy slot 0.
+  assert.equal(enemyInst.status?.kind, "freeze", "freeze status should be on enemy slot");
+});
+
+test("MP play-card without spellTarget on a spell returns engine error (JSON)", async () => {
+  // Confirms that a malformed/missing spellTarget still produces a
+  // JSON {error}, not an HTML crash. Belt-and-suspenders for the
+  // new payload field.
+  const { spellToCard, SPELL_CARDS } = require("../shared/spell-cards");
+  const FREEZE = spellToCard(SPELL_CARDS.find((s) => s.effect === "freeze"));
+  const matchId = "m-mp-spell-noargs";
+  const seedMatch = makeMatchRecord(matchId, "p1");
+  seedMatch.state.players.player.field = [null, null, null, null, null];
+  seedMatch.state.players.ai.field = [null, null, null, null, null];
+  seedMatch.state.players.player.discard = [];
+  seedMatch.state.players.player.hand = [FREEZE];
+  seedMatch.state.players.player.energy = 5;
+  seedMatch.state.players.player.maxEnergy = 10;
+  seedMatch.state.activePlayer = "player";
+  seedMatch.state.phase = "main";
+  store.roomWithLock = async (_id, fn) => { await fn(seedMatch); };
+  store.roomGet = async () => seedMatch;
+  const r = await postJson(`/api/mp/match/${matchId}/action`, {
+    playerId: "p1",
+    action: "play-card",
+    payload: { handIndex: 0 /* no spellTarget */ },
+  });
+  resetStore();
+  // The engine refuses (no target), so the MP handler returns 400.
+  assert.equal(r.status, 400);
+  assert.ok((r.headers["content-type"] || "").includes("application/json"));
+  assert.match(r.json.error, /pick.*enemy/i);
+});
