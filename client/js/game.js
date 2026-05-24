@@ -989,15 +989,90 @@ const POLICIES = {
   hard:   { pickCard: "smartSig",  pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart" },
 };
 
+// True if a spell can actually do something useful given the current
+// board state. Used by the AI to skip a spell when its target type is
+// absent (Heal with no allies, AOE with no enemies, etc.) — playing
+// it anyway would either fail at the engine or burn the card on
+// nothing.
+function spellPlayable(card, ai, opp) {
+  if (card.kind !== "spell") return true;
+  switch (card.effect) {
+    case "freeze":
+    case "paralyze":
+      return opp?.field?.some((s) => s !== null) ?? false;
+    case "aoe":
+      // Worth burning the 4-energy spell only if 2+ enemies share the board.
+      return (opp?.field?.filter((s) => s !== null).length || 0) >= 2;
+    case "heal":
+      return ai?.field?.some((s) => s !== null && s.currentHp < (s.maxHp ?? s.card?.cardHp ?? 1)) ?? false;
+    case "defender":
+    case "evolve":
+      return ai?.field?.some((s) => s !== null) ?? false;
+    default:
+      return false;
+  }
+}
+
+// Pick the best target slot for a spell given the current board.
+// Returns a slot index for targeted spells, or null for AOE / unknown.
+// Strategy per effect:
+//   freeze/paralyze → highest effective-attack enemy (shut down their hitter)
+//   heal            → lowest HP fraction ally (most efficient heal)
+//   defender/evolve → highest base-attack ally (protect/boost the threat)
+//   aoe             → no target needed
+function aiPickSpellTarget(state, side, card) {
+  const ai = state.players[side];
+  const opp = state.players[side === "ai" ? "player" : "ai"];
+  const enemyField = opp.field;
+  const allyField  = ai.field;
+  switch (card.effect) {
+    case "freeze":
+    case "paralyze": {
+      let best = null, bestScore = -Infinity;
+      for (let i = 0; i < enemyField.length; i++) {
+        const e = enemyField[i];
+        if (!e) continue;
+        const atk = (e.card?.cardAttack || 0) + (e.attackBoost || 0);
+        if (atk > bestScore) { bestScore = atk; best = i; }
+      }
+      return best;
+    }
+    case "heal": {
+      let best = null, bestFrac = Infinity;
+      for (let i = 0; i < allyField.length; i++) {
+        const a = allyField[i];
+        if (!a) continue;
+        const cap = a.maxHp ?? a.card?.cardHp ?? 1;
+        const frac = a.currentHp / cap;
+        if (frac < bestFrac) { bestFrac = frac; best = i; }
+      }
+      return best;
+    }
+    case "defender":
+    case "evolve": {
+      let best = null, bestScore = -Infinity;
+      for (let i = 0; i < allyField.length; i++) {
+        const a = allyField[i];
+        if (!a) continue;
+        const atk = (a.card?.cardAttack || 0) + (a.attackBoost || 0);
+        if (atk > bestScore) { bestScore = atk; best = i; }
+      }
+      return best;
+    }
+    case "aoe":
+    default:
+      return null;
+  }
+}
+
 function chooseHandIndex(ai, policy, rand, state = null) {
+  const opp = state?.players?.player;
   const candidates = ai.hand
     .map((c, idx) => ({ c, idx, cost: effectiveCost(ai, c) }))
-    // Skip spell cards: AI doesn't have targeting logic for them yet
-    // (slice 1 ships Freeze with player-side targeting only). The AI
-    // will still draw spells — they just sit in hand instead of being
-    // wasted on a no-target play. Future slices will add AI heuristics
-    // for picking spell targets and re-enable selection here.
-    .filter((x) => x.c.kind !== "spell")
+    // A spell is a candidate only if it'd be useful given the board.
+    // A non-spell Pokémon is always a candidate (subject to the energy
+    // gate below).
+    .filter((x) => spellPlayable(x.c, ai, opp))
     .filter((x) => x.cost <= ai.energy);
   if (candidates.length === 0) return -1;
   switch (policy.pickCard) {
@@ -1281,15 +1356,38 @@ async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality 
   for (let safety = 0; safety < 10; safety++) {
     if (state.phase !== "main") break;
     if (playsThisTurn > 0 && rand() < policy.passPlayChance) break;
+
+    const idx = chooseHandIndex(ai, policy, rand, state);
+    if (idx === -1) break;
+    const handCard = ai.hand[idx];
+
+    // Spell cards route through their own dispatch path — no field
+    // slot, no replace. aiPickSpellTarget walks the board to pick the
+    // best slot for each effect (or null for AOE).
+    if (handCard.kind === "spell") {
+      const spellTarget = aiPickSpellTarget(state, "ai", handCard);
+      const r = playCard(state, "ai", idx, { rand, spellTarget });
+      if (!r.ok) break;
+      playsThisTurn++;
+      if (onAction) {
+        await onAction({
+          kind: "spell",
+          spell: r.spell,
+          effect: r.effect,
+          targetSide: r.targetSide,
+          targetSlot: r.targetSlot,
+        });
+      }
+      continue;
+    }
+
+    // Pokémon summon — needs a field slot. If full, the smart
+    // policies may sacrifice the weakest current board card to make
+    // room; easier policies just stop summoning when the board is full.
     let replaceSlot = null;
     if (emptySlot(ai.field) === -1) {
-      // Field full — only the smart policies consider replacing.
       if (policy.pickCard !== "smartSig" && policy.pickCard !== "smart") break;
-      const idx = chooseHandIndex(ai, policy, rand, state);
-      if (idx === -1) break;
-      const handCard = ai.hand[idx];
       const handScore = scoreCardForSummon(ai, state.players.player, handCard);
-      // Find the weakest board card to replace.
       let worstSlot = -1;
       let worstScore = Infinity;
       for (let i = 0; i < ai.field.length; i++) {
@@ -1302,18 +1400,18 @@ async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality 
       }
       if (worstSlot === -1 || handScore <= worstScore + 4) break;
       replaceSlot = worstSlot;
-      const r = playCard(state, "ai", idx, { rand, replaceSlot });
-      if (!r.ok) break;
-      playsThisTurn++;
-      if (onAction) await onAction({ kind: "summon", slot: r.slot, instance: r.instance, replaced: true });
-      continue;
     }
-    const idx = chooseHandIndex(ai, policy, rand, state);
-    if (idx === -1) break;
-    const r = playCard(state, "ai", idx, { rand });
+    const r = playCard(state, "ai", idx, { rand, replaceSlot });
     if (!r.ok) break;
     playsThisTurn++;
-    if (onAction) await onAction({ kind: "summon", slot: r.slot, instance: r.instance });
+    if (onAction) {
+      await onAction({
+        kind: "summon",
+        slot: r.slot,
+        instance: r.instance,
+        replaced: replaceSlot != null,
+      });
+    }
   }
 
   // Attack phase.
