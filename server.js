@@ -390,6 +390,19 @@ if (!htmlContent.includes("socket.io")) {
   }
 }
 
+// JSON error handler — last middleware before listen. Any uncaught throw
+// from an async route handler ends up here. Without this, Express 5's
+// default fallback returns an HTML 500 page, which the client tries to
+// JSON.parse and crashes with "non-JSON" errors (see /me/rewards/claim
+// regression). Must be registered AFTER all routes.
+app.use((err, req, res, _next) => {
+  console.error("[server] unhandled route error:", req.method, req.url, err);
+  if (res.headersSent) return;
+  res.status(500).json({
+    error: err && err.message ? err.message : "Internal server error",
+  });
+});
+
 // Start the server. Bind on all interfaces so both LAN IP and localhost work.
 // (Passkeys require a domain RP_ID, so localhost:3000 is the right URL for
 // local dev — IP-address RP_IDs are rejected by Chrome/Safari.)

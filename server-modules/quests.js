@@ -140,33 +140,63 @@ function mount(app, supabase, getPokedex) {
 
   app.post("/me/quests/:id/claim", async (req, res) => {
     if (!req.user) return res.status(401).json({ error: "Sign in required." });
-    const pokedex = await loadDex();
+    let pokedex;
+    try {
+      pokedex = await loadDex();
+    } catch (err) {
+      console.error("[quests] loadDex failed:", err);
+      return res.status(503).json({ error: `Pokédex unavailable: ${err.message || "unknown"}` });
+    }
     if (!pokedex?.length) return res.status(503).json({ error: "Pokédex not loaded." });
     const dayKey = todayKey();
     const quests = pickTwoQuests(req.user.id, dayKey);
     const q = quests.find((x) => x.id === req.params.id);
     if (!q) return res.status(404).json({ error: "Quest not active today." });
 
-    // Already claimed?
-    const { data: existing } = await supabase
-      .from("quest_claims")
-      .select("quest_id")
-      .eq("user_id", req.user.id)
-      .eq("quest_id", q.id)
-      .eq("claim_date", dayKey)
-      .maybeSingle();
+    // Already claimed? supabase-js returns {data, error} on REST errors
+    // but CAN throw on network/auth refresh failures — catch both shapes
+    // so the client always gets JSON instead of Express's HTML 500 page.
+    let existing, lookupErr;
+    try {
+      ({ data: existing, error: lookupErr } = await supabase
+        .from("quest_claims")
+        .select("quest_id")
+        .eq("user_id", req.user.id)
+        .eq("quest_id", q.id)
+        .eq("claim_date", dayKey)
+        .maybeSingle());
+    } catch (err) {
+      console.error("[quests] claim lookup threw:", err);
+      return res.status(500).json({ error: `Couldn't check claim status: ${err.message || "network error"}` });
+    }
+    if (lookupErr) {
+      console.error("[quests] claim lookup failed:", lookupErr);
+      return res.status(500).json({ error: `Couldn't check claim status: ${lookupErr.message}` });
+    }
     if (existing) return res.status(409).json({ error: "Already claimed today." });
 
     // Progress check
-    const progress = await computeProgress(supabase, req.user.id, dayKey);
+    let progress;
+    try {
+      progress = await computeProgress(supabase, req.user.id, dayKey);
+    } catch (err) {
+      console.error("[quests] computeProgress threw:", err);
+      return res.status(500).json({ error: `Couldn't compute progress: ${err.message || "network error"}` });
+    }
     if ((progress[q.metric] || 0) < q.target) {
       return res.status(400).json({ error: "Quest not yet complete." });
     }
 
     // Roll picks and create an offer.
-    const eligible = pokedex.filter((c) => c.tier >= q.minTier);
-    const picks = rewards.rollPicks(eligible.length >= q.rewardCount ? eligible : pokedex, q.rewardCount);
-    if (!picks.length) {
+    let picks;
+    try {
+      const eligible = pokedex.filter((c) => c.tier >= q.minTier);
+      picks = rewards.rollPicks(eligible.length >= q.rewardCount ? eligible : pokedex, q.rewardCount);
+    } catch (err) {
+      console.error("[quests] rollPicks threw:", err);
+      return res.status(500).json({ error: "Couldn't roll a reward — try again." });
+    }
+    if (!picks?.length) {
       return res.status(500).json({ error: "Couldn't roll a reward — try again." });
     }
     let offerId;
@@ -180,11 +210,17 @@ function mount(app, supabase, getPokedex) {
     // Persist the claim AFTER the offer is durable. Surface the real
     // Postgres error if the insert fails so we can diagnose instead of
     // returning a silently-half-claimed reward.
-    const { error: claimErr } = await supabase.from("quest_claims").insert({
-      user_id: req.user.id,
-      quest_id: q.id,
-      claim_date: dayKey,
-    });
+    let claimErr;
+    try {
+      ({ error: claimErr } = await supabase.from("quest_claims").insert({
+        user_id: req.user.id,
+        quest_id: q.id,
+        claim_date: dayKey,
+      }));
+    } catch (err) {
+      console.error("[quests] claim insert threw:", err);
+      return res.status(500).json({ error: `Couldn't record claim (network): ${err.message || "unknown"}` });
+    }
     if (claimErr) {
       console.error("[quests] claim insert failed:", claimErr);
       // Duplicate key = the user already claimed (race / double-tap).

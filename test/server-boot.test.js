@@ -107,6 +107,15 @@ before(async () => {
   winstreak.mount(app, supabaseStub, getPokedex);
   multiplayerHttp.mount(app, supabaseStub, getPokedex);
 
+  // Match server.js: a JSON-emitting error handler so any async-route
+  // throw becomes `{error}` instead of Express 5's HTML 500 fallback.
+  // Without this, the boot test can't catch regressions where a route
+  // returns HTML and the client crashes on JSON.parse.
+  app.use((err, _req, res, _next) => {
+    if (res.headersSent) return;
+    res.status(500).json({ error: err && err.message ? err.message : "Internal server error" });
+  });
+
   await new Promise((resolve) => {
     server = http.createServer(app);
     server.listen(0, "127.0.0.1", resolve);

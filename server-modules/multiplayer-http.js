@@ -307,6 +307,25 @@ function mount(app, supabase, getPokedex) {
   });
 
   app.post("/api/mp/match/:id/action", async (req, res) => {
+    try {
+      await runMatchAction(req, res);
+    } catch (err) {
+      // Any throw from the engine / store / supabase that isn't already
+      // handled below MUST come back as JSON, not Express's HTML 500.
+      // The MP client does `await r.json()` and the resulting parse error
+      // surfaces in iOS Safari as "The string did not match the expected
+      // pattern." and in Chrome as "Unexpected Token <" — both useless to
+      // a player. Wrap once at the top so every action stays JSON-safe.
+      console.error("[mp] action handler threw:", err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: `Action failed: ${err && err.message ? err.message : "unknown error"}`,
+        });
+      }
+    }
+  });
+
+  async function runMatchAction(req, res) {
     const matchId = req.params.id;
     const playerId = String(req.body?.playerId || "");
     const action = String(req.body?.action || "");
@@ -380,7 +399,13 @@ function mount(app, supabase, getPokedex) {
       m.v += 1;
       if (m.state.winner) {
         outOver = true;
-        // Persist match record + offer rewards.
+        // Persist match record + offer rewards. EVERY downstream op here
+        // is best-effort: a thrown supabase/Redis call must NOT abort
+        // this lock callback, because doing so would skip the trailing
+        // `roomSet` in roomWithLock — losing the winner mutation and
+        // leaving the player stuck in a "live" match they thought they
+        // ended. (Regression: concede used to wedge the user when
+        // offerForOutcome failed.)
         if (supabase && m.dbMatchId) {
           const winnerSide = m.state.winner;
           const winnerSeat = m.players[winnerSide];
@@ -391,15 +416,30 @@ function mount(app, supabase, getPokedex) {
             ended_at: new Date().toISOString(),
           }).eq("id", m.dbMatchId).then(() => {}, () => {});
         }
-        // Stash rewards on the match so the next state-fetch can deliver them.
-        const dex = await loadDex();
+        // Stash rewards on the match so the next state-fetch can deliver
+        // them. If the pokédex isn't loaded yet or createOffer fails,
+        // skip the reward — the match still ends.
+        let dex = null;
+        try {
+          dex = await loadDex();
+        } catch (err) {
+          console.error("[mp] loadDex during match end failed:", err);
+        }
         const winnerSide = m.state.winner;
         if (dex?.length) {
           if (m.players.player.userId) {
-            m.rewardForPlayer = await offerForOutcome(m.players.player.userId, dex, winnerSide === "player");
+            try {
+              m.rewardForPlayer = await offerForOutcome(m.players.player.userId, dex, winnerSide === "player");
+            } catch (err) {
+              console.error("[mp] offerForOutcome(player) failed:", err);
+            }
           }
           if (m.players.ai.userId) {
-            m.rewardForAi = await offerForOutcome(m.players.ai.userId, dex, winnerSide === "ai");
+            try {
+              m.rewardForAi = await offerForOutcome(m.players.ai.userId, dex, winnerSide === "ai");
+            } catch (err) {
+              console.error("[mp] offerForOutcome(ai) failed:", err);
+            }
           }
         }
       }
@@ -415,7 +455,7 @@ function mount(app, supabase, getPokedex) {
       out.gameOver = true;
     }
     res.json(out);
-  });
+  }
 }
 
 module.exports = { mount, viewFor };

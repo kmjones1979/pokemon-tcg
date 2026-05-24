@@ -202,6 +202,18 @@ export async function joinPrivateRoom(code, opts) {
   }
 }
 
+// Defensive JSON parser. iOS Safari throws "The string did not match the
+// expected pattern." and Chrome/Firefox throw "Unexpected Token" when
+// you JSON.parse an HTML 500 page. Catch the parse failure and replace
+// it with a useful message that names the status code instead.
+async function safeJson(r, label) {
+  try {
+    return await r.json();
+  } catch {
+    throw new Error(`${label}: server returned non-JSON (status ${r.status})`);
+  }
+}
+
 async function postAction(action, payload) {
   if (!_matchId) return;
   try {
@@ -210,9 +222,9 @@ async function postAction(action, payload) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ playerId: playerId(), action, payload }),
     });
-    const data = await r.json();
+    const data = await safeJson(r, action);
     if (!r.ok) {
-      emit("err", { error: data.error || "action rejected" });
+      emit("err", { error: data.error || `${action} rejected` });
       return;
     }
     if (data.view) deliverView(data.view);
