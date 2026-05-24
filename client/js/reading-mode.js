@@ -10,6 +10,12 @@
 //
 // Pure DOM module — no global state mutation outside its mounted root.
 
+import {
+  tokenizeTextForWordClicks,
+  attachWordClickListener,
+  wordTtsAvailable,
+} from "./word-click-tts.js";
+
 let _rootEl = null;
 let _state = {
   view: "picker",     // "picker" | "story"
@@ -18,6 +24,7 @@ let _state = {
   sectionIdx: 0,
 };
 let _audioEl = null;
+let _detachWordClicks = null;
 
 const SPRITE_URL = (id) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
@@ -45,6 +52,8 @@ export async function openReadingMode(rootEl) {
 
 export function destroyReadingMode() {
   if (_audioEl) { _audioEl.pause(); _audioEl = null; }
+  if (_detachWordClicks) { _detachWordClicks(); _detachWordClicks = null; }
+  try { window.speechSynthesis?.cancel(); } catch {}
   if (_rootEl) _rootEl.innerHTML = "";
   _rootEl = null;
   _state = { view: "picker", storyId: null, story: null, sectionIdx: 0 };
@@ -164,8 +173,10 @@ function renderStory() {
             : `<div class="reading-speaker-glyph">📖</div>`}
           <div class="reading-speaker-name">${escapeHtml(speakerName)}</div>
         </div>
-        <p class="reading-text">${escapeHtml(sec.text)}</p>
-        <div class="reading-prompt">Read the words above out loud. When you're ready, press the button.</div>
+        <p class="reading-text">${tokenizeTextForWordClicks(sec.text)}</p>
+        <div class="reading-prompt">${wordTtsAvailable()
+          ? "Tap any word to hear it. Read the page, then press the button to hear the whole story."
+          : "Read the words above out loud. When you're ready, press the button."}</div>
         <div class="reading-controls">
           ${audioBtn}
         </div>
@@ -215,6 +226,14 @@ function renderStory() {
         console.warn("[reading] audio play failed:", err);
       });
     });
+  }
+  // Tap-to-hear: each rendered section gets a fresh delegated listener
+  // (cheap; we re-render the section on every nav). Detaches the old
+  // one first so we don't accumulate listeners across pages.
+  if (_detachWordClicks) { _detachWordClicks(); _detachWordClicks = null; }
+  const sectionEl = _rootEl.querySelector(".reading-text");
+  if (sectionEl) {
+    _detachWordClicks = attachWordClickListener(sectionEl);
   }
 }
 

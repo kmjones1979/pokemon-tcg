@@ -9,6 +9,11 @@
 import { TYPE_COLORS } from "./type-chart.js";
 import * as rewards from "./rewards.js";
 import { flashVerdict } from "./animations.js";
+import {
+  tokenizeTextForWordClicks,
+  attachWordClickListener,
+  wordTtsAvailable,
+} from "./word-click-tts.js";
 
 let _stage = null;
 
@@ -126,9 +131,14 @@ function playReadAlong(chapter) {
     const sections = chapter.readAlong;
     let idx = 0;
     let audioEl = null;
+    let detachWords = null;
     const total = sections.length;
 
     const stopAudio = () => { if (audioEl) { try { audioEl.pause(); } catch {} audioEl = null; } };
+    const stopWordTts = () => {
+      if (detachWords) { detachWords(); detachWords = null; }
+      try { window.speechSynthesis?.cancel(); } catch {}
+    };
 
     const renderSection = () => {
       const sec = sections[idx];
@@ -157,8 +167,10 @@ function playReadAlong(chapter) {
                        : `<div class="reading-speaker-glyph">📖</div>`}
               <div class="reading-speaker-name">${escape(speakerName)}</div>
             </div>
-            <p class="reading-text">${escape(sec.text)}</p>
-            <div class="reading-prompt">Read the words above out loud. Then press the button to hear them.</div>
+            <p class="reading-text">${tokenizeTextForWordClicks(sec.text)}</p>
+            <div class="reading-prompt">${wordTtsAvailable()
+              ? "Tap any word to hear it. Then press the button to hear the whole page."
+              : "Read the words above out loud. Then press the button to hear them."}</div>
             <div class="reading-controls">${audioBtnHtml}</div>
           </article>
           <nav class="reading-nav">
@@ -181,15 +193,21 @@ function playReadAlong(chapter) {
       _stage.querySelector(".reading-prev").addEventListener("click", () => {
         if (idx === 0) return;
         stopAudio();
+        stopWordTts();
         idx -= 1;
         renderSection();
       });
       _stage.querySelector(".reading-next").addEventListener("click", () => {
         stopAudio();
+        stopWordTts();
         if (idx >= total - 1) { resolve(); return; }
         idx += 1;
         renderSection();
       });
+      // Per-word tap-to-hear listener (refreshed every section).
+      stopWordTts();
+      const textEl = _stage.querySelector(".reading-text");
+      if (textEl) detachWords = attachWordClickListener(textEl);
     };
 
     renderSection();

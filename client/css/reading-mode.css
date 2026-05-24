@@ -304,3 +304,36 @@
 }
 
 .reading-error { color: #fca5a5; }
+
+/* --- Per-word tap-to-hear ----------------------------------------
+ * Each word in .reading-text is wrapped in a .reading-word span by
+ * word-click-tts.js. Tapping it pronounces just that word via the
+ * browser's speechSynthesis API. Designed for early readers who want
+ * to decode one word at a time.
+ */
+.reading-text .reading-word {
+  display: inline-block;
+  padding: 0 2px;
+  margin: 0 -2px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.reading-text .reading-word:hover {
+  background: rgba(110, 231, 183, 0.18);
+}
+.reading-text .reading-word:active {
+  background: rgba(110, 231, 183, 0.32);
+}
+.reading-text .reading-word.speaking {
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.55), rgba(110, 231, 183, 0.55));
+  color: #0a0f1c;
+  font-weight: 600;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.5);
+  animation: readingWordPulse 0.65s ease-in-out infinite;
+}
+@keyframes readingWordPulse {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1px); }
+}
