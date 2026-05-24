@@ -1395,6 +1395,10 @@ function hpBar(hp, max) {
 }
 
 function renderFields() {
+  // Are we currently picking a target for a staged spell? If so, the
+  // relevant side's occupied slots glow as valid targets.
+  const spellExpectsEnemy = pendingSpell?.target === "enemyField";
+  const spellExpectsOwn   = pendingSpell?.target === "ownField";
   for (const side of ["player", "ai"]) {
     const root = $(side === "player" ? "#player-field" : "#ai-field");
     root.innerHTML = "";
@@ -1404,6 +1408,13 @@ function renderFields() {
       slot.className = `field-slot ${side}`;
       slot.dataset.side = side;
       slot.dataset.slot = String(i);
+      // Spell-targeting glow: only on occupied slots of the right side.
+      const isCorrectTargetSide =
+        (spellExpectsEnemy && side === "ai") ||
+        (spellExpectsOwn   && side === "player");
+      if (isCorrectTargetSide && p.field[i]) {
+        slot.classList.add("spell-target");
+      }
       const inst = p.field[i];
       if (inst) {
         const card = renderCard(inst.card, { instance: inst });
@@ -1585,8 +1596,17 @@ function renderHand() {
     const cardEl = renderCard(card);
     const cost = effectiveCost(p, card);
     cardEl.dataset.handIndex = String(idx);
-    const playable = state.activePlayer === "player" && p.energy >= cost && state.players.player.field.includes(null);
+    // Spells don't need a field slot — they go from hand → discard.
+    // Pokémon need an empty slot OR the user must pick one to replace.
+    const isSpell = card.kind === "spell";
+    const playable = state.activePlayer === "player"
+      && p.energy >= cost
+      && (isSpell || state.players.player.field.includes(null));
     if (!playable) cardEl.classList.add("unplayable");
+    // Highlight a spell card that's currently staged (pendingSpell).
+    if (pendingSpell && pendingSpell.handIndex === idx) {
+      cardEl.classList.add("spell-staged");
+    }
     // Pulse playable cards only when we have no other clearer action.
     const hasReadyAttackers = p.field.some(
       (s) => s && !s.summoningSickness && !s.attackedThisTurn,
@@ -1674,11 +1694,32 @@ function onHandCardClick(handIndex) {
     chosenAbilityId = "basic";
     hideAbilityPopover();
     const prompt = card.target === "enemyField"
-      ? `Tap an enemy Pokémon to ${card.effect}`
+      ? `🎯 Tap an enemy Pokémon to ${card.effect} them`
       : card.target === "ownField"
-        ? `Tap one of your Pokémon to ${card.effect}`
-        : `Tap to cast ${card.name}`;
-    flashVerdict(prompt, "weak");
+        ? `🎯 Tap one of your Pokémon to ${card.effect} them`
+        : `✨ Cast ${card.name}!`;
+    flashVerdict(prompt, "super");
+    // For "no target" spells (Surge, Scout, Phoenix, AOE), resolve
+    // immediately — no second click needed.
+    if (card.target === "none") {
+      pendingSpell = null;
+      if (gameMode === "mp") {
+        sfxCardPlay();
+        mp.playCard(handIndex, null, null);
+        return;
+      }
+      const r = playCard(state, "player", handIndex);
+      if (!r.ok) {
+        flashVerdict(r.reason, "weak");
+        render();
+        return;
+      }
+      sfxCardPlay();
+      const spellEv2 = spellResultToEvent(r);
+      if (spellEv2) playEmote(spellEv2);
+      render();
+      return;
+    }
     render();
     return;
   }

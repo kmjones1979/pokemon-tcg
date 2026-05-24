@@ -1589,7 +1589,20 @@ async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality 
     }
   }
 
-  // Attack phase.
+  // Before the attack loop: log a "still asleep / frozen / paralyzed"
+  // line for each locked-out Pokémon. Otherwise a player who cast
+  // Sleep Powder sees the AI's turn pass silently and can't tell the
+  // disruption worked. Fires once per AI turn (outside the safety
+  // retry loop).
+  for (const inst of ai.field) {
+    if (!inst || !isLockedOut(inst)) continue;
+    const k = inst.status?.kind || "lock";
+    const phrase = k === "sleep"    ? "fast asleep"
+                 : k === "freeze"   ? "frozen solid"
+                 : k === "paralyze" ? "paralyzed"
+                 : k;
+    log(state, `${inst.card.name} is ${phrase} — can't move this turn!`, "status");
+  }
   for (let safety = 0; safety < 20; safety++) {
     if (state.winner) return;
     const attackers = ai.field
