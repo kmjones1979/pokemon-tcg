@@ -56,6 +56,7 @@ let soloSessionId = null;   // server-tracked anti-cheat session for solo matche
 let chosenAbilityId = "basic"; // ability the player will use on their next attack
 let pendingItem = null;        // when set, next slot click targets this item
 let pendingReplace = null;     // { handIndex } — next own-field click sacrifices that slot to summon this card
+let pendingSpell = null;       // { handIndex, target } — next field click resolves this spell ("enemyField" | "ownField")
 let currentTheme = null;       // { type, endsAt } — theme of the week
 let aiPersonality = null;      // chosen at match start so it stays consistent
 let _prevHps = { player: null, ai: null }; // tracks trainer HPs between renders for the flash
@@ -1605,6 +1606,10 @@ function onHandCardClick(handIndex) {
     flashVerdict("Wait for your turn", "weak");
     return;
   }
+  // Clicking a new hand card cancels any staged spell — otherwise a
+  // user staging Freeze and then changing their mind to summon a
+  // Pokémon would leave the spell intent dangling.
+  if (pendingSpell) pendingSpell = null;
   // Touch-device peek: first tap shows the full card big so abilities are
   // legible; a second tap on the SAME card commits to playing it. Tapping
   // outside the hand cancels. Skipped on desktop.
@@ -1623,6 +1628,25 @@ function onHandCardClick(handIndex) {
     flashVerdict(`Need ${cost} ⚡`, "weak");
     return;
   }
+
+  // Spell cards branch BEFORE the field-full / replace flow — they
+  // don't summon, they need a target slot picked next. Stash the play
+  // intent in pendingSpell and let onSlotClick resolve it.
+  if (card.kind === "spell") {
+    pendingSpell = { handIndex, target: card.target, name: card.name, effect: card.effect };
+    selectedAttacker = null;
+    chosenAbilityId = "basic";
+    hideAbilityPopover();
+    const prompt = card.target === "enemyField"
+      ? `Tap an enemy Pokémon to ${card.effect}`
+      : card.target === "ownField"
+        ? `Tap one of your Pokémon to ${card.effect}`
+        : `Tap to cast ${card.name}`;
+    flashVerdict(prompt, "weak");
+    render();
+    return;
+  }
+
   if (!p.field.includes(null)) {
     // Field is full — prompt user to sacrifice one of their Pokémon.
     pendingReplace = { handIndex };
@@ -1657,6 +1681,46 @@ async function onSlotClick(side, slot) {
   if (state.winner) return;
   if (state.activePlayer !== "player") {
     flashVerdict("Wait for your turn", "weak");
+    return;
+  }
+
+  // Spell targeting takes priority over everything else — once a spell
+  // is staged in pendingSpell, the next slot click resolves it.
+  if (pendingSpell) {
+    const expectsEnemy = pendingSpell.target === "enemyField";
+    const expectsOwn   = pendingSpell.target === "ownField";
+    if (expectsEnemy && side !== "ai") {
+      flashVerdict("Tap an ENEMY Pokémon", "weak");
+      return;
+    }
+    if (expectsOwn && side !== "player") {
+      flashVerdict("Tap one of YOUR Pokémon", "weak");
+      return;
+    }
+    const targetField = expectsEnemy ? state.players.ai.field : state.players.player.field;
+    if (!targetField[slot]) {
+      flashVerdict("Pick an occupied slot", "weak");
+      return;
+    }
+    const { handIndex } = pendingSpell;
+    pendingSpell = null;
+    if (gameMode === "mp") {
+      // Multiplayer not wired for spells in slice 1 — fall back to
+      // local resolution so single-player still works. Solo + story
+      // are the primary surfaces for spells until the MP path lands.
+      flashVerdict("Spells aren't supported in multiplayer yet", "weak");
+      render();
+      return;
+    }
+    const r = playCard(state, "player", handIndex, { spellTarget: slot });
+    if (!r.ok) {
+      flashVerdict(r.reason, "weak");
+      render();
+      return;
+    }
+    sfxCardPlay();
+    flashVerdict(`${r.spell?.name || "Spell"} cast on ${r.targetName || "target"}!`, "super");
+    render();
     return;
   }
 

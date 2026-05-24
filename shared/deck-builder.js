@@ -122,19 +122,38 @@ function pickOne(arr, rand) {
   return arr[Math.floor(rand() * arr.length)];
 }
 
-// Target distribution per 30-card deck.
+// Target distribution per 30-card Pokémon section.
 const DEFAULT_DIST = { 1: 10, 2: 10, 3: 6, 4: 3, 5: 1 };
 
-// Build a 30-card deck:
-// - mix of tiers per DEFAULT_DIST
-// - no more than 2 copies of any single Pokémon (by id)
-// - if a tier doesn't have enough variety we fall back to neighbouring tiers
-function buildDeck(pokedex, { seed, distribution = DEFAULT_DIST } = {}) {
+// Default spell-card count appended to every deck. 10 spells in a
+// 40-card deck = ~25% chance per draw, enough disruption to feel
+// constantly available without crowding out the Pokémon mix.
+const DEFAULT_SPELL_COUNT = 10;
+
+// Build a 40-card deck: 30 Pokémon + 10 spell cards.
+//
+// Pokémon section:
+//   - mix of tiers per `distribution` (default DEFAULT_DIST)
+//   - no more than 2 copies of any single Pokémon (by id)
+//   - if a tier doesn't have enough variety we fall back to neighbouring tiers
+//
+// Spell section:
+//   - `spellCount` cards drawn from cards with kind === "spell"
+//   - sampled with replacement (10 of the same spell is allowed — slice 1
+//     only ships Freeze, so a deck during slice 1 is 30 Pokémon + 10 Freeze)
+//   - silently no-ops if the pokedex contains no spells (e.g. tests that
+//     use a synth dex of Pokémon only)
+function buildDeck(pokedex, { seed, distribution = DEFAULT_DIST, spellCount = DEFAULT_SPELL_COUNT } = {}) {
   const rand = rng(seed);
 
-  // Bucket by tier.
+  // Split pokedex into Pokémon (no kind, or kind="pokemon") and spells.
+  // The 30-slot Pokémon section must never accidentally include a spell.
+  const pokemonPool = pokedex.filter((c) => c.kind !== "spell");
+  const spellPool   = pokedex.filter((c) => c.kind === "spell");
+
+  // Bucket by tier — Pokémon only.
   const byTier = new Map();
-  for (const c of pokedex) {
+  for (const c of pokemonPool) {
     if (!byTier.has(c.tier)) byTier.set(c.tier, []);
     byTier.get(c.tier).push(c);
   }
@@ -186,10 +205,19 @@ function buildDeck(pokedex, { seed, distribution = DEFAULT_DIST } = {}) {
     }
   }
 
+  // Append the spell section. Sampled with replacement: slice 1 ships
+  // only Freeze so all 10 spell slots will be Freeze; once more spells
+  // come online they'll spread naturally.
+  for (let i = 0; i < spellCount && spellPool.length > 0; i++) {
+    const spell = spellPool[Math.floor(rand() * spellPool.length)];
+    deck.push(spell);
+  }
+
   return deck;
 }
 
 module.exports = {
   toCard, buildDeck, tierFromBst, rng,
   rarityForCard, RARITIES, RARITY_BY_TIER,
+  DEFAULT_SPELL_COUNT,
 };

@@ -27,6 +27,13 @@ const TYPE_GLYPH = {
 };
 
 export function renderCard(card, { compact = false, instance = null } = {}) {
+  // Spell cards (Freeze, etc.) render through a separate path: no HP /
+  // attack stats, big glyph in the art slot, type-themed gradient,
+  // description on the footer instead of the name+ATK row.
+  if (card?.kind === "spell") {
+    return renderSpellCard(card, { compact });
+  }
+
   const el = document.createElement("div");
   el.className = `card type-${card.types?.[0] || "normal"}${compact ? " compact" : ""}`;
   if (instance) el.dataset.instanceId = instance.instanceId;
@@ -91,7 +98,47 @@ function statusGlyph(kind) {
   if (kind === "sleep") return "💤";
   if (kind === "burn") return "🔥";
   if (kind === "paralyze") return "⚡";
+  if (kind === "freeze") return "❄";
   return "✦";
+}
+
+// Spell-card render — distinct frame from Pokémon. Type-themed gradient
+// background, big glyph instead of a sprite, description text below.
+// The `card.kind === "spell"` branch in renderCard funnels here so
+// downstream callers don't need to know about the split.
+function renderSpellCard(card, { compact = false } = {}) {
+  const el = document.createElement("div");
+  const primary = card.types?.[0] || "normal";
+  const rarity = card.rarity || "common";
+  el.className = `card spell-card type-${primary} rarity-${rarity}${compact ? " compact" : ""}`;
+  el.dataset.cardId = card.id;
+  el.dataset.cardKind = "spell";
+  el.dataset.spellEffect = card.effect;
+
+  const c1 = TYPE_COLORS[primary] || "#888";
+  el.style.setProperty("--type-1", c1);
+  el.style.setProperty("--type-2", c1);
+
+  el.innerHTML = `
+    <div class="card-inner">
+      <div class="card-sheen"></div>
+      <header class="card-header">
+        <div class="cost-gem" title="${card.energyCost} Energy">${card.energyCost}</div>
+        <div class="spell-tag" title="Spell">SPELL</div>
+        <div class="card-types">
+          <span class="type-badge" style="background:${c1}" title="${primary}">${TYPE_GLYPH[primary] || "•"}</span>
+        </div>
+      </header>
+      <div class="card-art spell-art">
+        <div class="spell-glyph" aria-hidden="true">${card.glyph || "✦"}</div>
+      </div>
+      <footer class="card-footer spell-footer">
+        <div class="card-name">${escape(card.name)}</div>
+        <div class="spell-desc">${escape(card.description || "")}</div>
+      </footer>
+    </div>
+  `;
+  return el;
 }
 
 function escape(s) {

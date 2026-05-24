@@ -149,7 +149,14 @@ function loadPokedex() {
       from += PAGE;
     }
     pokedex = all.map(toCard);
-    console.log(`[pokedex] loaded ${pokedex.length} cards from Supabase`);
+    // Append all active spell cards so drops + deck-builder see them
+    // alongside Pokémon. allSpellCards() only returns spells whose
+    // engine effect is wired (see ACTIVE_EFFECTS in shared/spell-cards
+    // — slice 1 = Freeze only).
+    const { allSpellCards } = require("./shared/spell-cards");
+    const spells = allSpellCards();
+    pokedex.push(...spells);
+    console.log(`[pokedex] loaded ${pokedex.length - spells.length} Pokémon + ${spells.length} spell card(s)`);
   })();
   return _pokedexPromise;
 }

@@ -371,7 +371,48 @@ export function mulliganHand(state, side, indices = [], { rand = Math.random } =
   }
 }
 
-export function playCard(state, side, handIndex, { rand = Math.random, replaceSlot = null } = {}) {
+// Spell-card dispatcher. Called from playCard when card.kind === "spell".
+// Each effect branch must (a) validate its target, (b) return a useful
+// error reason if invalid, and (c) on success pay energy + remove from
+// hand + push to discard. Logging happens INSIDE each branch so the
+// message references the right card/target.
+function playSpellCard(state, side, handIndex, card, cost, { spellTarget = null } = {}) {
+  const p = state.players[side];
+  const otherSide = side === "player" ? "ai" : "player";
+  switch (card.effect) {
+    case "freeze": {
+      if (!Number.isInteger(spellTarget) || spellTarget < 0 || spellTarget >= FIELD_SIZE) {
+        return { ok: false, reason: "Pick an enemy Pokémon to freeze" };
+      }
+      const enemy = state.players[otherSide].field[spellTarget];
+      if (!enemy) return { ok: false, reason: "That slot is empty" };
+      // Apply freeze status — battle.isLockedOut() recognises "freeze"
+      // and gates the enemy's next attack. tickStatus decrements
+      // turnsLeft each turn and removes the status when it hits 0.
+      enemy.status = { kind: "freeze", turnsLeft: 1 };
+      p.energy -= cost;
+      p.hand.splice(handIndex, 1);
+      p.discard.push(card);
+      log(state, `❄ ${card.name}: ${enemy.card.name} was frozen solid!`, "status");
+      return {
+        ok: true,
+        spell: card,
+        effect: "freeze",
+        targetSide: otherSide,
+        targetSlot: spellTarget,
+        targetName: enemy.card.name,
+      };
+    }
+    default:
+      // Slice 1 only ships Freeze. Other effects in the catalog are
+      // "designed" but not yet wired; refuse to play them so a player
+      // who somehow has one in hand sees a clear error instead of a
+      // silent failure.
+      return { ok: false, reason: `${card.name} isn't ready to cast yet.` };
+  }
+}
+
+export function playCard(state, side, handIndex, { rand = Math.random, replaceSlot = null, spellTarget = null } = {}) {
   if (state.winner) return { ok: false, reason: "game over" };
   if (state.activePlayer !== side) return { ok: false, reason: "not your turn" };
   if (state.phase !== "main") return { ok: false, reason: "wrong phase" };
@@ -380,6 +421,13 @@ export function playCard(state, side, handIndex, { rand = Math.random, replaceSl
   if (!card) return { ok: false, reason: "no such card" };
   const cost = effectiveCost(p, card);
   if (p.energy < cost) return { ok: false, reason: "not enough energy" };
+
+  // Spell cards — branch BEFORE the field-slot machinery. Spells don't
+  // get summoned; they trigger an immediate state effect and go to the
+  // discard pile. The dispatcher returns its own result shape.
+  if (card.kind === "spell") {
+    return playSpellCard(state, side, handIndex, card, cost, { spellTarget });
+  }
 
   // Determine target slot.
   let slot = emptySlot(p.field);
@@ -818,6 +866,12 @@ const POLICIES = {
 function chooseHandIndex(ai, policy, rand, state = null) {
   const candidates = ai.hand
     .map((c, idx) => ({ c, idx, cost: effectiveCost(ai, c) }))
+    // Skip spell cards: AI doesn't have targeting logic for them yet
+    // (slice 1 ships Freeze with player-side targeting only). The AI
+    // will still draw spells — they just sit in hand instead of being
+    // wasted on a no-target play. Future slices will add AI heuristics
+    // for picking spell targets and re-enable selection here.
+    .filter((x) => x.c.kind !== "spell")
     .filter((x) => x.cost <= ai.energy);
   if (candidates.length === 0) return -1;
   switch (policy.pickCard) {

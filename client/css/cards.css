@@ -581,3 +581,87 @@ body.dragging-attack .trainer-block.ai {
      For now the 3-star variant just shows the brighter shadow because
      of the longer text. */
 }
+
+/* =========================================================================
+ * Spell cards — visually distinct from Pokémon. Gradient background,
+ * big centered glyph (no sprite), description text below the name.
+ * Shares the same outer .card frame so hover / drag / selected styles
+ * Just Work without extra rules.
+ * ====================================================================== */
+.card.spell-card .card-inner {
+  background: linear-gradient(155deg,
+    color-mix(in srgb, var(--type-1) 70%, #0c1422 30%) 0%,
+    color-mix(in srgb, var(--type-1) 25%, #0a0f1c 75%) 100%);
+  border: 1px solid color-mix(in srgb, var(--type-1) 80%, #fff 20%);
+  box-shadow:
+    inset 0 0 18px color-mix(in srgb, var(--type-1) 40%, transparent),
+    0 4px 14px rgba(0, 0, 0, 0.5);
+}
+.card.spell-card .spell-tag {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+}
+.card.spell-card .spell-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  background: radial-gradient(circle at 50% 45%,
+    color-mix(in srgb, var(--type-1) 35%, transparent) 0%,
+    transparent 65%);
+}
+.card.spell-card .spell-glyph {
+  font-size: clamp(40px, 10vw, 70px);
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6))
+          drop-shadow(0 0 12px color-mix(in srgb, var(--type-1) 70%, transparent));
+  animation: spellGlyphFloat 3.6s ease-in-out infinite;
+}
+.card.spell-card .spell-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 7px 7px;
+}
+.card.spell-card .spell-desc {
+  font-size: 9px;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 0.9;
+  font-style: italic;
+}
+.card.spell-card.compact .spell-desc { display: none; }
+.card.spell-card.compact .spell-glyph { font-size: clamp(28px, 7vw, 44px); }
+
+@keyframes spellGlyphFloat {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-3px) rotate(-2deg); }
+}
+
+/* Rarity-coloured border accent so players can spot rare spells fast.
+ * Uses outer ring vs the existing legendary star treatment for
+ * Pokémon (we don't want spells competing visually with the
+ * legendary glow that announces a Mewtwo). */
+.card.spell-card.rarity-uncommon { box-shadow: 0 0 0 1px #6ee7b755, inset 0 0 18px color-mix(in srgb, var(--type-1) 40%, transparent), 0 4px 14px rgba(0,0,0,.5); }
+.card.spell-card.rarity-rare     { box-shadow: 0 0 0 2px #60a5fa88, inset 0 0 18px color-mix(in srgb, var(--type-1) 40%, transparent), 0 4px 14px rgba(0,0,0,.5); }
+.card.spell-card.rarity-epic     { box-shadow: 0 0 0 2px #c084fc99, inset 0 0 22px color-mix(in srgb, var(--type-1) 50%, transparent), 0 4px 16px rgba(0,0,0,.6); }
+.card.spell-card.rarity-legendary { box-shadow: 0 0 0 2px #f59e0bcc, inset 0 0 24px color-mix(in srgb, var(--type-1) 55%, transparent), 0 4px 18px rgba(245,158,11,.4); }
+
+/* Frozen status — frostbite overlay on a card with status.kind=freeze. */
+.card .card-status.status-freeze,
+.card .status-icon.kind-freeze { color: #93c5fd; text-shadow: 0 0 6px #60a5faaa; }
+.field-slot .card[data-frozen] .card-art,
+.field-slot .card .card-status.status-freeze ~ .card-art {
+  filter: brightness(0.85) hue-rotate(180deg) saturate(0.85);
+}

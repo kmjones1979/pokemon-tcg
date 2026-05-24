@@ -87,7 +87,9 @@ export function tickStatus(card) {
     }
     return { damage: 2, expired: false, message: `${card.name} is burning` };
   }
-  // Paralyze + sleep don't deal damage — they just gate the next attack.
+  // Paralyze + sleep + freeze don't deal damage — they just gate the
+  // next attack. `freeze` is applied by the Freeze spell card (player
+  // chooses the target), unlike paralyze/sleep which roll on contact.
   s.turnsLeft -= 1;
   if (s.turnsLeft <= 0) {
     delete card.status;
@@ -99,5 +101,6 @@ export function tickStatus(card) {
 // True if the card is "locked" from attacking right now because of a status.
 export function isLockedOut(card) {
   if (!card.status) return false;
-  return card.status.kind === "paralyze" || card.status.kind === "sleep";
+  const k = card.status.kind;
+  return k === "paralyze" || k === "sleep" || k === "freeze";
 }
