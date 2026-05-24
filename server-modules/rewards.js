@@ -10,45 +10,58 @@
 
 const { randomUUID } = require("crypto");
 const store = require("./state-store");
+const {
+  rarityForCard,
+  RARITIES,
+  RARITY_BY_TIER,
+} = require("../shared/deck-builder");
 
 const OFFER_TTL_SEC = 10 * 60;       // 10 minutes
 
-// Default tier weights — heavy lean on T1-T3 with a small chance at T4/5.
-// Used by multiplayer / champion / unrestricted rolls.
-const DEFAULT_WEIGHTS = { 1: 30, 2: 32, 3: 22, 4: 11, 5: 5 };
+// Player-facing drop-rate ladder. Drop frequencies sum to 100 across the
+// five rarities, with each step roughly halving the one below. This is
+// the SINGLE source of truth for "how often does each rarity drop" —
+// difficulty bands carve subsets out of this table but never override
+// the underlying ratios.
+const RARITY_RATES = {
+  common:    50,
+  uncommon:  30,
+  rare:      15,
+  epic:       4,
+  legendary:  1,
+};
 
-// Difficulty-restricted weights for solo rewards. Medium can only roll the
-// bottom of the ladder (common/uncommon); hard rolls the top of the ladder
-// (rare/epic/legendary) — legendaries are the slim-chance jackpot.
-const MEDIUM_WEIGHTS = { 1: 60, 2: 40 };
-const HARD_WEIGHTS   = { 3: 65, 4: 25, 5: 10 };
+// Difficulty pools — what a win at each difficulty is allowed to drop:
+//   easy   → 0 cards (handled at the route layer, no pool here)
+//   medium → common / uncommon / rare
+//   hard   → epic / legendary
+//   default (multiplayer / champion / unrestricted) → all five
+//
+// Rares were intentionally moved from hard → medium so each band has a
+// distinct character: hard is the "elite drop" tier (no overlap with
+// medium), medium is the steady grind.
+const MEDIUM_RARITIES = ["common", "uncommon", "rare"];
+const HARD_RARITIES   = ["epic", "legendary"];
 
-// Player-facing rarity ladder. The internal `tier` (BST bucket 1-5) is a
-// stat tier; the rarity is the word the UI shows.
-const RARITY_BY_TIER = { 1: "common", 2: "uncommon", 3: "rare", 4: "epic", 5: "legendary" };
-
-function rarityForCard(card) {
-  // Flagged legendaries/mythicals always read as "legendary" regardless of
-  // their BST tier — keeps the player-facing ladder consistent.
-  if (card.is_legendary || card.is_mythical) return "legendary";
-  return RARITY_BY_TIER[card.tier] || "common";
-}
-
-function weightedTier(rand = Math.random, weights = DEFAULT_WEIGHTS) {
-  const keys = Object.keys(weights);
+function weightedRarity(rand = Math.random, allowed = RARITIES, rates = RARITY_RATES) {
+  // Sum the rates for ONLY the allowed rarities so subsetting (e.g.
+  // medium-mode) renormalises to 100% within that subset.
   let total = 0;
-  for (const t of keys) total += weights[t];
-  let r = rand() * total;
-  for (const t of keys) {
-    r -= weights[t];
-    if (r <= 0) return Number(t);
+  for (const r of allowed) total += rates[r] || 0;
+  if (total <= 0) return allowed[0];
+  let x = rand() * total;
+  for (const r of allowed) {
+    x -= (rates[r] || 0);
+    if (x <= 0) return r;
   }
-  return Number(keys[0]);
+  return allowed[allowed.length - 1];
 }
 
-function pickFromTier(pokedex, tier, exclude, rand = Math.random) {
-  const candidates = pokedex.filter((p) => p.tier === tier && !exclude.has(p.id));
-  if (candidates.length === 0) return null;
+function pickFromRarity(pokedex, rarity, exclude, rand = Math.random) {
+  const candidates = pokedex.filter(
+    (p) => rarityForCard(p) === rarity && !exclude.has(p.id),
+  );
+  if (!candidates.length) return null;
   return candidates[Math.floor(rand() * candidates.length)];
 }
 
@@ -56,33 +69,33 @@ function rollPicks(pokedex, count, rand = Math.random, opts = {}) {
   const {
     themeType = currentTheme(),
     themeBias = 0.3,
-    weights = DEFAULT_WEIGHTS,
-    // Optional candidate-pool filter applied BEFORE tier rolling. Used by
-    // medium-difficulty drops to exclude is_legendary cards that happen to
-    // live at tier 1-2.
-    rarityFilter = null,
+    allowedRarities = RARITIES,
+    rates = RARITY_RATES,
   } = opts;
-  const allowedTiers = new Set(Object.keys(weights).map(Number));
-  const pool = rarityFilter ? pokedex.filter(rarityFilter) : pokedex;
+  const allowedSet = new Set(allowedRarities);
+  // Restrict the candidate pool to the eligible rarities up front. This
+  // means an is_legendary card with a low BST tier can NEVER show up in
+  // a medium-mode roll, because its computed rarity is "legendary" and
+  // "legendary" isn't in MEDIUM_RARITIES.
+  const pool = pokedex.filter((c) => allowedSet.has(rarityForCard(c)));
   const picks = [];
   const seen = new Set();
   let safety = 0;
   while (picks.length < count && safety++ < 100) {
-    const tier = weightedTier(rand, weights);
-    // With probability themeBias, try to draw a themed-type card from the
-    // allowed tiers; if none, fall through to the regular tier pick.
+    const rarity = weightedRarity(rand, allowedRarities, rates);
     let card = null;
     if (themeType && rand() < themeBias) {
-      const themed = pool.filter((c) => !seen.has(c.id) && c.types?.includes(themeType) && allowedTiers.has(c.tier));
+      const themed = pool.filter(
+        (c) => !seen.has(c.id) && c.types?.includes(themeType) && rarityForCard(c) === rarity,
+      );
       if (themed.length > 0) card = themed[Math.floor(rand() * themed.length)];
     }
-    if (!card) card = pickFromTier(pool, tier, seen, rand);
+    if (!card) card = pickFromRarity(pool, rarity, seen, rand);
     if (!card) {
-      // Fallback walks the ALLOWED tiers only — never bleed into a
-      // disallowed rarity bucket (e.g. don't give a medium-difficulty
-      // player a legendary because tier 1 was momentarily exhausted).
-      for (const t of Array.from(allowedTiers).sort()) {
-        card = pickFromTier(pool, t, seen, rand);
+      // Fallback walks ONLY the allowed rarities so we never bleed an
+      // epic into a medium-mode reward when the targeted bucket is empty.
+      for (const r of allowedRarities) {
+        card = pickFromRarity(pool, r, seen, rand);
         if (card) break;
       }
     }
@@ -217,8 +230,8 @@ function mount(app, supabase, getPokedex) {
 
     // Drop policy by difficulty (wins only — losses get nothing):
     //   easy   → 0 cards (signal effort, not luck)
-    //   medium → 1 card from common/uncommon pool (T1-T2, no legendaries)
-    //   hard   → 1 card from rare/epic/legendary pool (T3-T5)
+    //   medium → 1 card from {common, uncommon, rare}
+    //   hard   → 1 card from {epic, legendary}
     //   champion override → 5 picks, full pool, one guaranteed legendary
     let count = 0;
     let guaranteeLegendary = false;
@@ -243,13 +256,10 @@ function mount(app, supabase, getPokedex) {
       }
     } else if (won && difficulty === "medium") {
       count = 1;
-      rollOpts = {
-        weights: MEDIUM_WEIGHTS,
-        rarityFilter: (c) => !c.is_legendary && !c.is_mythical,
-      };
+      rollOpts = { allowedRarities: MEDIUM_RARITIES };
     } else if (won && difficulty === "hard") {
       count = 1;
-      rollOpts = { weights: HARD_WEIGHTS };
+      rollOpts = { allowedRarities: HARD_RARITIES };
     }
     if (count === 0) {
       return res.json({ reward: null, reason: "no_drop_for_difficulty" });
@@ -358,7 +368,8 @@ async function offerForOutcome(userId, pokedex, didWin) {
 }
 
 module.exports = {
-  mount, offerForOutcome, rollPicks, weightedTier, createOffer,
-  rarityForCard, toPickPayload,
-  DEFAULT_WEIGHTS, MEDIUM_WEIGHTS, HARD_WEIGHTS, RARITY_BY_TIER,
+  mount, offerForOutcome, rollPicks, weightedRarity, pickFromRarity,
+  createOffer, rarityForCard, toPickPayload,
+  RARITIES, RARITY_BY_TIER, RARITY_RATES,
+  MEDIUM_RARITIES, HARD_RARITIES,
 };

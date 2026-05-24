@@ -22,6 +22,27 @@ function tierFromBst(bst) {
   return TIERS[TIERS.length - 1];
 }
 
+// Player-facing rarity ladder. Every Pokémon classifies into exactly one
+// of these — derived from the BST-based tier, plus the is_legendary /
+// is_mythical flags. This is the single source of truth for "how rare
+// is this card", used by drops, the collection UI, and the reward modal.
+const RARITIES = ["common", "uncommon", "rare", "epic", "legendary"];
+const RARITY_BY_TIER = {
+  1: "common",
+  2: "uncommon",
+  3: "rare",
+  4: "epic",
+  5: "legendary",
+};
+
+function rarityForCard(card) {
+  // Flagged legendaries/mythicals always read as "legendary" regardless of
+  // their BST tier — keeps the player-facing ladder honest even when a
+  // legendary's BST happens to land in a lower stat bucket.
+  if (card?.is_legendary || card?.is_mythical) return "legendary";
+  return RARITY_BY_TIER[card?.tier] || "common";
+}
+
 function toCard(row) {
   const bst =
     (row.hp || 0) +
@@ -31,7 +52,7 @@ function toCard(row) {
     (row.sp_defense || 0) +
     (row.speed || 0);
   const t = tierFromBst(bst);
-  return {
+  const card = {
     id: row.id,
     name: row.name,
     slug: row.slug,
@@ -66,6 +87,10 @@ function toCard(row) {
       ),
     ),
   };
+  // Every Pokémon ships with an explicit rarity so the drop / UI layers
+  // don't have to recompute it. Driven by BST tier + the legendary flags.
+  card.rarity = rarityForCard(card);
+  return card;
 }
 
 // Seedable RNG (mulberry32). Deterministic when a seed is given — handy for
@@ -164,4 +189,7 @@ function buildDeck(pokedex, { seed, distribution = DEFAULT_DIST } = {}) {
   return deck;
 }
 
-module.exports = { toCard, buildDeck, tierFromBst, rng };
+module.exports = {
+  toCard, buildDeck, tierFromBst, rng,
+  rarityForCard, RARITIES, RARITY_BY_TIER,
+};

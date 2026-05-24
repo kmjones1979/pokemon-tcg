@@ -16,7 +16,7 @@ const assert = require("node:assert/strict");
 
 // Each entry: module path + the named exports that MUST be present.
 const MODULES = [
-  ["../server-modules/rewards",        ["mount", "rollPicks", "createOffer", "offerForOutcome", "weightedTier"]],
+  ["../server-modules/rewards",        ["mount", "rollPicks", "createOffer", "offerForOutcome", "weightedRarity"]],
   ["../server-modules/quests",         ["mount", "bumpDailyStats"]],
   ["../server-modules/story",          ["mount", "buildBossDeck", "summarisePhaseRules"]],
   ["../server-modules/daily-streak",   ["mount"]],
