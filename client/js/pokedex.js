@@ -1,7 +1,13 @@
 // Pokédex completion overlay. Renders all 1025 species as a grid;
 // owned ones are colored + show count, unowned ones are silhouettes.
 // Generation totals are shown at the top for the "gotta catch 'em all"
-// progress bar feel.
+// progress bar feel. A search box at the top live-filters by name,
+// dex id, type, or generation (e.g. "char fire" or "gen3 grass").
+
+import { filterPokedexEntries } from "./search-utils.js";
+
+let _allRows = [];   // unfiltered rows from /me/pokedex
+let _query = "";     // current search string
 
 export async function open() {
   let overlay = document.querySelector(".pdx-overlay");
@@ -39,6 +45,7 @@ function render(overlay, rows, owned, total) {
   const gens = [...byGen.entries()].sort((a, b) => a[0] - b[0]);
   const pct = Math.round((owned / total) * 1000) / 10;
 
+  _allRows = rows;
   overlay.innerHTML = `
     <div class="pdx-card">
       <header class="pdx-header">
@@ -49,6 +56,10 @@ function render(overlay, rows, owned, total) {
         </div>
         <button class="pdx-x">✕</button>
       </header>
+      <div class="pdx-search-row">
+        <input type="search" class="pdx-search" placeholder="Search by name, #id, type, or gen…" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <span class="pdx-search-count"></span>
+      </div>
       <div class="pdx-genbar">
         ${gens.map(([g, b]) => `
           <div class="pdx-gen">
@@ -61,7 +72,32 @@ function render(overlay, rows, owned, total) {
       <div class="pdx-grid"></div>
     </div>
   `;
+  const searchEl = overlay.querySelector(".pdx-search");
+  const countEl  = overlay.querySelector(".pdx-search-count");
+  searchEl.value = _query;
+  const applyFilter = () => {
+    const filtered = filterPokedexEntries(_allRows, _query);
+    countEl.textContent = _query
+      ? `${filtered.length} of ${_allRows.length}`
+      : "";
+    paintGrid(overlay, filtered);
+  };
+  searchEl.addEventListener("input", (e) => {
+    _query = e.target.value;
+    applyFilter();
+  });
+  applyFilter();
+  overlay.querySelector(".pdx-x").addEventListener("click", close);
+}
+
+function paintGrid(overlay, rows) {
   const grid = overlay.querySelector(".pdx-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  if (rows.length === 0) {
+    grid.innerHTML = `<div class="pdx-empty">No Pokémon match that search.</div>`;
+    return;
+  }
   for (const r of rows) {
     const cell = document.createElement("div");
     const ownedClass = r.quantity > 0 ? "owned" : "locked";
@@ -79,7 +115,6 @@ function render(overlay, rows, owned, total) {
     `;
     grid.appendChild(cell);
   }
-  overlay.querySelector(".pdx-x").addEventListener("click", close);
 }
 
 function escape(s) {

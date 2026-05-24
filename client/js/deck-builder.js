@@ -7,6 +7,7 @@
 
 import { renderCard } from "./cards.js";
 import { encodeDeckIds } from "./deck-codes-client.js";
+import { filterDecks } from "./search-utils.js";
 
 const DECK_SIZE = 30;
 const MAX_COPIES = 2;
@@ -196,6 +197,9 @@ function render() {
         </section>
 
         <aside class="cb-deck">
+          ${_decks.length > 3 ? `
+            <input type="search" class="cb-deck-search" placeholder="Search decks by name or Pokémon…" autocomplete="off">
+          ` : ""}
           <div class="cb-deck-switcher">
             <select class="cb-deck-select">
               <option value="__new__" ${!_editingDeckId ? "selected" : ""}>+ New deck</option>
@@ -337,6 +341,23 @@ function render() {
     _editingDeckName = e.target.value.slice(0, 40);
   });
   overlay.querySelector(".cb-deck-delete")?.addEventListener("click", deleteCurrentDeck);
+  // Deck search — filters the deck-select dropdown by deck name OR
+  // contained Pokémon name/type. Live filter via hidden options so
+  // there's no full re-render mid-typing.
+  const searchEl = overlay.querySelector(".cb-deck-search");
+  if (searchEl) {
+    const dexById = new Map((_collection || []).map((c) => [c.id, c]));
+    searchEl.addEventListener("input", (e) => {
+      const q = e.target.value;
+      const matching = new Set(filterDecks(_decks, dexById, q).map((d) => d.id));
+      const sel = overlay.querySelector(".cb-deck-select");
+      if (!sel) return;
+      for (const opt of sel.options) {
+        if (opt.value === "__new__") { opt.hidden = false; continue; }
+        opt.hidden = !matching.has(opt.value);
+      }
+    });
+  }
   overlay.querySelector(".cb-activate")?.addEventListener("click", setCurrentAsActive);
 
   // Restore scroll + focus so a click on a card doesn't fling the user back
