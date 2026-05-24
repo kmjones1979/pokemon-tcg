@@ -14,6 +14,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { listStories, getStory } = require("../shared/reading-stories");
+const { BATTLE_EMOTES } = require("../shared/battle-emotes");
 
 const MANIFEST_PATH = path.join(__dirname, "..", "shared", "reading-stories-manifest.json");
 
@@ -49,6 +50,21 @@ function hydrateAudio(story) {
   return { ...story, sections };
 }
 
+function buildEmoteResponse() {
+  // Group emotes by event, returning { [event]: [{id, audioUrl}, ...] }
+  // Skips any emote whose audioUrl isn't yet in the manifest (e.g. a
+  // newly-added emote that hasn't been re-generated).
+  const manifest = loadManifest();
+  const grouped = {};
+  for (const e of BATTLE_EMOTES) {
+    const entry = manifest[`emotes/${e.id}`];
+    if (!entry?.audioUrl) continue;
+    if (!grouped[e.event]) grouped[e.event] = [];
+    grouped[e.event].push({ id: e.id, audioUrl: entry.audioUrl });
+  }
+  return grouped;
+}
+
 function mount(app) {
   app.get("/api/reading/stories", (_req, res) => {
     res.json({ stories: listStories() });
@@ -59,6 +75,13 @@ function mount(app) {
     if (!story) return res.status(404).json({ error: "Story not found." });
     res.json({ story: hydrateAudio(story) });
   });
+
+  // Battle emote audio manifest — keyed by event so the client can
+  // pick a random matching clip per fire. Lightweight; safe to cache
+  // on the client.
+  app.get("/api/reading/emotes", (_req, res) => {
+    res.json({ emotes: buildEmoteResponse() });
+  });
 }
 
-module.exports = { mount, hydrateAudio, loadManifest };
+module.exports = { mount, hydrateAudio, loadManifest, buildEmoteResponse };

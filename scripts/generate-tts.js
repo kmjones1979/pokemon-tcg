@@ -30,6 +30,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { READING_STORIES } = require("../shared/reading-stories");
+const { BATTLE_EMOTES, EMOTE_VOICES } = require("../shared/battle-emotes");
 
 const SECRETS_FILE = path.join(process.env.HOME || "", ".secrets", "pokemon.env");
 const MANIFEST_PATH = path.join(__dirname, "..", "shared", "reading-stories-manifest.json");
@@ -165,7 +166,8 @@ async function main() {
   const confirm = args.includes("--confirm");
   const force   = args.includes("--force");
 
-  // Plan: walk all stories, decide what needs generating.
+  // Plan: walk all stories + battle emotes, decide what needs generating.
+  // Stories use `<storyId>/<sectionId>` keys; emotes use `emotes/<emoteId>`.
   const manifest = loadManifest();
   const plan = [];
   let totalChars = 0;
@@ -175,9 +177,30 @@ async function main() {
       const cached = manifest[key];
       if (cached && !force) continue;
       const voiceId = SPEAKER_VOICES[sec.speaker] || SPEAKER_VOICES.narrator;
-      plan.push({ storyId: story.id, sectionId: sec.id, speaker: sec.speaker, voiceId, text: sec.text });
+      plan.push({
+        kind: "story",
+        storyId: story.id,
+        sectionId: sec.id,
+        speaker: sec.speaker,
+        voiceId,
+        text: sec.text,
+      });
       totalChars += sec.text.length;
     }
+  }
+  for (const emote of BATTLE_EMOTES) {
+    const key = `emotes/${emote.id}`;
+    const cached = manifest[key];
+    if (cached && !force) continue;
+    const voiceId = EMOTE_VOICES[emote.voiceKey] || EMOTE_VOICES.narrator;
+    plan.push({
+      kind: "emote",
+      emoteId: emote.id,
+      event: emote.event,
+      voiceId,
+      text: emote.text,
+    });
+    totalChars += emote.text.length;
   }
 
   console.log(`[tts] Reading Mode TTS generation`);
@@ -191,8 +214,10 @@ async function main() {
   if (!confirm) {
     console.log(`[tts] DRY RUN — re-run with --confirm to actually call ElevenLabs + upload to Supabase.`);
     console.log(`[tts] Sample plan items:`);
-    for (const item of plan.slice(0, 3)) {
-      console.log(`        ${item.storyId}/${item.sectionId} [${item.speaker} → ${item.voiceId}] "${item.text.slice(0, 60)}…"`);
+    for (const item of plan.slice(0, 5)) {
+      const id = item.kind === "story" ? `${item.storyId}/${item.sectionId}` : `emotes/${item.emoteId}`;
+      const speaker = item.kind === "story" ? item.speaker : item.event;
+      console.log(`        ${id} [${speaker} → ${item.voiceId}] "${item.text.slice(0, 60)}…"`);
     }
     return;
   }
@@ -201,21 +226,53 @@ async function main() {
 
   let done = 0;
   for (const item of plan) {
-    process.stdout.write(`[tts] ${done + 1}/${plan.length}  ${item.storyId}/${item.sectionId} [${item.speaker}] … `);
+    const id = item.kind === "story"
+      ? `${item.storyId}/${item.sectionId}`
+      : `emotes/${item.emoteId}`;
+    const label = item.kind === "story" ? item.speaker : item.event;
+    process.stdout.write(`[tts] ${done + 1}/${plan.length}  ${id} [${label}] … `);
     try {
       const mp3 = await elevenLabsTTS(apiKey, item.voiceId, item.text);
-      const url = await uploadMp3(supabaseUrl, serviceKey, item.storyId, item.sectionId, mp3);
-      manifest[manifestKey(item.storyId, item.sectionId)] = { audioUrl: url, voiceId: item.voiceId, generatedAt: new Date().toISOString() };
-      saveManifest(manifest); // checkpoint after each section so a crash doesn't lose progress
+      let url;
+      if (item.kind === "story") {
+        url = await uploadMp3(supabaseUrl, serviceKey, item.storyId, item.sectionId, mp3);
+      } else {
+        url = await uploadEmoteMp3(supabaseUrl, serviceKey, item.emoteId, mp3);
+      }
+      manifest[id] = {
+        audioUrl: url,
+        voiceId: item.voiceId,
+        generatedAt: new Date().toISOString(),
+      };
+      saveManifest(manifest); // checkpoint after each item so a crash doesn't lose progress
       done++;
       console.log(`✓ ${mp3.length} bytes`);
     } catch (err) {
       console.log(`✗ ${err.message}`);
-      console.error(`[tts] aborting at ${item.storyId}/${item.sectionId}; partial manifest saved`);
+      console.error(`[tts] aborting at ${id}; partial manifest saved`);
       process.exit(1);
     }
   }
-  console.log(`[tts] Done. Generated ${done} sections. Manifest: ${MANIFEST_PATH}`);
+  console.log(`[tts] Done. Generated ${done} items. Manifest: ${MANIFEST_PATH}`);
+}
+
+async function uploadEmoteMp3(supabaseUrl, serviceKey, emoteId, buf) {
+  const objectPath = `emotes/${emoteId}.mp3`;
+  const res = await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${objectPath}`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${serviceKey}`,
+      "apikey": serviceKey,
+      "Content-Type": "audio/mpeg",
+      "x-upsert": "true",
+    },
+    body: buf,
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`emote upload failed ${res.status}: ${body.slice(0, 200)}`);
+  }
+  return `${supabaseUrl}/storage/v1/object/public/${BUCKET}/${objectPath}`;
 }
 
 main().catch((err) => {

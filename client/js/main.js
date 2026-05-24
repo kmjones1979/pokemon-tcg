@@ -20,6 +20,11 @@ import { fireAttackTrail, floatDamage, knockOut, flashVerdict, shakeHit } from "
 import {
   playCry, setMuted, isMuted,
   sfxAttack, sfxHit, sfxKO, sfxVictory, sfxDefeat, sfxCardPlay, sfxCrit, sfxYourTurn,
+} from "./audio.js";
+import {
+  playEmote, attackResultToEvents, spellResultToEvent,
+} from "./battle-emotes.js";
+import {
   startBGM, stopBGM,
 } from "./audio.js";
 import { TYPE_COLORS } from "./type-chart.js";
@@ -1224,6 +1229,9 @@ function performAttackFromDrag(fromSlot, target) {
     flashVerdict(result.reason, "weak");
     return;
   }
+  // Fire-and-forget battle emote(s) for this attack. Events are
+  // classified by attackResultToEvents (super/weak/hit + maybe ko).
+  for (const ev of attackResultToEvents(result)) playEmote(ev);
   animateHit(attackerEl, defenderEl, attackerInst, result, () => render());
 }
 
@@ -1747,6 +1755,8 @@ async function onSlotClick(side, slot) {
       return;
     }
     sfxCardPlay();
+    const spellEv = spellResultToEvent(r);
+    if (spellEv) playEmote(spellEv);
     flashVerdict(`${r.spell?.name || "Spell"} cast on ${r.targetName || "target"}!`, "super");
     render();
     return;
