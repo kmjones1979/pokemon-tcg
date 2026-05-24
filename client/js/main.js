@@ -314,6 +314,7 @@ function renderMenu() {
           <button class="mode-btn story-launch" id="mode-story" disabled title="${currentUser ? "Pick a trainer to begin Story Mode" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
           <button class="mode-btn" id="mode-trade" ${currentUser ? "" : "disabled"} title="${currentUser ? "Trade cards with other trainers" : "Sign in to trade"}">🔄 Trade Cards</button>
           <button class="mode-btn puzzle-launch" id="mode-puzzle" title="Today's chess-style card puzzle">🧩 Daily Puzzle</button>
+          <button class="mode-btn" id="mode-reading" title="Read along with Pokémon friends">📚 Story Time</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -499,6 +500,7 @@ function renderMenu() {
   $("#mode-story")?.addEventListener("click", () => story.openStoryHub({ currentUser }));
   $("#mode-trade")?.addEventListener("click", () => trading.openTradeMarket({ currentUser }));
   $("#mode-puzzle")?.addEventListener("click", () => puzzle.openPuzzle({ currentUser }));
+  $("#mode-reading")?.addEventListener("click", openReadingMode);
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).
@@ -877,6 +879,32 @@ async function startChampionFight(championId) {
   } catch (err) {
     alert("Couldn't start: " + (err.message || "unknown"));
   }
+}
+
+// Opens the kid-friendly read-along Reading Mode as an overlay. The
+// reading-mode module owns its own DOM lifecycle — we just give it a
+// rooted container and clean up when the close button fires.
+async function openReadingMode() {
+  // Lazy-load to keep the initial bundle lean. Reading Mode isn't on
+  // the critical battle path; defer its 8KB until the user opens it.
+  const mod = await import("./reading-mode.js");
+  document.querySelector(".reading-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.className = "reading-overlay howto-overlay"; // reuse the dim/blur shell
+  overlay.innerHTML = `
+    <div class="howto-card" style="max-width: 800px; padding: 0; overflow: hidden;">
+      <div class="reading-overlay-close-wrap" style="display: flex; justify-content: flex-end; padding: 10px;">
+        <button class="howto-close" id="reading-close">✕ Close</button>
+      </div>
+      <div id="reading-root"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#reading-close").addEventListener("click", () => {
+    mod.destroyReadingMode();
+    overlay.remove();
+  });
+  await mod.openReadingMode(overlay.querySelector("#reading-root"));
 }
 
 function showHowToPlay() {
