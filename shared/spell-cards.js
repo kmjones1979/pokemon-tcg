@@ -49,6 +49,12 @@ const ACTIVE_EFFECTS = new Set([
   "surge",        // slice 6: gain +2 energy this turn (capped at max)
   "scout",        // slice 6: draw 2 cards from your deck
   "phoenix",      // slice 6: revive most-recently-fainted Pokémon at full HP
+  "burn",         // slice 7: apply burn status (2 dmg/turn for 3 turns)
+  "shield",       // slice 7: block the next attack on one ally (one-time)
+  "mass-heal",    // slice 7: heal every ally by 3 HP
+  "power-strike", // slice 7: +3 ATK to one ally's next attack (one-time)
+  "counter",      // slice 7: reflect the next attack's damage back to attacker
+  "stop-time",    // slice 7: opponent skips their next turn entirely
 ]);
 
 const SPELL_CARDS = [
@@ -217,6 +223,88 @@ const SPELL_CARDS = [
     description: "Revive your most recently fainted Pokémon at full HP.",
     flavor_text: "From ashes, returning.",
   },
+  // --- Slice 7 ------------------------------------------------------
+  {
+    id: SPELL_BASE_ID + 13,
+    kind: "spell",
+    name: "Burn",
+    effect: "burn",
+    target: "enemyField",
+    types: ["fire"],
+    glyph: "🔥",
+    power: 2,
+    rarity: "uncommon",
+    burnTurns: 3,
+    description: "Set one enemy on fire — 2 damage at the end of their next 3 turns.",
+    flavor_text: "Ember catches. Flames take hold.",
+  },
+  {
+    id: SPELL_BASE_ID + 14,
+    kind: "spell",
+    name: "Shield",
+    effect: "shield",
+    target: "ownField",
+    types: ["steel"],
+    glyph: "🛡",
+    power: 4,
+    rarity: "rare",
+    description: "Block the next attack on one of your Pokémon (one-time).",
+    flavor_text: "An iron wall, raised in a heartbeat.",
+  },
+  {
+    id: SPELL_BASE_ID + 15,
+    kind: "spell",
+    name: "Mass Heal",
+    effect: "mass-heal",
+    target: "none",
+    types: ["fairy"],
+    glyph: "💗",
+    power: 6,
+    rarity: "rare",
+    massHealAmount: 3,
+    description: "Restore 3 HP to every one of your Pokémon on the field.",
+    flavor_text: "A soft wave washes across the team.",
+  },
+  {
+    id: SPELL_BASE_ID + 16,
+    kind: "spell",
+    name: "Power Strike",
+    effect: "power-strike",
+    target: "ownField",
+    types: ["fighting"],
+    glyph: "⚔",
+    power: 2,
+    rarity: "common",
+    powerStrikeBonus: 3,
+    description: "+3 Attack on one ally's next attack (one-time).",
+    flavor_text: "All your strength, one perfect strike.",
+  },
+  {
+    id: SPELL_BASE_ID + 17,
+    kind: "spell",
+    name: "Counter",
+    effect: "counter",
+    target: "ownField",
+    types: ["psychic"],
+    glyph: "↩",
+    power: 6,
+    rarity: "epic",
+    description: "Reflect the next attack on one of your Pokémon back at the attacker.",
+    flavor_text: "Mirror up. Whatever hits, hits back.",
+  },
+  {
+    id: SPELL_BASE_ID + 18,
+    kind: "spell",
+    name: "Stop Time",
+    effect: "stop-time",
+    target: "none",
+    types: ["psychic"],
+    glyph: "⏸",
+    power: 10,
+    rarity: "legendary",
+    description: "Your opponent's next turn is skipped entirely.",
+    flavor_text: "The clock holds its breath.",
+  },
 ];
 
 const SPELL_EFFECTS = SPELL_CARDS.map((s) => s.effect);
@@ -270,10 +358,19 @@ function spellToCard(spell) {
     power: spell.power,
     // Effect parameters — carried so the engine can resolve without
     // re-importing the catalog.
-    defenderHpBonus: spell.defenderHpBonus,
-    evolveHpMult: spell.evolveHpMult,
-    evolveAtkMult: spell.evolveAtkMult,
-    aoeDamage: spell.aoeDamage,
+    defenderHpBonus:  spell.defenderHpBonus,
+    evolveHpMult:     spell.evolveHpMult,
+    evolveAtkMult:    spell.evolveAtkMult,
+    aoeDamage:        spell.aoeDamage,
+    // Slice 6 params:
+    boltDamage:       spell.boltDamage,
+    sleepTurns:       spell.sleepTurns,
+    surgeEnergy:      spell.surgeEnergy,
+    drawCount:        spell.drawCount,
+    // Slice 7 params:
+    burnTurns:        spell.burnTurns,
+    massHealAmount:   spell.massHealAmount,
+    powerStrikeBonus: spell.powerStrikeBonus,
   };
 }
 

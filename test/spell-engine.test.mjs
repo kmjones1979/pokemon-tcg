@@ -554,3 +554,162 @@ test("Revived Pokémon comes back with summoning sickness (no instant attack)", 
   const revived = state.players.player.field.find((s) => s !== null);
   assert.equal(revived.summoningSickness, true, "newly-revived Pokémon must wait a turn");
 });
+
+// =====================================================================
+// Slice 7 — Burn, Shield, Mass Heal, Power Strike, Counter, Stop Time
+// =====================================================================
+
+const BURN         = spellToCard(SPELL_CARDS.find((s) => s.effect === "burn"));
+const SHIELD       = spellToCard(SPELL_CARDS.find((s) => s.effect === "shield"));
+const MASS_HEAL    = spellToCard(SPELL_CARDS.find((s) => s.effect === "mass-heal"));
+const POWER_STRIKE = spellToCard(SPELL_CARDS.find((s) => s.effect === "power-strike"));
+const COUNTER      = spellToCard(SPELL_CARDS.find((s) => s.effect === "counter"));
+const STOP_TIME    = spellToCard(SPELL_CARDS.find((s) => s.effect === "stop-time"));
+
+// --- BURN ------------------------------------------------------------
+
+test("Burn applies burn status to one enemy for the designed turn count", () => {
+  const enemy = pokemon(300, { hp: 12 });
+  const state = makeMatch({ playerHand: [BURN], aiField: [enemy], playerEnergy: 3 });
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  const t = state.players.ai.field[0];
+  assert.equal(t.status.kind, "burn");
+  assert.equal(t.status.turnsLeft, BURN.burnTurns);
+});
+
+// --- SHIELD ----------------------------------------------------------
+
+test("Shield marks an ally; the next incoming attack does 0 damage", () => {
+  // Set up: AI attacker, player defender with shield.
+  const aiAttacker = pokemon(310, { atk: 8, hp: 10 });
+  const playerDef  = pokemon(311, { hp: 10 });
+  const state = makeMatch({ playerHand: [SHIELD], playerEnergy: 3 });
+  placeAlly(state, 0, playerDef, 10);
+  state.players.ai.field[0] = makeInst(aiAttacker);
+
+  // Cast Shield on slot 0 (own ally).
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  assert.equal(state.players.player.field[0].shieldedNext, true);
+
+  // AI's turn — they attack.
+  state.activePlayer = "ai";
+  state.players.ai.field[0].summoningSickness = false;
+  const before = state.players.player.field[0].currentHp;
+  const atk = attack(state, "ai", 0, 0);
+  assert.equal(atk.ok, true);
+  // Damage should have been 0 — shield absorbed it.
+  assert.equal(state.players.player.field[0].currentHp, before, "shielded ally takes no damage");
+  // Shield consumed.
+  assert.equal(state.players.player.field[0].shieldedNext, false);
+});
+
+test("Shield only absorbs ONE attack — second attack lands normally", () => {
+  const aiAttacker = pokemon(312, { atk: 5, hp: 10 });
+  const playerDef  = pokemon(313, { hp: 20 });
+  const state = makeMatch({ playerHand: [SHIELD], playerEnergy: 3 });
+  placeAlly(state, 0, playerDef, 20);
+  state.players.ai.field[0] = makeInst(aiAttacker);
+  playCard(state, "player", 0, { spellTarget: 0 });
+
+  state.activePlayer = "ai";
+  state.players.ai.field[0].summoningSickness = false;
+  attack(state, "ai", 0, 0); // blocked
+  // Reset attackedThisTurn so we can attack again.
+  state.players.ai.field[0].attackedThisTurn = false;
+  const before = state.players.player.field[0].currentHp;
+  attack(state, "ai", 0, 0);
+  assert.ok(state.players.player.field[0].currentHp < before, "second attack should land");
+});
+
+// --- MASS HEAL -------------------------------------------------------
+
+test("Mass Heal restores HP to every ally on field (capped at max)", () => {
+  const a1 = pokemon(320, { hp: 10 });
+  const a2 = pokemon(321, { hp: 8 });
+  const state = makeMatch({ playerHand: [MASS_HEAL], playerEnergy: 5 });
+  placeAlly(state, 0, a1, 3);
+  placeAlly(state, 1, a2, 1);
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  // Both allies should have gained up to 3 HP (or maxed out).
+  assert.equal(state.players.player.field[0].currentHp, 6, "3+3=6");
+  assert.equal(state.players.player.field[1].currentHp, 4, "1+3=4");
+  assert.equal(r.allies, 2);
+});
+
+test("Mass Heal refuses when no allies are on the field", () => {
+  const state = makeMatch({ playerHand: [MASS_HEAL], playerEnergy: 5 });
+  const before = state.players.player.energy;
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, false);
+  assert.equal(state.players.player.energy, before, "no waste on empty field");
+});
+
+// --- POWER STRIKE ----------------------------------------------------
+
+test("Power Strike marks ally; next attack hits for +bonus damage", () => {
+  const aiVictim = pokemon(330, { hp: 30 });
+  const myHitter = pokemon(331, { atk: 4, hp: 10 });
+  const state = makeMatch({ playerHand: [POWER_STRIKE], playerEnergy: 3 });
+  placeAlly(state, 0, myHitter);
+  state.players.ai.field[0] = makeInst(aiVictim);
+
+  // Cast Power Strike on my hitter.
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  assert.equal(state.players.player.field[0].powerStrikeBonus, POWER_STRIKE.powerStrikeBonus);
+
+  // Now attack. Damage should include the bonus. We compare to a
+  // baseline by running the attack and confirming the bonus flag
+  // cleared.
+  const before = state.players.ai.field[0].currentHp;
+  attack(state, "player", 0, 0);
+  const after = state.players.ai.field[0].currentHp;
+  assert.ok(before - after >= POWER_STRIKE.powerStrikeBonus, `expected ≥${POWER_STRIKE.powerStrikeBonus} damage, got ${before - after}`);
+  // Flag cleared after use.
+  assert.ok(!state.players.player.field[0].powerStrikeBonus, "power-strike flag should clear after one attack");
+});
+
+// --- COUNTER ---------------------------------------------------------
+
+test("Counter reflects the next attack's damage back at the attacker", () => {
+  const aiAttacker = pokemon(340, { atk: 6, hp: 15 });
+  const myDefender = pokemon(341, { hp: 15 });
+  const state = makeMatch({ playerHand: [COUNTER], playerEnergy: 3 });
+  placeAlly(state, 0, myDefender);
+  state.players.ai.field[0] = makeInst(aiAttacker);
+
+  // Cast Counter on my defender.
+  playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(state.players.player.field[0].counterNext, true);
+
+  // AI attacks.
+  state.activePlayer = "ai";
+  state.players.ai.field[0].summoningSickness = false;
+  const beforeAtkHp = state.players.ai.field[0].currentHp;
+  const beforeDefHp = state.players.player.field[0].currentHp;
+  const r = attack(state, "ai", 0, 0);
+  assert.equal(r.ok, true);
+
+  // Defender took damage; attacker took the SAME damage reflected.
+  const defenderDmg = beforeDefHp - state.players.player.field[0].currentHp;
+  const attackerDmg = beforeAtkHp - state.players.ai.field[0].currentHp;
+  assert.ok(defenderDmg > 0, "defender should still take the hit");
+  assert.equal(attackerDmg, defenderDmg, "attacker should take the reflected damage");
+  // Counter consumed.
+  assert.equal(state.players.player.field[0].counterNext, false);
+});
+
+// --- STOP TIME -------------------------------------------------------
+
+test("Stop Time sets a skipNextTurn flag on the opposing player", () => {
+  const oppMon = pokemon(350);
+  const state = makeMatch({ playerHand: [STOP_TIME], playerEnergy: 5 });
+  state.players.ai.field[0] = makeInst(oppMon);
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  assert.equal(state.players.ai.skipNextTurn, true,
+    "Stop Time should mark the opponent's next turn for skip");
+});

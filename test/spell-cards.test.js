@@ -19,11 +19,12 @@ const {
 
 const KNOWN_RARITIES = new Set(["common", "uncommon", "rare", "epic", "legendary"]);
 
-test("SPELL_CARDS contains all 12 designed spells (6 slice 1-2 + 6 slice 6)", () => {
+test("SPELL_CARDS contains all 18 designed spells (slice 1-7)", () => {
   const effects = SPELL_CARDS.map((s) => s.effect).sort();
   assert.deepEqual(effects, [
-    "aoe", "bolt", "cleanse", "defender", "evolve", "freeze",
-    "heal", "paralyze", "phoenix", "scout", "sleep-powder", "surge",
+    "aoe", "bolt", "burn", "cleanse", "counter", "defender", "evolve", "freeze",
+    "heal", "mass-heal", "paralyze", "phoenix", "power-strike", "scout",
+    "shield", "sleep-powder", "stop-time", "surge",
   ]);
 });
 
@@ -97,10 +98,11 @@ test("isSpellCard distinguishes spells from Pokémon", () => {
   assert.equal(isSpellCard(undefined), false);
 });
 
-test("isActiveSpellEffect: all 12 designed effects are active in slice 6", () => {
+test("isActiveSpellEffect: all 18 designed effects are active in slice 7", () => {
   for (const e of [
     "freeze", "paralyze", "heal", "defender", "evolve", "aoe",
     "bolt", "sleep-powder", "cleanse", "surge", "scout", "phoenix",
+    "burn", "shield", "mass-heal", "power-strike", "counter", "stop-time",
   ]) {
     assert.equal(isActiveSpellEffect(e), true, `${e} should be active`);
   }
@@ -108,12 +110,12 @@ test("isActiveSpellEffect: all 12 designed effects are active in slice 6", () =>
   assert.equal(isActiveSpellEffect("unknown"), false);
 });
 
-test("allSpellCards() returns all 12 active spells", () => {
+test("allSpellCards() returns all 18 active spells", () => {
   const cards = allSpellCards();
   for (const c of cards) {
     assert.ok(ACTIVE_EFFECTS.has(c.effect), `${c.name} (${c.effect}) leaked into active spells`);
   }
-  assert.equal(cards.length, 12);
+  assert.equal(cards.length, 18);
 });
 
 test("rarity bands cover every player tier (slice 6 expanded the spread)", () => {

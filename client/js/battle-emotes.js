@@ -97,6 +97,13 @@ export function spellResultToEvent(result) {
     case "surge":        return "spell-surge";
     case "scout":        return "spell-scout";
     case "phoenix":      return "spell-phoenix";
+    // Slice 7:
+    case "burn":         return "spell-burn";
+    case "shield":       return "spell-shield";
+    case "mass-heal":    return "spell-mass-heal";
+    case "power-strike": return "spell-power-strike";
+    case "counter":      return "spell-counter";
+    case "stop-time":    return "spell-stop-time";
     default:             return null;
   }
 }

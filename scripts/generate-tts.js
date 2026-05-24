@@ -102,7 +102,20 @@ function manifestKey(storyId, sectionId) {
   return `${storyId}/${sectionId}`;
 }
 
-async function elevenLabsTTS(apiKey, voiceId, text) {
+// Voice-setting presets per content kind:
+//   "story" / "chapter-intro" → calm, consistent reading. Higher
+//     stability so the voice doesn't bounce around mid-paragraph.
+//   "emote" → battle interjections. Lower stability + higher style
+//     so they sound EXCITED and varied, like a kid yelling at the
+//     screen, not a corporate VO booth.
+function voiceSettingsFor(kind) {
+  if (kind === "emote") {
+    return { stability: 0.25, similarity_boost: 0.70, style: 0.75, use_speaker_boost: true };
+  }
+  return { stability: 0.6, similarity_boost: 0.75, style: 0.2 };
+}
+
+async function elevenLabsTTS(apiKey, voiceId, text, kind = "story") {
   const res = await fetch(`${ELEVEN_BASE}/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
     method: "POST",
     headers: {
@@ -113,7 +126,7 @@ async function elevenLabsTTS(apiKey, voiceId, text) {
     body: JSON.stringify({
       text,
       model_id: ELEVEN_MODEL,
-      voice_settings: { stability: 0.6, similarity_boost: 0.75, style: 0.2 },
+      voice_settings: voiceSettingsFor(kind),
     }),
   });
   if (!res.ok) {
@@ -162,6 +175,11 @@ async function main() {
   // EMOTE_VOICES map. Useful when reassigning voices: you change the
   // map, run this flag, and only the affected clips re-generate.
   const voiceMismatch = args.includes("--regenerate-voice-mismatch");
+  // `--regenerate-emotes` re-creates every emote clip (forces emote
+  // entries through TTS regardless of cache). Used when changing the
+  // emote voice_settings to make them sound more excited — voiceId
+  // didn't change, just the delivery, which the cache doesn't see.
+  const regenerateEmotes = args.includes("--regenerate-emotes");
 
   // Plan: walk all stories + battle emotes, decide what needs generating.
   // Stories use `<storyId>/<sectionId>` keys; emotes use `emotes/<emoteId>`.
@@ -196,7 +214,10 @@ async function main() {
   for (const emote of BATTLE_EMOTES) {
     const key = `emotes/${emote.id}`;
     const voiceId = EMOTE_VOICES[emote.voiceKey] || EMOTE_VOICES.narrator;
-    if (!shouldRegen(manifest[key], voiceId)) continue;
+    // --regenerate-emotes treats every emote as if its cache is stale,
+    // bypassing the voiceId match — captures voice_settings changes
+    // (excitement tuning) that the standard cache check can't see.
+    if (!regenerateEmotes && !shouldRegen(manifest[key], voiceId)) continue;
     plan.push({
       kind: "emote",
       emoteId: emote.id,
@@ -251,7 +272,7 @@ async function main() {
     const { id, label, objectPath } = describePlanItem(item);
     process.stdout.write(`[tts] ${done + 1}/${plan.length}  ${id} [${label}] … `);
     try {
-      const mp3 = await elevenLabsTTS(apiKey, item.voiceId, item.text);
+      const mp3 = await elevenLabsTTS(apiKey, item.voiceId, item.text, item.kind);
       const url = await uploadAt(supabaseUrl, serviceKey, objectPath, mp3);
       manifest[id] = {
         audioUrl: url,

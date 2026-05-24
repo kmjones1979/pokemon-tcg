@@ -87,82 +87,82 @@
   "emotes/hit-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/hit-1.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T14:37:31.110Z"
+    "generatedAt": "2026-05-24T16:09:51.025Z"
   },
   "emotes/hit-2": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/hit-2.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T14:37:31.528Z"
+    "generatedAt": "2026-05-24T16:09:51.642Z"
   },
   "emotes/hit-3": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/hit-3.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T14:37:31.903Z"
+    "generatedAt": "2026-05-24T16:09:52.106Z"
   },
   "emotes/hit-4": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/hit-4.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T14:37:32.333Z"
+    "generatedAt": "2026-05-24T16:09:52.447Z"
   },
   "emotes/super-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/super-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:01:24.711Z"
+    "generatedAt": "2026-05-24T16:09:52.856Z"
   },
   "emotes/super-2": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/super-2.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:01:25.129Z"
+    "generatedAt": "2026-05-24T16:09:53.285Z"
   },
   "emotes/weak-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/weak-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:01:25.491Z"
+    "generatedAt": "2026-05-24T16:09:53.702Z"
   },
   "emotes/ko-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/ko-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:01:25.854Z"
+    "generatedAt": "2026-05-24T16:09:54.043Z"
   },
   "emotes/ko-2": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/ko-2.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T14:37:36.861Z"
+    "generatedAt": "2026-05-24T16:09:54.497Z"
   },
   "emotes/win-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/win-1.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T14:37:37.326Z"
+    "generatedAt": "2026-05-24T16:09:54.966Z"
   },
   "emotes/win-2": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/win-2.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T14:37:37.671Z"
+    "generatedAt": "2026-05-24T16:09:55.342Z"
   },
   "emotes/loss-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/loss-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:01:26.216Z"
+    "generatedAt": "2026-05-24T16:09:55.738Z"
   },
   "emotes/spell-freeze-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-freeze-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:01:26.615Z"
+    "generatedAt": "2026-05-24T16:09:56.169Z"
   },
   "emotes/spell-heal-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-heal-1.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T14:37:40.751Z"
+    "generatedAt": "2026-05-24T16:09:56.538Z"
   },
   "emotes/spell-evolve-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-evolve-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:01:26.973Z"
+    "generatedAt": "2026-05-24T16:09:57.105Z"
   },
   "emotes/spell-aoe-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-aoe-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:01:27.581Z"
+    "generatedAt": "2026-05-24T16:09:57.502Z"
   },
   "chapter-intro/ch1_viridian/1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/chapter-intros/ch1_viridian/1.mp3",
@@ -272,31 +272,61 @@
   "emotes/spell-bolt-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-bolt-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:45:37.546Z"
+    "generatedAt": "2026-05-24T16:09:57.878Z"
   },
   "emotes/spell-sleep-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-sleep-1.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T15:45:37.932Z"
+    "generatedAt": "2026-05-24T16:09:58.265Z"
   },
   "emotes/spell-cleanse-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-cleanse-1.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T15:45:38.299Z"
+    "generatedAt": "2026-05-24T16:09:58.651Z"
   },
   "emotes/spell-surge-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-surge-1.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T15:45:38.661Z"
+    "generatedAt": "2026-05-24T16:09:59.028Z"
   },
   "emotes/spell-scout-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-scout-1.mp3",
     "voiceId": "cgSgspJ2msm6clMCkdW9",
-    "generatedAt": "2026-05-24T15:45:39.006Z"
+    "generatedAt": "2026-05-24T16:09:59.384Z"
   },
   "emotes/spell-phoenix-1": {
     "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-phoenix-1.mp3",
     "voiceId": "FGY2WhTYpPnrIDTdsKH5",
-    "generatedAt": "2026-05-24T15:45:39.382Z"
+    "generatedAt": "2026-05-24T16:09:59.724Z"
+  },
+  "emotes/spell-burn-1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-burn-1.mp3",
+    "voiceId": "cgSgspJ2msm6clMCkdW9",
+    "generatedAt": "2026-05-24T16:10:00.111Z"
+  },
+  "emotes/spell-shield-1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-shield-1.mp3",
+    "voiceId": "cgSgspJ2msm6clMCkdW9",
+    "generatedAt": "2026-05-24T16:10:00.495Z"
+  },
+  "emotes/spell-mass-heal-1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-mass-heal-1.mp3",
+    "voiceId": "cgSgspJ2msm6clMCkdW9",
+    "generatedAt": "2026-05-24T16:10:00.840Z"
+  },
+  "emotes/spell-power-strike-1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-power-strike-1.mp3",
+    "voiceId": "cgSgspJ2msm6clMCkdW9",
+    "generatedAt": "2026-05-24T16:10:01.282Z"
+  },
+  "emotes/spell-counter-1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-counter-1.mp3",
+    "voiceId": "FGY2WhTYpPnrIDTdsKH5",
+    "generatedAt": "2026-05-24T16:10:01.664Z"
+  },
+  "emotes/spell-stop-time-1": {
+    "audioUrl": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tts-audio/emotes/spell-stop-time-1.mp3",
+    "voiceId": "FGY2WhTYpPnrIDTdsKH5",
+    "generatedAt": "2026-05-24T16:10:02.043Z"
   }
 }

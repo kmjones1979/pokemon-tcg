@@ -646,6 +646,93 @@ function playSpellCard(state, side, handIndex, card, cost, { spellTarget = null 
       return { ok: true, spell: card, effect: "phoenix", targetSide: side, targetSlot: emptyIdx, targetName: revivedCard.name };
     }
 
+    // -------- BURN (slice 7) ----------------------------------------
+    // Apply burn status — battle.tickStatus deals 2 damage at the end
+    // of the burnt Pokémon's own turn for `burnTurns` ticks. Different
+    // shape from Freeze/Paralyze: it's slow consistent damage, not a
+    // hard lockout.
+    case "burn": {
+      const r = requireEnemyTarget(state, side, spellTarget, "burn");
+      if (r.err) return r.err;
+      const turns = Math.max(1, card.burnTurns || 3);
+      r.enemy.status = { kind: "burn", turnsLeft: turns };
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `🔥 ${card.name}: ${r.enemy.card.name} caught fire — ${turns} turns of burn damage!`, "status");
+      return { ok: true, spell: card, effect: "burn", targetSide: r.otherSide, targetSlot: spellTarget, targetName: r.enemy.card.name };
+    }
+
+    // -------- SHIELD (slice 7) --------------------------------------
+    // Mark an ally with `shieldedNext = true`. The attack() function
+    // consumes this flag on the next incoming hit: damage becomes 0,
+    // flag clears, log line announces the block.
+    case "shield": {
+      const r = requireAllyTarget(state, side, spellTarget, "shield");
+      if (r.err) return r.err;
+      r.ally.shieldedNext = true;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `🛡 ${card.name}: ${r.ally.card.name} is shielded from the next attack!`, "status");
+      return { ok: true, spell: card, effect: "shield", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name };
+    }
+
+    // -------- MASS HEAL (slice 7) -----------------------------------
+    // Heal every ally on field by `massHealAmount` HP, capped at each
+    // Pokémon's maxHp. No-target spell — fires the moment you pick it.
+    case "mass-heal": {
+      const amount = Math.max(1, card.massHealAmount || 3);
+      const allies = p.field.filter((s) => s !== null);
+      if (allies.length === 0) {
+        return { ok: false, reason: "No Pokémon on the field to heal." };
+      }
+      let totalHealed = 0;
+      for (const ally of allies) {
+        const cap = ally.maxHp ?? ally.card.cardHp;
+        const before = ally.currentHp;
+        ally.currentHp = Math.min(cap, ally.currentHp + amount);
+        totalHealed += ally.currentHp - before;
+      }
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `💗 ${card.name}: restored ${totalHealed} HP across ${allies.length} Pokémon.`, "status");
+      return { ok: true, spell: card, effect: "mass-heal", healed: totalHealed, allies: allies.length };
+    }
+
+    // -------- POWER STRIKE (slice 7) --------------------------------
+    // Mark an ally with `powerStrikeBonus`. The attack() function adds
+    // this to the next attack's damage, then clears the flag.
+    case "power-strike": {
+      const r = requireAllyTarget(state, side, spellTarget, "power up");
+      if (r.err) return r.err;
+      const bonus = Math.max(1, card.powerStrikeBonus || 3);
+      r.ally.powerStrikeBonus = bonus;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `⚔ ${card.name}: ${r.ally.card.name}'s next attack will hit for +${bonus} damage!`, "status");
+      return { ok: true, spell: card, effect: "power-strike", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name };
+    }
+
+    // -------- COUNTER (slice 7) -------------------------------------
+    // Mark an ally with `counterNext = true`. When they next get
+    // attacked, attack() reflects the damage back at the attacker AND
+    // still takes the hit themselves. Powerful but single-use.
+    case "counter": {
+      const r = requireAllyTarget(state, side, spellTarget, "set as counter");
+      if (r.err) return r.err;
+      r.ally.counterNext = true;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `↩ ${card.name}: ${r.ally.card.name} will reflect the next attack!`, "status");
+      return { ok: true, spell: card, effect: "counter", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name };
+    }
+
+    // -------- STOP TIME (slice 7) -----------------------------------
+    // Set a flag on the opposing player; the turn-end → next-player
+    // switch checks it and skips their turn entirely (clearing the
+    // flag on the way out). Legendary — high impact, expensive.
+    case "stop-time": {
+      const oppPlayer = state.players[otherSide];
+      oppPlayer.skipNextTurn = true;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `⏸ ${card.name}: time freezes — opponent's next turn is skipped!`, "status");
+      return { ok: true, spell: card, effect: "stop-time", targetSide: otherSide };
+    }
+
     default:
       // Catalog effect that the engine hasn't been taught about yet.
       // Shouldn't be reachable while ACTIVE_EFFECTS gates the catalog,
@@ -844,6 +931,13 @@ export function attack(
         && attackerInst.card.types?.[0] === state.modifier_typeAtkBonus.type) {
       typeStormBonus = state.modifier_typeAtkBonus.bonus || 0;
     }
+    // Power Strike (slice 7): one-time +N attack bonus from a spell.
+    // Consumed once and cleared regardless of hit/miss.
+    const powerStrikeBonus = attackerInst.powerStrikeBonus || 0;
+    if (powerStrikeBonus) {
+      log(state, `⚔ ${attackerInst.card.name}'s Power Strike adds +${powerStrikeBonus} attack!`, "status");
+      attackerInst.powerStrikeBonus = 0;
+    }
     const calc = computeDamage(attackerInst.card, defenderInst.card, {
       abilityBonus:
         attackBonus +
@@ -853,7 +947,8 @@ export function attack(
         auraBonus -
         auraPenalty +
         bossSideBonus +
-        typeStormBonus,
+        typeStormBonus +
+        powerStrikeBonus,
       ability,
       rand,
       themeType: state.themeType || null,
@@ -889,8 +984,32 @@ export function attack(
       damageBase = Math.max(1, Math.round(damageBase / 2));
       solidRockApplied = true;
     }
-    const damage = Math.max(calc.multiplier === 0 ? 0 : 1, damageBase - defReduction);
+    let damage = Math.max(calc.multiplier === 0 ? 0 : 1, damageBase - defReduction);
+    // Shield (slice 7): if the defender's instance is shielded by a
+    // prior Shield spell, the next incoming attack does 0 damage and
+    // the shield is consumed.
+    if (defenderInst.shieldedNext && damage > 0) {
+      log(state, `🛡 ${defenderInst.card.name}'s Shield blocked the attack!`, "status");
+      damage = 0;
+      defenderInst.shieldedNext = false;
+      calc.multiplier = 0;
+      if (!calc.verdict?.text) calc.verdict = { text: "Shielded!", tone: "miss" };
+    }
     defenderInst.currentHp = Math.max(0, defenderInst.currentHp - damage);
+    // Counter (slice 7): if the defender was set to Counter the next
+    // incoming attack, reflect the same damage back at the attacker
+    // (after their hit lands — both Pokémon take the damage).
+    if (defenderInst.counterNext && damage > 0) {
+      defenderInst.counterNext = false;
+      const reflected = Math.min(attackerInst.currentHp, damage);
+      attackerInst.currentHp -= reflected;
+      log(state, `↩ ${defenderInst.card.name}'s Counter reflects ${reflected} damage back!`, "status");
+      if (attackerInst.currentHp <= 0) {
+        log(state, `${attackerInst.card.name} fainted to its own reflected attack!`, "ko");
+        p.discard.push(attackerInst.card);
+        p.field[fromSlot] = null;
+      }
+    }
     if (multiscaleApplied) log(state, `🐉 ${defenderInst.card.name}'s Multiscale halved the blow.`, "status");
     if (solidRockApplied) log(state, `🪨 ${defenderInst.card.name}'s Solid Rock weakened the super-effective hit.`, "status");
     if (defReduction > 0 && damageBase > damage) {
@@ -1082,6 +1201,15 @@ export function endTurn(state) {
 
   // Switch sides.
   state.activePlayer = state.activePlayer === "player" ? "ai" : "player";
+  // Stop Time: if the new active player has skipNextTurn set, consume
+  // the flag and immediately switch back. This is the engine's
+  // representation of "the opponent loses their turn entirely".
+  const incoming = state.players[state.activePlayer];
+  if (incoming?.skipNextTurn) {
+    incoming.skipNextTurn = false;
+    log(state, `⏸ ${incoming.name}'s turn is frozen in time — skipped!`, "status");
+    state.activePlayer = state.activePlayer === "player" ? "ai" : "player";
+  }
   beginTurn(state);
 }
 
@@ -1158,6 +1286,21 @@ export function spellPlayable(card, ai, opp) {
       // the field to revive into.
       return ai?.discard?.some((c) => c?.kind !== "spell")
           && ai?.field?.some((s) => s === null);
+    case "burn":
+      return aiHasField && oppHasField;
+    case "shield":
+    case "power-strike":
+    case "counter":
+      return aiHasField;
+    case "mass-heal":
+      // Worth playing if at least one ally is below max HP. Wasted
+      // otherwise (caps at maxHp).
+      return ai?.field?.some((s) => s !== null && s.currentHp < (s.maxHp ?? s.card?.cardHp ?? 1)) ?? false;
+    case "stop-time":
+      // 5-energy legendary — high impact. Only worth it when the
+      // opponent has at least one attacker on the board, otherwise
+      // skipping their turn doesn't deny them anything.
+      return oppHasField;
     default:
       return false;
   }
@@ -1230,10 +1373,37 @@ function aiPickSpellTarget(state, side, card) {
       }
       return best;
     }
+    case "burn": {
+      // Burn the highest-attack enemy so chip damage chases them down.
+      let best = null, bestScore = -Infinity;
+      for (let i = 0; i < enemyField.length; i++) {
+        const e = enemyField[i];
+        if (!e) continue;
+        const atk = (e.card?.cardAttack || 0) + (e.attackBoost || 0);
+        if (atk > bestScore) { bestScore = atk; best = i; }
+      }
+      return best;
+    }
+    case "shield":
+    case "counter":
+    case "power-strike": {
+      // Pick the ally with the highest base attack (the one most
+      // likely to be a target / get an attack off).
+      let best = null, bestScore = -Infinity;
+      for (let i = 0; i < allyField.length; i++) {
+        const a = allyField[i];
+        if (!a) continue;
+        const atk = (a.card?.cardAttack || 0) + (a.attackBoost || 0);
+        if (atk > bestScore) { bestScore = atk; best = i; }
+      }
+      return best;
+    }
     case "aoe":
     case "surge":
     case "scout":
     case "phoenix":
+    case "mass-heal":
+    case "stop-time":
     default:
       // No target slot — caller passes spellTarget: null.
       return null;
