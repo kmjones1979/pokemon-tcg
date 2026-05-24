@@ -43,11 +43,19 @@ const BATTLE_EMOTES = [
   { id: "win-2",   event: "win",   text: "Awesome win!",    voiceKey: "energetic" },
   { id: "loss-1",  event: "loss",  text: "Good game!",      voiceKey: "narrator" },
 
-  // Spell flavour
+  // Spell flavour — one clip per active effect so the audio shifts
+  // with the gameplay instead of replaying the same "spell cast" line.
   { id: "spell-freeze-1", event: "spell-freeze", text: "Frozen solid!",     voiceKey: "narrator" },
   { id: "spell-heal-1",   event: "spell-heal",   text: "All better!",       voiceKey: "energetic" },
   { id: "spell-evolve-1", event: "spell-evolve", text: "It evolved!",       voiceKey: "narrator" },
   { id: "spell-aoe-1",    event: "spell-aoe",    text: "Earthquake!",       voiceKey: "narrator" },
+  // Slice 6 spells:
+  { id: "spell-bolt-1",         event: "spell-bolt",         text: "Lightning bolt!", voiceKey: "narrator" },
+  { id: "spell-sleep-1",        event: "spell-sleep-powder", text: "Sleepy time!",    voiceKey: "energetic" },
+  { id: "spell-cleanse-1",      event: "spell-cleanse",      text: "All clean!",      voiceKey: "energetic" },
+  { id: "spell-surge-1",        event: "spell-surge",        text: "Power up!",       voiceKey: "energetic" },
+  { id: "spell-scout-1",        event: "spell-scout",        text: "Card draw!",      voiceKey: "energetic" },
+  { id: "spell-phoenix-1",      event: "spell-phoenix",      text: "Rise again!",     voiceKey: "narrator" },
 ];
 
 const EMOTE_VOICES = {

@@ -86,10 +86,17 @@ export function attackResultToEvents(result) {
 export function spellResultToEvent(result) {
   if (!result?.effect) return null;
   switch (result.effect) {
-    case "freeze": return "spell-freeze";
-    case "heal":   return "spell-heal";
-    case "evolve": return "spell-evolve";
-    case "aoe":    return "spell-aoe";
-    default:       return null;
+    case "freeze":       return "spell-freeze";
+    case "heal":         return "spell-heal";
+    case "evolve":       return "spell-evolve";
+    case "aoe":          return "spell-aoe";
+    // Slice 6:
+    case "bolt":         return "spell-bolt";
+    case "sleep-powder": return "spell-sleep-powder";
+    case "cleanse":      return "spell-cleanse";
+    case "surge":        return "spell-surge";
+    case "scout":        return "spell-scout";
+    case "phoenix":      return "spell-phoenix";
+    default:             return null;
   }
 }

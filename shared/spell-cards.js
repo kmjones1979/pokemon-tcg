@@ -37,12 +37,18 @@ const SPELL_BASE_ID = 10000;
 // next vertical slice has a target, but won't drop until their engine
 // + UI integration ships.
 const ACTIVE_EFFECTS = new Set([
-  "freeze",   // slice 1: lock one enemy for 1 turn
-  "paralyze", // slice 2: paralyze one enemy for 1 turn
-  "heal",     // slice 2: restore one ally to full HP
-  "defender", // slice 2: +5 max HP + force opponents to target this ally
-  "evolve",   // slice 2: +50% max HP and +50% attack on one ally
-  "aoe",      // slice 2: deal flat damage to every enemy on field
+  "freeze",       // slice 1: lock one enemy for 1 turn
+  "paralyze",     // slice 2: paralyze one enemy for 1 turn
+  "heal",         // slice 2: restore one ally to full HP
+  "defender",     // slice 2: +5 max HP + force opponents to target this ally
+  "evolve",       // slice 2: +50% max HP and +50% attack on one ally
+  "aoe",          // slice 2: deal flat damage to every enemy on field
+  "bolt",         // slice 6: direct 5 damage to one enemy (bypass combat math)
+  "sleep-powder", // slice 6: sleep one enemy for 2 turns (stronger than freeze)
+  "cleanse",      // slice 6: remove all status effects from one ally
+  "surge",        // slice 6: gain +2 energy this turn (capped at max)
+  "scout",        // slice 6: draw 2 cards from your deck
+  "phoenix",      // slice 6: revive most-recently-fainted Pokémon at full HP
 ]);
 
 const SPELL_CARDS = [
@@ -127,6 +133,89 @@ const SPELL_CARDS = [
     aoeDamage: 4,
     description: "Deal 4 damage to every enemy Pokémon on the field.",
     flavor_text: "The earth itself answers your call.",
+  },
+  // --- Slice 6 -------------------------------------------------------
+  {
+    id: SPELL_BASE_ID + 7,
+    kind: "spell",
+    name: "Bolt",
+    effect: "bolt",
+    target: "enemyField",
+    types: ["electric"],
+    glyph: "⚡",
+    power: 4,
+    rarity: "rare",
+    boltDamage: 5,
+    description: "Deal 5 damage directly to one enemy Pokémon.",
+    flavor_text: "A spark of pure voltage, aimed.",
+  },
+  {
+    id: SPELL_BASE_ID + 8,
+    kind: "spell",
+    name: "Sleep Powder",
+    effect: "sleep-powder",
+    target: "enemyField",
+    types: ["grass"],
+    glyph: "💤",
+    power: 4,
+    rarity: "uncommon",
+    sleepTurns: 2,
+    description: "Put one enemy to sleep for 2 turns — they can't act.",
+    flavor_text: "Spores drift down — eyelids close.",
+  },
+  {
+    id: SPELL_BASE_ID + 9,
+    kind: "spell",
+    name: "Cleanse",
+    effect: "cleanse",
+    target: "ownField",
+    types: ["fairy"],
+    glyph: "✨",
+    power: 2,
+    rarity: "common",
+    description: "Remove all status effects from one of your Pokémon.",
+    flavor_text: "A soft light. The pain melts away.",
+  },
+  {
+    id: SPELL_BASE_ID + 10,
+    kind: "spell",
+    name: "Surge",
+    effect: "surge",
+    target: "none",
+    types: ["electric"],
+    glyph: "🔋",
+    power: 2,
+    rarity: "common",
+    surgeEnergy: 2,
+    description: "Gain +2 Energy this turn (capped at your max).",
+    flavor_text: "Power floods the field — for now.",
+  },
+  {
+    id: SPELL_BASE_ID + 11,
+    kind: "spell",
+    name: "Scout",
+    effect: "scout",
+    target: "none",
+    types: ["normal"],
+    glyph: "🎴",
+    power: 2,
+    rarity: "uncommon",
+    drawCount: 2,
+    description: "Draw 2 cards from your deck.",
+    flavor_text: "A quick peek — perfect timing.",
+  },
+  {
+    id: SPELL_BASE_ID + 12,
+    kind: "spell",
+    name: "Phoenix",
+    effect: "phoenix",
+    target: "none",
+    types: ["fire"],
+    glyph: "🦅",
+    power: 8,
+    rarity: "legendary",
+    description: "Revive your most recently fainted Pokémon at full HP.",
+    flavor_text: "From ashes, returning.",
   },
 ];
 

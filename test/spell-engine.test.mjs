@@ -360,3 +360,197 @@ test("AOE doesn't need a target slot (target = none)", () => {
   assert.equal(r.ok, true);
   assert.equal(state.players.ai.field[0].currentHp, 10 - AOE.aoeDamage);
 });
+
+// =====================================================================
+// Slice 6 — Bolt, Sleep Powder, Cleanse, Surge, Scout, Phoenix
+// =====================================================================
+
+const BOLT         = spellToCard(SPELL_CARDS.find((s) => s.effect === "bolt"));
+const SLEEP_POWDER = spellToCard(SPELL_CARDS.find((s) => s.effect === "sleep-powder"));
+const CLEANSE      = spellToCard(SPELL_CARDS.find((s) => s.effect === "cleanse"));
+const SURGE        = spellToCard(SPELL_CARDS.find((s) => s.effect === "surge"));
+const SCOUT        = spellToCard(SPELL_CARDS.find((s) => s.effect === "scout"));
+const PHOENIX      = spellToCard(SPELL_CARDS.find((s) => s.effect === "phoenix"));
+
+// --- BOLT ------------------------------------------------------------
+
+test("Bolt deals direct 5 damage to one enemy (bypasses combat math)", () => {
+  const enemy = pokemon(200, { hp: 8, atk: 1 });
+  const state = makeMatch({ playerHand: [BOLT], aiField: [enemy], playerEnergy: 5 });
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  assert.equal(r.damage, 5);
+  assert.equal(state.players.ai.field[0].currentHp, 3, "8 HP - 5 damage = 3");
+});
+
+test("Bolt KO's enemies at ≤5 HP and moves them to discard", () => {
+  const lowHpEnemy = pokemon(201, { hp: 4 });
+  const state = makeMatch({ playerHand: [BOLT], aiField: [lowHpEnemy], playerEnergy: 5 });
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  assert.equal(r.knockedOut, true);
+  assert.equal(state.players.ai.field[0], null);
+  assert.equal(state.players.ai.discard.length, 1);
+});
+
+test("Bolt rejects an empty slot target", () => {
+  const state = makeMatch({ playerHand: [BOLT], aiField: [], playerEnergy: 5 });
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, false);
+});
+
+// --- SLEEP POWDER ----------------------------------------------------
+
+test("Sleep Powder applies sleep status for 2 turns (longer than Freeze)", () => {
+  const enemy = pokemon(210);
+  const state = makeMatch({ playerHand: [SLEEP_POWDER], aiField: [enemy], playerEnergy: 3 });
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  const t = state.players.ai.field[0];
+  assert.equal(t.status.kind, "sleep");
+  assert.equal(t.status.turnsLeft, 2);
+  assert.ok(isLockedOut(t), "sleeping pokémon locked out same as freeze");
+});
+
+// --- CLEANSE ---------------------------------------------------------
+
+test("Cleanse removes any status effect from one ally", () => {
+  const ally = pokemon(220);
+  const state = makeMatch({ playerHand: [CLEANSE], playerEnergy: 3 });
+  placeAlly(state, 0, ally, 5);
+  // Pre-apply a freeze status — Cleanse should clear it.
+  state.players.player.field[0].status = { kind: "freeze", turnsLeft: 1 };
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  assert.equal(state.players.player.field[0].status, null);
+  assert.equal(r.removedStatus, "freeze");
+});
+
+test("Cleanse on a status-free ally still consumes the card", () => {
+  const ally = pokemon(221);
+  const state = makeMatch({ playerHand: [CLEANSE], playerEnergy: 3 });
+  placeAlly(state, 0, ally);
+  const r = playCard(state, "player", 0, { spellTarget: 0 });
+  assert.equal(r.ok, true);
+  assert.equal(r.removedStatus, null);
+  assert.equal(state.players.player.hand.length, 0);
+});
+
+// --- SURGE -----------------------------------------------------------
+
+test("Surge gains +2 Energy net (after paying its 1 cost = +1 effective)", () => {
+  const state = makeMatch({ playerHand: [SURGE], playerEnergy: 3 });
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  // Start 3, pay 1 (→2), gain 2 (→4). Net +1.
+  assert.equal(state.players.player.energy, 4);
+  assert.equal(r.gained, 2);
+});
+
+test("Surge respects max energy cap (no overflow)", () => {
+  const state = makeMatch({ playerHand: [SURGE], playerEnergy: 9 });
+  state.players.player.maxEnergy = 10;
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  // 9 - 1 = 8, +2 capped at 10 → 10.
+  assert.equal(state.players.player.energy, 10);
+});
+
+// --- SCOUT -----------------------------------------------------------
+
+test("Scout draws 2 cards from the deck into hand", () => {
+  const deckCards = [pokemon(230), pokemon(231), pokemon(232)];
+  const state = makeMatch({ playerHand: [SCOUT], playerEnergy: 3 });
+  state.players.player.deck = deckCards;
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  assert.equal(r.drew, 2);
+  assert.equal(state.players.player.hand.length, 2, "hand had 1 (Scout itself), drew 2, used 1");
+  assert.equal(state.players.player.deck.length, 1);
+});
+
+test("Scout draws fewer cards if deck runs out", () => {
+  const state = makeMatch({ playerHand: [SCOUT], playerEnergy: 3 });
+  state.players.player.deck = [pokemon(240)];
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  assert.equal(r.drew, 1);
+  assert.equal(state.players.player.deck.length, 0);
+});
+
+test("Scout fails cleanly when deck is empty AND hand is full", () => {
+  // Edge case: nothing to draw. Refuse rather than burn the card.
+  const state = makeMatch({ playerHand: [SCOUT], playerEnergy: 3 });
+  state.players.player.deck = [];
+  const before = state.players.player.energy;
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /hand.*full|deck.*empty/i);
+  // Energy preserved on rejection.
+  assert.equal(state.players.player.energy, before);
+});
+
+// --- PHOENIX ---------------------------------------------------------
+
+test("Phoenix revives the most-recently-fainted Pokémon to an empty slot at full HP", () => {
+  const fallen = pokemon(250, { hp: 12, atk: 5 });
+  const state = makeMatch({ playerHand: [PHOENIX], playerEnergy: 5 });
+  state.players.player.discard = [fallen];
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  const revived = state.players.player.field.find((s) => s !== null);
+  assert.ok(revived);
+  assert.equal(revived.card.id, 250);
+  assert.equal(revived.currentHp, revived.maxHp, "revived at full HP");
+  // The fallen Pokémon was lifted out of discard. The Phoenix card
+  // itself then lands in discard via consumeSpell — so the discard
+  // length is back to 1, but it's the spell card now, not the
+  // Pokémon. Check the contents, not the length.
+  assert.ok(!state.players.player.discard.some((c) => c.id === 250),
+    "fallen Pokémon should be lifted out of discard");
+  assert.ok(state.players.player.discard.some((c) => c.kind === "spell" && c.effect === "phoenix"),
+    "the spent Phoenix card lands in discard");
+});
+
+test("Phoenix skips spell cards in discard — only revives Pokémon", () => {
+  const fallenPoke = pokemon(251);
+  const spellInDiscard = { id: 99001, kind: "spell", name: "OldFreeze", effect: "freeze" };
+  const state = makeMatch({ playerHand: [PHOENIX], playerEnergy: 5 });
+  state.players.player.discard = [fallenPoke, spellInDiscard]; // spell is "more recent"
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  // The Pokémon was revived (not the spell).
+  const revived = state.players.player.field.find((s) => s !== null);
+  assert.equal(revived.card.id, 251);
+  // Spell stays in discard untouched.
+  assert.ok(state.players.player.discard.some((c) => c.id === 99001));
+});
+
+test("Phoenix fails when there are no fainted Pokémon", () => {
+  const state = makeMatch({ playerHand: [PHOENIX], playerEnergy: 5 });
+  state.players.player.discard = [];
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /no fainted/i);
+});
+
+test("Phoenix fails when the field is full (no room to revive)", () => {
+  const state = makeMatch({ playerHand: [PHOENIX], playerEnergy: 5 });
+  state.players.player.discard = [pokemon(260)];
+  // Fill the field.
+  for (let i = 0; i < 5; i++) placeAlly(state, i, pokemon(261 + i));
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /field is full/i);
+});
+
+test("Revived Pokémon comes back with summoning sickness (no instant attack)", () => {
+  // Phoenix shouldn't snowball into "revive + attack same turn" combos.
+  const fallen = pokemon(270);
+  const state = makeMatch({ playerHand: [PHOENIX], playerEnergy: 5 });
+  state.players.player.discard = [fallen];
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  const revived = state.players.player.field.find((s) => s !== null);
+  assert.equal(revived.summoningSickness, true, "newly-revived Pokémon must wait a turn");
+});

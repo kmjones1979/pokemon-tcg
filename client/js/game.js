@@ -526,6 +526,126 @@ function playSpellCard(state, side, handIndex, card, cost, { spellTarget = null 
       return { ok: true, spell: card, effect: "aoe", targetSide: otherSide, damage: dmg, hits, kos };
     }
 
+    // -------- BOLT (slice 6) -----------------------------------------
+    // Direct damage to one enemy — bypasses combat math (no type
+    // multiplier, no defender's defense). Useful as a finisher on
+    // chip-damaged enemies the player can't quite KO with a normal
+    // attack. KO'd Pokémon move to the opponent's discard.
+    case "bolt": {
+      const r = requireEnemyTarget(state, side, spellTarget, "strike");
+      if (r.err) return r.err;
+      const dmg = Math.max(1, card.boltDamage || 5);
+      const dealt = Math.min(r.enemy.currentHp, dmg);
+      r.enemy.currentHp -= dealt;
+      let kod = false;
+      if (r.enemy.currentHp <= 0) {
+        state.players[r.otherSide].discard.push(r.enemy.card);
+        state.players[r.otherSide].field[spellTarget] = null;
+        kod = true;
+      }
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `⚡ ${card.name}: ${r.enemy.card.name} took ${dealt} damage${kod ? " — KO!" : ""}.`, kod ? "ko" : "status");
+      return { ok: true, spell: card, effect: "bolt", targetSide: r.otherSide, targetSlot: spellTarget, targetName: r.enemy.card.name, damage: dealt, knockedOut: kod };
+    }
+
+    // -------- SLEEP POWDER (slice 6) ---------------------------------
+    // Stronger lockout than Freeze: 2 turns instead of 1. Uses the
+    // existing "sleep" status kind so battle.tickStatus + isLockedOut
+    // handle it without engine changes.
+    case "sleep-powder": {
+      const r = requireEnemyTarget(state, side, spellTarget, "lull");
+      if (r.err) return r.err;
+      const turns = Math.max(1, card.sleepTurns || 2);
+      r.enemy.status = { kind: "sleep", turnsLeft: turns };
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `💤 ${card.name}: ${r.enemy.card.name} fell asleep for ${turns} turns.`, "status");
+      return { ok: true, spell: card, effect: "sleep-powder", targetSide: r.otherSide, targetSlot: spellTarget, targetName: r.enemy.card.name };
+    }
+
+    // -------- CLEANSE (slice 6) --------------------------------------
+    // Counter to enemy disruption (freeze, paralyze, sleep, burn). The
+    // cheap common-rarity equivalent of "wake up please". No-op on a
+    // status-free ally but still consumes the card.
+    case "cleanse": {
+      const r = requireAllyTarget(state, side, spellTarget, "cleanse");
+      if (r.err) return r.err;
+      const removed = r.ally.status?.kind || null;
+      r.ally.status = null;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `✨ ${card.name}: ${r.ally.card.name} ${removed ? `shook off ${removed}!` : "stayed in fine shape."}`, "status");
+      return { ok: true, spell: card, effect: "cleanse", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name, removedStatus: removed };
+    }
+
+    // -------- SURGE (slice 6) ----------------------------------------
+    // Pay 1 energy to gain 2 energy this turn (net +1). Tempo card —
+    // enables an expensive play one turn earlier. Capped at maxEnergy
+    // so a maxed-out player gets less benefit (no infinite ladder).
+    case "surge": {
+      const gain = Math.max(1, card.surgeEnergy || 2);
+      const cap  = p.maxEnergy ?? 10;
+      // Pay the cost FIRST so a player at energy=1 doesn't go negative
+      // when the cost is 1 — consumeSpell already does this in the
+      // other branches but we run it inline here so we can clamp.
+      p.energy = Math.max(0, p.energy - cost);
+      const before = p.energy;
+      p.energy = Math.min(cap, p.energy + gain);
+      const realGain = p.energy - before;
+      p.hand.splice(handIndex, 1);
+      p.discard.push(card);
+      log(state, `🔋 ${card.name}: +${realGain} Energy (now ${p.energy}/${cap}).`, "summon");
+      return { ok: true, spell: card, effect: "surge", gained: realGain, energyAfter: p.energy };
+    }
+
+    // -------- SCOUT (slice 6) ----------------------------------------
+    // Draw 2 cards. Card advantage in a deck where draws happen 1/turn.
+    // Capped at MAX_HAND so a near-full hand doesn't over-stuff.
+    case "scout": {
+      const want = Math.max(1, card.drawCount || 2);
+      const drawn = [];
+      for (let i = 0; i < want; i++) {
+        if (p.deck.length === 0) break;
+        if (p.hand.length >= MAX_HAND) break;
+        const c = p.deck.shift();
+        p.hand.push(c);
+        drawn.push(c.name);
+      }
+      if (drawn.length === 0) {
+        return { ok: false, reason: "Hand is full or deck is empty." };
+      }
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `🎴 ${card.name}: drew ${drawn.length} card${drawn.length === 1 ? "" : "s"} (${drawn.join(", ")}).`, "summon");
+      return { ok: true, spell: card, effect: "scout", drew: drawn.length, drawnNames: drawn };
+    }
+
+    // -------- PHOENIX (slice 6) --------------------------------------
+    // Revive the most recently fainted Pokémon at full HP. Only Pokémon
+    // count (skips spell cards that landed in discard via consumeSpell).
+    // Summoning sickness applies so the revived Pokémon can't attack
+    // the turn it comes back — otherwise this would be too snowbally.
+    case "phoenix": {
+      let lastPokeIdx = -1;
+      for (let i = p.discard.length - 1; i >= 0; i--) {
+        if (p.discard[i]?.kind !== "spell") { lastPokeIdx = i; break; }
+      }
+      if (lastPokeIdx === -1) {
+        return { ok: false, reason: "No fainted Pokémon to revive." };
+      }
+      const emptyIdx = p.field.findIndex((s) => s === null);
+      if (emptyIdx === -1) {
+        return { ok: false, reason: "Field is full — no room to revive." };
+      }
+      const revivedCard = p.discard.splice(lastPokeIdx, 1)[0];
+      const inst = instantiate(revivedCard, p);
+      // Override instantiate's default HP (which uses cardHp + bonuses)
+      // to set explicit full HP. Most code paths already do this but
+      // we pin it for Phoenix specifically.
+      inst.currentHp = inst.maxHp;
+      p.field[emptyIdx] = inst;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `🦅 ${card.name}: ${revivedCard.name} rose from the ashes at full HP!`, "summon");
+      return { ok: true, spell: card, effect: "phoenix", targetSide: side, targetSlot: emptyIdx, targetName: revivedCard.name };
+    }
+
     default:
       // Catalog effect that the engine hasn't been taught about yet.
       // Shouldn't be reachable while ACTIVE_EFFECTS gates the catalog,
@@ -1004,19 +1124,40 @@ const POLICIES = {
 export function spellPlayable(card, ai, opp) {
   if (card.kind !== "spell") return true;
   const aiHasField = ai?.field?.some((s) => s !== null) ?? false;
+  const oppHasField = opp?.field?.some((s) => s !== null) ?? false;
   switch (card.effect) {
     case "freeze":
     case "paralyze":
-      return aiHasField && (opp?.field?.some((s) => s !== null) ?? false);
+    case "sleep-powder":
+      return aiHasField && oppHasField;
+    case "bolt":
+      // Direct damage — at least one enemy must exist. AI-field gate
+      // matches the other offensive spells so we don't burn a Bolt
+      // before deploying anything to attack with afterwards.
+      return aiHasField && oppHasField;
     case "aoe":
       // Worth burning the 4-energy spell only if 2+ enemies share the
       // board AND the AI has its own attackers to follow up.
       return aiHasField && ((opp?.field?.filter((s) => s !== null).length || 0) >= 2);
     case "heal":
       return ai?.field?.some((s) => s !== null && s.currentHp < (s.maxHp ?? s.card?.cardHp ?? 1)) ?? false;
+    case "cleanse":
+      return ai?.field?.some((s) => s !== null && s.status?.kind) ?? false;
     case "defender":
     case "evolve":
       return aiHasField;
+    case "surge":
+      // Only worth playing if we'd actually GAIN energy (already at
+      // cap = pure waste). Also need to be able to afford the cost.
+      return (ai?.energy ?? 0) < (ai?.maxEnergy ?? 10);
+    case "scout":
+      // Card draw is wasted if the deck is empty OR hand is full.
+      return (ai?.deck?.length ?? 0) > 0 && (ai?.hand?.length ?? 0) < 10;
+    case "phoenix":
+      // Need a fainted Pokémon (in discard, non-spell) AND room on
+      // the field to revive into.
+      return ai?.discard?.some((c) => c?.kind !== "spell")
+          && ai?.field?.some((s) => s === null);
     default:
       return false;
   }
@@ -1036,13 +1177,26 @@ function aiPickSpellTarget(state, side, card) {
   const allyField  = ai.field;
   switch (card.effect) {
     case "freeze":
-    case "paralyze": {
+    case "paralyze":
+    case "sleep-powder": {
+      // Lock the enemy with the highest effective attack — disrupts
+      // their biggest threat for a turn.
       let best = null, bestScore = -Infinity;
       for (let i = 0; i < enemyField.length; i++) {
         const e = enemyField[i];
         if (!e) continue;
         const atk = (e.card?.cardAttack || 0) + (e.attackBoost || 0);
         if (atk > bestScore) { bestScore = atk; best = i; }
+      }
+      return best;
+    }
+    case "bolt": {
+      // Pick the lowest-HP enemy to finish them off (≤5 HP = KO).
+      let best = null, bestHp = Infinity;
+      for (let i = 0; i < enemyField.length; i++) {
+        const e = enemyField[i];
+        if (!e) continue;
+        if (e.currentHp < bestHp) { bestHp = e.currentHp; best = i; }
       }
       return best;
     }
@@ -1057,6 +1211,14 @@ function aiPickSpellTarget(state, side, card) {
       }
       return best;
     }
+    case "cleanse": {
+      // First ally with any status. Status comparison is binary —
+      // we don't try to rank them.
+      for (let i = 0; i < allyField.length; i++) {
+        if (allyField[i]?.status?.kind) return i;
+      }
+      return null;
+    }
     case "defender":
     case "evolve": {
       let best = null, bestScore = -Infinity;
@@ -1069,7 +1231,11 @@ function aiPickSpellTarget(state, side, card) {
       return best;
     }
     case "aoe":
+    case "surge":
+    case "scout":
+    case "phoenix":
     default:
+      // No target slot — caller passes spellTarget: null.
       return null;
   }
 }

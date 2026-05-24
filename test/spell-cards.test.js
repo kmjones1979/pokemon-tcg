@@ -19,9 +19,12 @@ const {
 
 const KNOWN_RARITIES = new Set(["common", "uncommon", "rare", "epic", "legendary"]);
 
-test("SPELL_CARDS contains the six designed spells", () => {
+test("SPELL_CARDS contains all 12 designed spells (6 slice 1-2 + 6 slice 6)", () => {
   const effects = SPELL_CARDS.map((s) => s.effect).sort();
-  assert.deepEqual(effects, ["aoe", "defender", "evolve", "freeze", "heal", "paralyze"]);
+  assert.deepEqual(effects, [
+    "aoe", "bolt", "cleanse", "defender", "evolve", "freeze",
+    "heal", "paralyze", "phoenix", "scout", "sleep-powder", "surge",
+  ]);
 });
 
 test("every spell has the fields the engine + UI need", () => {
@@ -94,27 +97,38 @@ test("isSpellCard distinguishes spells from Pokémon", () => {
   assert.equal(isSpellCard(undefined), false);
 });
 
-test("isActiveSpellEffect: all six designed effects are active in slice 2", () => {
-  assert.equal(isActiveSpellEffect("freeze"), true);
-  assert.equal(isActiveSpellEffect("paralyze"), true);
-  assert.equal(isActiveSpellEffect("heal"), true);
-  assert.equal(isActiveSpellEffect("defender"), true);
-  assert.equal(isActiveSpellEffect("evolve"), true);
-  assert.equal(isActiveSpellEffect("aoe"), true);
+test("isActiveSpellEffect: all 12 designed effects are active in slice 6", () => {
+  for (const e of [
+    "freeze", "paralyze", "heal", "defender", "evolve", "aoe",
+    "bolt", "sleep-powder", "cleanse", "surge", "scout", "phoenix",
+  ]) {
+    assert.equal(isActiveSpellEffect(e), true, `${e} should be active`);
+  }
   // Unknown effect names still report false (not a crash).
   assert.equal(isActiveSpellEffect("unknown"), false);
 });
 
-test("allSpellCards() returns all six active spells", () => {
+test("allSpellCards() returns all 12 active spells", () => {
   const cards = allSpellCards();
   for (const c of cards) {
     assert.ok(ACTIVE_EFFECTS.has(c.effect), `${c.name} (${c.effect}) leaked into active spells`);
   }
-  assert.equal(cards.length, 6);
-  const effects = new Set(cards.map((c) => c.effect));
-  for (const e of ["freeze", "paralyze", "heal", "defender", "evolve", "aoe"]) {
-    assert.ok(effects.has(e), `missing ${e} from active spell catalog`);
+  assert.equal(cards.length, 12);
+});
+
+test("rarity bands cover every player tier (slice 6 expanded the spread)", () => {
+  // Drop-pool sanity: with the new commons (Cleanse, Surge), medium
+  // wins can now pull common-rarity spells. With the new legendary
+  // (Phoenix), hard wins can pull a legendary spell.
+  const byRarity = {};
+  for (const c of allSpellCards()) {
+    byRarity[c.rarity] = (byRarity[c.rarity] || 0) + 1;
   }
+  assert.ok((byRarity.common      || 0) >= 1, "expected ≥1 common spell");
+  assert.ok((byRarity.uncommon    || 0) >= 1, "expected ≥1 uncommon spell");
+  assert.ok((byRarity.rare        || 0) >= 1, "expected ≥1 rare spell");
+  assert.ok((byRarity.epic        || 0) >= 1, "expected ≥1 epic spell");
+  assert.ok((byRarity.legendary   || 0) >= 1, "expected ≥1 legendary spell");
 });
 
 test("spellById looks up by Pokémon-card id and returns a card-shaped object", () => {
