@@ -53,8 +53,12 @@ const BATTLE_EMOTES = [
 const EMOTE_VOICES = {
   // Same voice IDs used in scripts/generate-tts.js — verified accessible
   // on the project's ElevenLabs tier via /v1/voices.
+  // Both keys map to kid-feeling voices so battle reactions sound like a
+  // child playing the game, not a corporate announcer:
+  //   energetic = "Pow!", "Got ya!" — bouncy + playful
+  //   narrator  = "Super effective!", "Knocked out!" — excited kid announcing
   energetic: "cgSgspJ2msm6clMCkdW9", // Jessica — playful, bright, warm
-  narrator:  "JBFqnCBsd6RMkjVDRZzb", // George  — warm captivating storyteller
+  narrator:  "FGY2WhTYpPnrIDTdsKH5", // Laura — enthusiast, quirky (kid-announcer)
 };
 
 function listEmotes() {

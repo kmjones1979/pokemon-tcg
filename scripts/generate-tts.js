@@ -43,23 +43,29 @@ const ELEVEN_BASE = "https://api.elevenlabs.io/v1";
 // require a paid plan, which the project explicitly avoids. Adjust by
 // running `curl -s https://api.elevenlabs.io/v1/voices -H "xi-api-key:
 // $ELEVENLABS_API_KEY"` and picking from the returned list.
+//
+// Tuned for kid-friendly + character fit: brighter/younger voices for
+// small Pokémon (Pikachu, Caterpie, Jigglypuff), deeper voices for big
+// ones (Snorlax, Onix), warmer storyteller for the narrator. When the
+// manifest carries a voiceId that no longer matches this map, the
+// `--regenerate-voice-mismatch` flag re-creates just those entries.
 const SPEAKER_VOICES = {
-  narrator:   "JBFqnCBsd6RMkjVDRZzb", // George — warm captivating storyteller
-  pikachu:    "cgSgspJ2msm6clMCkdW9", // Jessica — playful, bright, warm
-  jigglypuff: "hpp4J3VqNfWAUOO0d1Us", // Bella — professional, bright, warm
-  clefairy:   "XrExE9yKIg1WjnnlVkGX", // Matilda — knowledgable, professional
-  squirtle:   "IKne3meq5aSn9XLyUdCD", // Charlie — deep, confident, energetic
-  charmander: "TX3LPaxmHKxFdv7VOQHJ", // Liam — energetic, social media creator
-  bulbasaur:  "bIHbv24MWmeRgasZH58o", // Will — relaxed optimist
-  caterpie:   "Xb7hH8MSUJpSbSDYk0k2", // Alice — clear, engaging educator
-  pidgey:     "N2lVS1w4EtoT3dr4eOWO", // Callum — husky trickster
-  weedle:     "Xb7hH8MSUJpSbSDYk0k2", // Alice — small, clear
-  snorlax:    "cjVigY5qzO86Huf0OWal", // Eric — smooth, trustworthy (deeper)
+  narrator:   "JBFqnCBsd6RMkjVDRZzb", // George — warm, captivating storyteller
+  pikachu:    "cgSgspJ2msm6clMCkdW9", // Jessica — playful, bright, warm (kid-feel)
+  jigglypuff: "FGY2WhTYpPnrIDTdsKH5", // Laura — enthusiast, quirky (high-energy cute)
+  clefairy:   "pFZP5JQG7iQjIQuC4Bku", // Lily — velvety actress (sweet, soft)
+  squirtle:   "TX3LPaxmHKxFdv7VOQHJ", // Liam — energetic (young male)
+  charmander: "TX3LPaxmHKxFdv7VOQHJ", // Liam — energetic, fiery
+  bulbasaur:  "bIHbv24MWmeRgasZH58o", // Will — relaxed optimist (gentle plant)
+  caterpie:   "FGY2WhTYpPnrIDTdsKH5", // Laura — enthusiast, quirky (small bug)
+  pidgey:     "cgSgspJ2msm6clMCkdW9", // Jessica — bright (chirpy bird)
+  weedle:     "FGY2WhTYpPnrIDTdsKH5", // Laura — small, quirky
+  snorlax:    "pqHfZKP75CvOlQylNhV4", // Bill — wise, mature, balanced (sleepy)
   // Story Mode chapter speakers — boss + Champion characters.
   beedrill:   "SOYHLrjzK2X1ezoPC6cr", // Harry — fierce warrior
-  onix:       "cjVigY5qzO86Huf0OWal", // Eric — deep, slow
-  mewtwo:     "cjVigY5qzO86Huf0OWal", // Eric — smooth, mysterious
-  lance:      "IKne3meq5aSn9XLyUdCD", // Charlie — deep, confident
+  onix:       "nPczCjzI2devNBz1zQrb", // Brian — deep, resonant and comforting (ancient rock)
+  mewtwo:     "SAz9YHcvj6GT2YYXdXww", // River — relaxed, neutral (cosmic psychic)
+  lance:      "IKne3meq5aSn9XLyUdCD", // Charlie — deep, confident (champion)
 };
 
 const ELEVEN_MODEL = "eleven_turbo_v2_5"; // cheapest model that sounds good
@@ -151,18 +157,31 @@ async function main() {
   const args = process.argv.slice(2);
   const confirm = args.includes("--confirm");
   const force   = args.includes("--force");
+  // `--regenerate-voice-mismatch` re-creates ONLY the entries whose
+  // manifest voiceId no longer matches the current SPEAKER_VOICES /
+  // EMOTE_VOICES map. Useful when reassigning voices: you change the
+  // map, run this flag, and only the affected clips re-generate.
+  const voiceMismatch = args.includes("--regenerate-voice-mismatch");
 
   // Plan: walk all stories + battle emotes, decide what needs generating.
   // Stories use `<storyId>/<sectionId>` keys; emotes use `emotes/<emoteId>`.
+  // The `--force` flag re-runs everything. `--regenerate-voice-mismatch`
+  // re-runs only entries whose voiceId in the manifest no longer matches
+  // the current code-level voice map (useful after swapping voice IDs).
   const manifest = loadManifest();
   const plan = [];
   let totalChars = 0;
+  const shouldRegen = (cached, currentVoiceId) => {
+    if (!cached) return true;
+    if (force) return true;
+    if (voiceMismatch && cached.voiceId !== currentVoiceId) return true;
+    return false;
+  };
   for (const story of READING_STORIES) {
     for (const sec of story.sections) {
       const key = manifestKey(story.id, sec.id);
-      const cached = manifest[key];
-      if (cached && !force) continue;
       const voiceId = SPEAKER_VOICES[sec.speaker] || SPEAKER_VOICES.narrator;
+      if (!shouldRegen(manifest[key], voiceId)) continue;
       plan.push({
         kind: "story",
         storyId: story.id,
@@ -176,9 +195,8 @@ async function main() {
   }
   for (const emote of BATTLE_EMOTES) {
     const key = `emotes/${emote.id}`;
-    const cached = manifest[key];
-    if (cached && !force) continue;
     const voiceId = EMOTE_VOICES[emote.voiceKey] || EMOTE_VOICES.narrator;
+    if (!shouldRegen(manifest[key], voiceId)) continue;
     plan.push({
       kind: "emote",
       emoteId: emote.id,
@@ -193,9 +211,8 @@ async function main() {
     if (!Array.isArray(chapter.readAlong)) continue;
     for (const sec of chapter.readAlong) {
       const key = `chapter-intro/${chapter.id}/${sec.id}`;
-      const cached = manifest[key];
-      if (cached && !force) continue;
       const voiceId = SPEAKER_VOICES[sec.speaker] || SPEAKER_VOICES.narrator;
+      if (!shouldRegen(manifest[key], voiceId)) continue;
       plan.push({
         kind: "chapter-intro",
         chapterId: chapter.id,

@@ -994,20 +994,29 @@ const POLICIES = {
 // absent (Heal with no allies, AOE with no enemies, etc.) — playing
 // it anyway would either fail at the engine or burn the card on
 // nothing.
-function spellPlayable(card, ai, opp) {
+//
+// Offensive spells (freeze/paralyze/aoe) additionally require the AI
+// to have at least one Pokémon on the field. Regression fix: without
+// this gate the AI sometimes spent all its energy on Freeze early in
+// the match before summoning a single attacker, leaving the attack
+// phase with nothing to fire and making it look like "the AI didn't
+// attack this turn" to the player.
+export function spellPlayable(card, ai, opp) {
   if (card.kind !== "spell") return true;
+  const aiHasField = ai?.field?.some((s) => s !== null) ?? false;
   switch (card.effect) {
     case "freeze":
     case "paralyze":
-      return opp?.field?.some((s) => s !== null) ?? false;
+      return aiHasField && (opp?.field?.some((s) => s !== null) ?? false);
     case "aoe":
-      // Worth burning the 4-energy spell only if 2+ enemies share the board.
-      return (opp?.field?.filter((s) => s !== null).length || 0) >= 2;
+      // Worth burning the 4-energy spell only if 2+ enemies share the
+      // board AND the AI has its own attackers to follow up.
+      return aiHasField && ((opp?.field?.filter((s) => s !== null).length || 0) >= 2);
     case "heal":
       return ai?.field?.some((s) => s !== null && s.currentHp < (s.maxHp ?? s.card?.cardHp ?? 1)) ?? false;
     case "defender":
     case "evolve":
-      return ai?.field?.some((s) => s !== null) ?? false;
+      return aiHasField;
     default:
       return false;
   }

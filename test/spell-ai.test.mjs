@@ -12,7 +12,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { playCard, FIELD_SIZE } from "../client/js/game.js";
+import { playCard, FIELD_SIZE, spellPlayable } from "../client/js/game.js";
 import * as spellCards from "../shared/spell-cards.js";
 
 const { SPELL_CARDS, spellToCard } = spellCards.default ?? spellCards;
@@ -206,4 +206,85 @@ test("AI with [spell, pokemon] and no spell target: plays the Pokémon", () => {
   const r = playCard(state, "ai", 1);
   assert.equal(r.ok, true);
   assert.ok(state.players.ai.field.some((s) => s !== null));
+});
+
+// --- spellPlayable contract -----------------------------------------
+//
+// Regression context: in slice 3 the AI started preferring cheap spells
+// (Freeze at 1⚡) over Pokémon summons. With no Pokémon already on the
+// AI field, casting Freeze wasted the energy — the attack phase then
+// found no attackers and the AI silently passed. From the player's POV
+// the AI "didn't attack this turn", which read as a bug. The fix gates
+// offensive spells (freeze/paralyze/aoe) on the AI having ≥1 of its own
+// Pokémon already deployed.
+
+function fieldWith(...cards) {
+  return cards.map((c) => ({
+    card: c, currentHp: c.cardHp, maxHp: c.cardHp,
+    status: null, summoningSickness: false, attackedThisTurn: false,
+  }));
+}
+
+test("spellPlayable(Freeze): requires AI to have own field AND enemy field", () => {
+  const aiNoField = { field: [null, null, null, null, null] };
+  const oppNoField = { field: [null, null, null, null, null] };
+  const aiField = { field: fieldWith(pokemon(1)) };
+  const oppField = { field: fieldWith(pokemon(2)) };
+
+  // No own field → can't follow up after disruption → skip the spell.
+  assert.equal(spellPlayable(FREEZE, aiNoField, oppField), false);
+  // No enemy field → nothing to disrupt.
+  assert.equal(spellPlayable(FREEZE, aiField, oppNoField), false);
+  // Neither side has anything.
+  assert.equal(spellPlayable(FREEZE, aiNoField, oppNoField), false);
+  // Both sides populated → playable.
+  assert.equal(spellPlayable(FREEZE, aiField, oppField), true);
+});
+
+test("spellPlayable(Paralyze): same own-field-required gate as Freeze", () => {
+  const aiNoField = { field: [null] };
+  const oppField  = { field: fieldWith(pokemon(3)) };
+  assert.equal(spellPlayable(PARALYZE, aiNoField, oppField), false);
+});
+
+test("spellPlayable(AOE): needs AI field AND ≥2 enemies (4-energy spell)", () => {
+  const aiField  = { field: fieldWith(pokemon(10)) };
+  const aiNoField = { field: [null] };
+  const oneEnemy  = { field: fieldWith(pokemon(20)) };
+  const twoEnemies = { field: fieldWith(pokemon(21), pokemon(22)) };
+
+  // AI has nothing → no point in disrupting.
+  assert.equal(spellPlayable(AOE, aiNoField, twoEnemies), false);
+  // Only 1 enemy → AOE is a waste (regular attack covers it).
+  assert.equal(spellPlayable(AOE, aiField, oneEnemy), false);
+  // Both conditions met → playable.
+  assert.equal(spellPlayable(AOE, aiField, twoEnemies), true);
+});
+
+test("spellPlayable(Heal): only when an ally is below max HP", () => {
+  const fullAlly = fieldWith(pokemon(30));
+  const hurtAlly = fieldWith(pokemon(31, { hp: 10 }));
+  hurtAlly[0].currentHp = 3; // injured
+  const aiFull = { field: fullAlly };
+  const aiHurt = { field: hurtAlly };
+  const opp    = { field: [null] };
+  assert.equal(spellPlayable(HEAL, aiFull, opp), false);
+  assert.equal(spellPlayable(HEAL, aiHurt, opp), true);
+});
+
+test("spellPlayable(Defender/Evolve): need a target ally on field", () => {
+  const aiField  = { field: fieldWith(pokemon(40)) };
+  const aiNoField = { field: [null] };
+  const opp = { field: [null] };
+  assert.equal(spellPlayable(DEFENDER, aiField, opp), true);
+  assert.equal(spellPlayable(DEFENDER, aiNoField, opp), false);
+  assert.equal(spellPlayable(EVOLVE, aiField, opp), true);
+  assert.equal(spellPlayable(EVOLVE, aiNoField, opp), false);
+});
+
+test("spellPlayable(non-spell card): always passes through", () => {
+  const aiNoField = { field: [null] };
+  const oppNoField = { field: [null] };
+  const justAPokemon = pokemon(50);
+  assert.equal(spellPlayable(justAPokemon, aiNoField, oppNoField), true);
 });
