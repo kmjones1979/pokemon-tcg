@@ -120,7 +120,19 @@ function mount(app, supabase, getPokedex) {
             if (!c) return null;
             return { ...c, shinyLevel: shinyMap.get(id) || 0 };
           }).filter(Boolean);
-          if (cards.length === 30) return cards;
+          if (cards.length === 30) {
+            // Append the standard 10-spell section so PvP active-deck
+            // matches have parity with random / Story Mode decks.
+            const { allSpellCards } = require("../shared/spell-cards");
+            const { DEFAULT_SPELL_COUNT } = require("../shared/deck-builder");
+            const spellPool = allSpellCards();
+            if (spellPool.length > 0) {
+              for (let i = 0; i < DEFAULT_SPELL_COUNT; i++) {
+                cards.push(spellPool[Math.floor(Math.random() * spellPool.length)]);
+              }
+            }
+            return cards;
+          }
         }
       } catch (err) {
         console.warn("[mp-http] active-deck fetch failed:", err.message);

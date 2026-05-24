@@ -87,7 +87,20 @@ async function buildBossDeck(supabase, chapter) {
     const extras = (anything || []).map(toCard);
     while (deck.length < 30 && extras.length) deck.push(extras.shift());
   }
-  return deck.slice(0, 30);
+  const trimmed = deck.slice(0, 30);
+  // Append the standard 10-spell section so the boss can also disrupt,
+  // heal, and evolve mid-fight — keeps Story Mode parity with /api/deck
+  // and PvP. The boss's AI uses the same chooseHandIndex +
+  // aiPickSpellTarget heuristics as multiplayer.
+  const { allSpellCards } = require("../shared/spell-cards");
+  const { DEFAULT_SPELL_COUNT } = require("../shared/deck-builder");
+  const spellPool = allSpellCards();
+  if (spellPool.length > 0) {
+    for (let i = 0; i < DEFAULT_SPELL_COUNT; i++) {
+      trimmed.push(spellPool[Math.floor(Math.random() * spellPool.length)]);
+    }
+  }
+  return trimmed;
 }
 
 // Translate the chapter's phase data into a compact "phase rules" payload

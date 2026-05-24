@@ -275,6 +275,18 @@ function mount(app, supabase) {
       if (!c) return null;
       return { ...c, shinyLevel: shinyMap.get(id) || 0 };
     }).filter(Boolean);
+    // Append the standard 10-spell section so saved decks have parity
+    // with random `/api/deck` draws. The decks table only stores
+    // Pokémon card_ids (size 30) — spells are added here at hydration
+    // time, sampled with replacement from the active spell catalog.
+    const { allSpellCards } = require("../shared/spell-cards");
+    const { DEFAULT_SPELL_COUNT } = require("../shared/deck-builder");
+    const spellPool = allSpellCards();
+    if (spellPool.length > 0) {
+      for (let i = 0; i < DEFAULT_SPELL_COUNT; i++) {
+        cards.push(spellPool[Math.floor(Math.random() * spellPool.length)]);
+      }
+    }
     res.json({ deck: { ...deck, cards } });
   });
 }
