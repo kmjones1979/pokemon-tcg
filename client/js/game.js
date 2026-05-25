@@ -1042,6 +1042,19 @@ export function attack(
     }
   }
 
+  // Per-difficulty AI combat bonus (Hard adds +1 ATK and +8% crit).
+  // Hoisted here so BOTH the trainer-hit branch and the
+  // Pokémon-vs-Pokémon branch can read it. Set by aiTakeTurnInner
+  // at the start of each AI turn.
+  const aiDifficultyAtk =
+    side === "ai" && state.aiCombatBonus
+      ? (state.aiCombatBonus.atkBonus || 0)
+      : 0;
+  const aiDifficultyCrit =
+    side === "ai" && state.aiCombatBonus
+      ? (state.aiCombatBonus.critBoost || 0)
+      : 0;
+
   let result;
   if (target === "trainer") {
     if (hasField) {
@@ -1049,7 +1062,7 @@ export function attack(
     }
     const comboBonus = comboBonusFor(p, attackerInst.card);
     const bossSideBonus = (side === "ai" && state.boss?.attackBonus) || 0;
-    const base = attackerInst.card.cardAttack + attackBonus + (attackerInst.attackBoost || 0) + comboBonus + bossSideBonus;
+    const base = attackerInst.card.cardAttack + attackBonus + (attackerInst.attackBoost || 0) + comboBonus + bossSideBonus + aiDifficultyAtk;
     const damage = Math.max(1, Math.round(base * (ability.damageMult || 1)));
     o.trainerHp = Math.max(0, o.trainerHp - damage);
     log(state, attackPhrase(attackerInst.card, ability, o.name, damage, 1, state.turn), "attack");
@@ -1084,7 +1097,8 @@ export function attack(
       (sigPassive?.ignoreDefenseSpecial && ability?.id === "special") ||
       (side === "ai" && state.boss?.ignoreDefense);
     // Boss-mode bonus: in story chapters, the boss's attacks get a flat
-    // +attackBonus from active phase rules.
+    // +attackBonus from active phase rules. (aiDifficultyAtk is hoisted
+    // above the trainer/Pokémon branch so it's in scope for both.)
     const bossSideBonus = (side === "ai" && state.boss?.attackBonus) || 0;
     // Type-storm match modifier: cards of the rolled type get a flat
     // +N to abilityBonus when their primary type matches.
@@ -1110,12 +1124,13 @@ export function attack(
         auraPenalty +
         bossSideBonus +
         typeStormBonus +
-        powerStrikeBonus,
+        powerStrikeBonus +
+        aiDifficultyAtk,
       ability,
       rand,
       themeType: state.themeType || null,
       ignoreDefense: ignoreDefenseFlag,
-      critBoost,
+      critBoost: critBoost + aiDifficultyCrit,
       forceCrit,
     });
     // Match-modifier damage multiplier (Glass Cannon / Iron Wall).
@@ -1402,10 +1417,22 @@ import { basicAbility, specialAbility } from "./abilities.js";
 //             Medium still feels noticeably softer than Hard.
 //   hard  → fully optimal. Signature-aware pick, best-dmg targets, no
 //             pass / skip chance.
+// Difficulty policies. Tuned from playtest feedback:
+//   easy  → forgiving, lots of passes / skipped attacks for new players
+//   medium → competent: bestDmg targets, never skips, "smart" card pick
+//             (lighter heuristic than Hard's signature-aware version)
+//   hard  → fully optimal play + small combat bonuses (+1 ATK, +8% crit
+//             chance on AI strikes). The bonuses make every Hard fight
+//             noticeably tighter without crushing — most attacks still
+//             follow the same type-chart math, just with extra bite.
+//
+// Per-policy combat bonuses (read by attack() when side === "ai"):
+//   atkBonus   → flat damage bonus on every AI attack
+//   critBoost  → additive crit chance (0.08 = +8%)
 const POLICIES = {
-  easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false, useSpecial: false },
-  medium: { pickCard: "smart",     pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "sometimes" },
-  hard:   { pickCard: "smartSig",  pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart" },
+  easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false, useSpecial: false,        atkBonus: 0, critBoost: 0 },
+  medium: { pickCard: "smart",     pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "sometimes",  atkBonus: 0, critBoost: 0 },
+  hard:   { pickCard: "smartSig",  pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart",      atkBonus: 1, critBoost: 0.08 },
 };
 
 // True if a spell can actually do something useful given the current
@@ -1864,6 +1891,14 @@ async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality 
     return;
   }
   const policy = POLICIES[difficulty] || POLICIES.medium;
+  // Cache the per-difficulty combat bonus on state so attack() can
+  // read it without plumbing difficulty through every call site.
+  // Re-set every turn so it stays in sync if difficulty ever changes
+  // mid-match (boss fights override this with their own attack bonus).
+  state.aiCombatBonus = {
+    atkBonus:  policy.atkBonus  || 0,
+    critBoost: policy.critBoost || 0,
+  };
   const ai = state.players.ai;
   const mood = personality || PERSONALITIES[Math.floor(rand() * PERSONALITIES.length)];
 
