@@ -1997,6 +1997,16 @@ async function onEndTurn() {
   endTurn(state);
   render();
   if (state.winner) return;
+  // Stop Time consumed the AI's turn via the skipNextTurn flag inside
+  // engine.endTurn — control snapped right back to the player. Don't
+  // trigger aiTakeTurn in that case; otherwise the AI runs through its
+  // phases (no-ops via the activePlayer guard), then ends its "turn",
+  // which immediately flips control AND starts a fresh AI countdown
+  // timer — exactly what Stop Time was supposed to prevent.
+  if (state.activePlayer === "player") {
+    flashVerdict("⏸ Opponent's turn skipped!", "super");
+    return;
+  }
   // Brief pause for the turn shift before the AI starts acting visibly.
   await sleep(500);
   // Race aiTakeTurn against a 25s timeout so a hung animation promise

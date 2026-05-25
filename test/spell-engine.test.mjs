@@ -713,3 +713,40 @@ test("Stop Time sets a skipNextTurn flag on the opposing player", () => {
   assert.equal(state.players.ai.skipNextTurn, true,
     "Stop Time should mark the opponent's next turn for skip");
 });
+
+// Stop Time integration: after the spell, the player should retain
+// control (no AI turn fires) and the timer should be re-set for the
+// player, not the opponent. This is the engine-level invariant; the
+// main.js skip-aiTakeTurn check is the UI-level companion fix.
+
+test("Stop Time: endTurn keeps the activePlayer on the caster after consuming the skip flag", async () => {
+  const { playCard, endTurn } = await import("../client/js/game.js");
+  const e = pokemon(500, { hp: 12 });
+  const state = makeMatch({ playerHand: [STOP_TIME], playerEnergy: 6 });
+  state.players.ai.field[0] = makeInst(e);
+  // Also need a player Pokémon on field so endTurn doesn't trigger
+  // the "no cards left" loss path.
+  placeAlly(state, 0, pokemon(501));
+
+  // Cast Stop Time — sets skipNextTurn on AI.
+  const r = playCard(state, "player", 0);
+  assert.equal(r.ok, true);
+  assert.equal(state.players.ai.skipNextTurn, true);
+
+  // Player ends turn. endTurn should:
+  //   1. flip activePlayer to "ai"
+  //   2. notice ai.skipNextTurn → flip back to "player"
+  //   3. clear ai.skipNextTurn
+  //   4. beginTurn for player (turnEndsAt resets to player's window)
+  const beforeTurnEnds = state.turnEndsAt;
+  endTurn(state);
+  assert.equal(state.activePlayer, "player", "Stop Time should leave control with the caster");
+  assert.equal(state.players.ai.skipNextTurn, false, "skip flag must be consumed (one-use)");
+  // turnEndsAt should belong to the PLAYER's new turn — a future
+  // timestamp in the standard turn-duration window. Pin it as
+  // ≥ now AND ≤ now + slack to confirm it was just reset (not stale
+  // or pointing at an already-expired window).
+  const now = Date.now();
+  assert.ok(state.turnEndsAt >= now, "turn timer should be in the future for the player's new turn");
+  assert.ok(state.turnEndsAt <= now + 61_000, "turn timer should be one TURN_DURATION_MS ahead, not stale");
+});

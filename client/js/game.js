@@ -1649,6 +1649,15 @@ export async function aiTakeTurn(state, { rand = Math.random, difficulty = "medi
 }
 
 async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality }) {
+  // Guard: if a spell (Stop Time) flipped control back to the player
+  // during endTurn, the caller may still hand us a state where it's
+  // NOT the AI's turn. Bail out early — running through the play/
+  // attack/endTurn pipeline would mistakenly hand the AI a real
+  // turn (and re-start the AI's countdown timer).
+  if (state.activePlayer !== "ai" || state.winner) {
+    if (onAction) await onAction({ kind: "skipped" });
+    return;
+  }
   const policy = POLICIES[difficulty] || POLICIES.medium;
   const ai = state.players.ai;
   const mood = personality || PERSONALITIES[Math.floor(rand() * PERSONALITIES.length)];
