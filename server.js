@@ -23,6 +23,7 @@ const theme = require("./server-modules/theme");
 const champions = require("./server-modules/champions");
 const story = require("./server-modules/story");
 const readingMode = require("./server-modules/reading-mode");
+const admin = require("./server-modules/admin");
 const trading = require("./server-modules/trading");
 const dailyBoss = require("./server-modules/daily-boss");
 const dailyPuzzle = require("./server-modules/daily-puzzle");
@@ -200,6 +201,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   champions.mount(app, authSupabase);
   story.mount(app, authSupabase, ensurePokedex);
   readingMode.mount(app);
+  admin.mount(app, authSupabase);
   trading.mount(app, authSupabase, ensurePokedex);
   dailyBoss.mount(app, authSupabase, ensurePokedex);
   dailyPuzzle.mount(app, authSupabase);
