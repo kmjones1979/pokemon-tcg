@@ -2185,7 +2185,14 @@ async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality 
     const r = attack(state, "ai", attackerSlot, target, { rand, abilityId });
     if (onAction) await onAction({ kind: "attack", fromSlot: attackerSlot, target, result: r, attackerCard: attackerInst.card });
   }
-  endTurn(state);
+  // Guard the endTurn the same way the top of this function does. If
+  // control already left the AI (player-side timeout force-end, Stop
+  // Time bounce, etc.), calling endTurn would flip the turn AGAIN and
+  // leave the AI as activePlayer with nobody scheduled to play —
+  // the "rival is stuck thinking" symptom.
+  if (state.activePlayer === "ai" && !state.winner) {
+    endTurn(state);
+  }
   if (onAction) await onAction({ kind: "end-turn" });
 }
 

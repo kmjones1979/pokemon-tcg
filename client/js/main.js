@@ -2018,20 +2018,49 @@ async function onEndTurn() {
   }
   // Brief pause for the turn shift before the AI starts acting visibly.
   await sleep(500);
-  // Race aiTakeTurn against a 25s timeout so a hung animation promise
-  // can't lock the match. Boss fights with phase summons + AOE +
-  // status effects can run a few seconds long, so 25s is well above
-  // the normal worst case and well under the player's patience limit.
+  // Drive AI turns until control returns to the player. Stop Time and
+  // similar "skip the opponent's turn" effects can stack consecutive
+  // AI turns — without this loop the engine would re-flip control to
+  // the AI but no one would call aiTakeTurn for the new turn, leaving
+  // the UI sitting on "Rival thinking…" forever. Safety cap at 4
+  // consecutive AI turns so a runaway Stop Time chain can't hang the
+  // tab either.
+  let aiTurnsTaken = 0;
+  while (
+    state && state.activePlayer === "ai" && !state.winner
+    && aiTurnsTaken < 4
+  ) {
+    await runOneAiTurn();
+    aiTurnsTaken += 1;
+    // If we're going around for another rep, give the player a brief
+    // verdict so they understand what happened.
+    if (state.activePlayer === "ai" && !state.winner && aiTurnsTaken === 1) {
+      flashVerdict("Rival takes another turn!", "weak");
+      await sleep(400);
+    }
+  }
+  if (aiTurnsTaken >= 4 && state.activePlayer === "ai" && !state.winner) {
+    // Catastrophic — should never happen but better to force the
+    // player a turn than leave them stuck.
+    console.warn("[main] AI consecutive-turn safety cap hit; force-ending");
+    try { endTurn(state); } catch {}
+  }
+  render();
+  // After AI's turn ends, control is back to us — render() picks up the
+  // activePlayer flip and fires the banner via the _prevActivePlayer hook.
+}
+
+// Run a single AI turn under a 25-second hard timeout. Returns when
+// either aiTakeTurn resolves OR the timeout fires + we force-end the
+// turn so the player isn't locked out by a hung animation.
+async function runOneAiTurn() {
   const aiPromise = aiTakeTurn(state, {
     difficulty: aiDifficulty,
     personality: aiPersonality,
     onAction: handleAiAction,
   });
   const TURN_HARD_TIMEOUT_MS = 25_000;
-  let timedOut = false;
-  const timeoutPromise = new Promise((resolve) => setTimeout(() => {
-    timedOut = true; resolve("__timeout__");
-  }, TURN_HARD_TIMEOUT_MS));
+  const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve("__timeout__"), TURN_HARD_TIMEOUT_MS));
   try {
     const result = await Promise.race([aiPromise, timeoutPromise]);
     if (result === "__timeout__") {
@@ -2042,19 +2071,12 @@ async function onEndTurn() {
       }
     }
   } catch (err) {
-    // aiTakeTurn already force-ends the turn in its own finally clause on
-    // throw; here we just surface a hint and refresh.
     console.error("[main] AI turn errored:", err);
     flashVerdict("Rival fumbled — your turn", "weak");
-    // Belt-and-suspenders: if for any reason aiTakeTurn didn't advance state,
-    // do it here so the player isn't locked out.
     if (state && state.activePlayer === "ai" && !state.winner) {
       try { endTurn(state); } catch (e2) { console.error("[main] endTurn fallback failed:", e2); }
     }
   }
-  render();
-  // After AI's turn ends, control is back to us — render() picks up the
-  // activePlayer flip and fires the banner via the _prevActivePlayer hook.
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
