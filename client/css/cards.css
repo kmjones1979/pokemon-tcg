@@ -489,19 +489,32 @@ body.dragging-attack .trainer-block.ai {
   font-size: 11px;
 }
 
+/* Rarity badge — was a strip just above the footer, which crowded the
+ * card name on smaller cards. Now a compact pill centered just under
+ * the header so it sits IN the art area (not over the name) and reads
+ * at a glance. Width auto-fits the text instead of left-anchoring. */
 .card-rarity {
   position: absolute;
-  bottom: 38px;
-  left: 8px;
+  top: 38px;
+  left: 50%;
+  transform: translateX(-50%);
   font-family: "Press Start 2P", monospace;
-  font-size: 8px;
+  font-size: 7px;
   color: gold;
   text-shadow: 0 0 4px gold, 0 0 8px gold;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 215, 0, 0.55);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
 }
 .card-rarity.mythical {
   color: #ff90c8;
   text-shadow: 0 0 4px #ff90c8, 0 0 8px #ff90c8;
+  border-color: rgba(255, 144, 200, 0.6);
 }
 
 .card-status {

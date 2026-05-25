@@ -1231,9 +1231,18 @@ export function endTurn(state) {
 import { computeDamage as _computeDamage } from "./battle.js";
 import { basicAbility, specialAbility } from "./abilities.js";
 
+// Difficulty policies. Tuned from playtest feedback:
+//   easy  → forgiving, lots of passes / skipped attacks for new players
+//   medium → competent opponent (was reported "too easy"). Now picks
+//             best-damage targets like Hard and never passes / never
+//             skips attacks. Pokémon selection stays on "smart" (a
+//             lighter heuristic than Hard's signature-aware pick) so
+//             Medium still feels noticeably softer than Hard.
+//   hard  → fully optimal. Signature-aware pick, best-dmg targets, no
+//             pass / skip chance.
 const POLICIES = {
   easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false, useSpecial: false },
-  medium: { pickCard: "smart",     pickTarget: "lowestHp", passPlayChance: 0.06, skipAttackChance: 0.04, useTypeEff: true,  useSpecial: "sometimes" },
+  medium: { pickCard: "smart",     pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "sometimes" },
   hard:   { pickCard: "smartSig",  pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart" },
 };
 
