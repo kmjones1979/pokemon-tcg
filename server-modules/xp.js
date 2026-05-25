@@ -16,7 +16,16 @@
 // only sane source of `won/kos/crits` — solo trusts the client (anti-cheat
 // is the daily-streak session check), multiplayer is server-authoritative.
 
-const XP_THRESHOLDS = [
+const MAX_LEVEL = 99;
+
+// XP curve: hand-tuned thresholds for L1-L10 (preserves the existing
+// early-game pacing every current account is on), then a deterministic
+// formula extends the curve to L99. The formula picks a delta that
+// continues the trend of the L1-L10 deltas (each level adds another
+// +200 to the per-level XP requirement, starting from the L9→L10
+// delta of 1200). Climbing from L10 → L99 is intentionally a long
+// journey — the cap shouldn't feel reachable in a single sprint.
+const XP_THRESHOLDS_HEAD = [
   /* lvl 1 */ 0,
   /* lvl 2 */ 100,
   /* lvl 3 */ 300,
@@ -28,13 +37,25 @@ const XP_THRESHOLDS = [
   /* lvl 9 */ 4000,
   /* lvl10 */ 5200,
 ];
+const XP_THRESHOLDS = (() => {
+  const out = XP_THRESHOLDS_HEAD.slice();
+  // L11..L99 — formula-based. Delta grows linearly: L(n) - L(n-1) =
+  // 1200 + (n - 10) * 200. So L11→L12 = 1400, L12→L13 = 1600, etc.
+  // Total XP to reach L99 ends up ~1,000,000 — long-haul.
+  for (let n = 11; n <= MAX_LEVEL; n++) {
+    const prev = out[n - 2]; // out is 0-indexed; out[n-2] is threshold to reach level (n-1)
+    const delta = 1200 + (n - 10) * 200;
+    out.push(prev + delta);
+  }
+  return out;
+})();
 
 function levelFromXp(xp) {
   let lvl = 1;
   for (let i = 0; i < XP_THRESHOLDS.length; i++) {
     if (xp >= XP_THRESHOLDS[i]) lvl = i + 1;
   }
-  return Math.min(10, lvl);
+  return Math.min(MAX_LEVEL, lvl);
 }
 
 function nextLevelAt(xp) {
@@ -120,4 +141,4 @@ function mount(app, supabase) {
   });
 }
 
-module.exports = { mount, levelFromXp, nextLevelAt };
+module.exports = { mount, levelFromXp, nextLevelAt, MAX_LEVEL, XP_THRESHOLDS };
