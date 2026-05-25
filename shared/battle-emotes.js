@@ -63,6 +63,13 @@ const BATTLE_EMOTES = [
   { id: "spell-power-strike-1", event: "spell-power-strike", text: "Power strike!",    voiceKey: "energetic" },
   { id: "spell-counter-1",      event: "spell-counter",      text: "Counter ready!",   voiceKey: "narrator" },
   { id: "spell-stop-time-1",    event: "spell-stop-time",    text: "Time stop!",       voiceKey: "narrator" },
+  // Slice 8 spells:
+  { id: "spell-confusion-1",    event: "spell-confusion",    text: "Confused!",        voiceKey: "energetic" },
+  { id: "spell-storm-1",        event: "spell-storm",        text: "Storm strike!",    voiceKey: "narrator" },
+  { id: "spell-burst-1",        event: "spell-burst",        text: "Burst!",           voiceKey: "energetic" },
+  { id: "spell-brave-strike-1", event: "spell-brave-strike", text: "Brave strike!",    voiceKey: "energetic" },
+  { id: "spell-refresh-1",      event: "spell-refresh",      text: "Refreshed!",       voiceKey: "energetic" },
+  { id: "spell-drain-1",        event: "spell-drain",        text: "Life drain!",      voiceKey: "narrator" },
 ];
 
 const EMOTE_VOICES = {

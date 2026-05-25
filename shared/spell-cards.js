@@ -55,6 +55,12 @@ const ACTIVE_EFFECTS = new Set([
   "power-strike", // slice 7: +3 ATK to one ally's next attack (one-time)
   "counter",      // slice 7: reflect the next attack's damage back to attacker
   "stop-time",    // slice 7: opponent skips their next turn entirely
+  "confusion",    // slice 8: confuse status — 50% chance enemy hits itself
+  "storm",        // slice 8: 2 dmg to EVERY Pokémon on field (both sides)
+  "burst",        // slice 8: 3 direct damage to one enemy (cheap Bolt)
+  "brave-strike", // slice 8: ally takes 50% HP loss for a double-damage next attack
+  "refresh",      // slice 8: heal every ally by 2 HP (lighter Mass Heal)
+  "drain",        // slice 8: 3 damage to enemy + heal lowest-HP ally by same
 ]);
 
 const SPELL_CARDS = [
@@ -305,6 +311,91 @@ const SPELL_CARDS = [
     description: "Your opponent's next turn is skipped entirely.",
     flavor_text: "The clock holds its breath.",
   },
+  // --- Slice 8 ------------------------------------------------------
+  {
+    id: SPELL_BASE_ID + 19,
+    kind: "spell",
+    name: "Confusion",
+    effect: "confusion",
+    target: "enemyField",
+    types: ["psychic"],
+    glyph: "🌀",
+    power: 4,
+    rarity: "rare",
+    confuseTurns: 2,
+    description: "Confuse one enemy — 50% chance they hit themselves next attack.",
+    flavor_text: "Up is down. Left is right. The room spins.",
+  },
+  {
+    id: SPELL_BASE_ID + 20,
+    kind: "spell",
+    name: "Storm",
+    effect: "storm",
+    target: "none",
+    types: ["water"],
+    glyph: "⛈",
+    power: 4,
+    rarity: "uncommon",
+    stormDamage: 2,
+    description: "A wild storm — 2 damage to every Pokémon on the field (both sides).",
+    flavor_text: "No shelter. No mercy. Just rain and lightning.",
+  },
+  {
+    id: SPELL_BASE_ID + 21,
+    kind: "spell",
+    name: "Burst",
+    effect: "burst",
+    target: "enemyField",
+    types: ["fire"],
+    glyph: "💥",
+    power: 2,
+    rarity: "common",
+    burstDamage: 3,
+    description: "Deal 3 direct damage to one enemy (cheap finisher).",
+    flavor_text: "A short, sharp blast.",
+  },
+  {
+    id: SPELL_BASE_ID + 22,
+    kind: "spell",
+    name: "Brave Strike",
+    effect: "brave-strike",
+    target: "ownField",
+    types: ["fighting"],
+    glyph: "💢",
+    power: 6,
+    rarity: "epic",
+    braveSelfDamageFrac: 0.5,
+    description: "Your ally takes 50% HP damage — but their next attack does DOUBLE damage.",
+    flavor_text: "Risk it all. Hit twice as hard.",
+  },
+  {
+    id: SPELL_BASE_ID + 23,
+    kind: "spell",
+    name: "Refresh",
+    effect: "refresh",
+    target: "none",
+    types: ["grass"],
+    glyph: "🌿",
+    power: 4,
+    rarity: "uncommon",
+    refreshAmount: 2,
+    description: "A gentle breeze — heal every one of your Pokémon by 2 HP.",
+    flavor_text: "New leaves, new strength.",
+  },
+  {
+    id: SPELL_BASE_ID + 24,
+    kind: "spell",
+    name: "Drain",
+    effect: "drain",
+    target: "enemyField",
+    types: ["dark"],
+    glyph: "🦇",
+    power: 4,
+    rarity: "rare",
+    drainDamage: 3,
+    description: "Deal 3 damage to one enemy and heal your lowest-HP ally by the same amount.",
+    flavor_text: "What's theirs is yours now.",
+  },
 ];
 
 const SPELL_EFFECTS = SPELL_CARDS.map((s) => s.effect);
@@ -368,9 +459,16 @@ function spellToCard(spell) {
     surgeEnergy:      spell.surgeEnergy,
     drawCount:        spell.drawCount,
     // Slice 7 params:
-    burnTurns:        spell.burnTurns,
-    massHealAmount:   spell.massHealAmount,
-    powerStrikeBonus: spell.powerStrikeBonus,
+    burnTurns:           spell.burnTurns,
+    massHealAmount:      spell.massHealAmount,
+    powerStrikeBonus:    spell.powerStrikeBonus,
+    // Slice 8 params:
+    confuseTurns:        spell.confuseTurns,
+    stormDamage:         spell.stormDamage,
+    burstDamage:         spell.burstDamage,
+    braveSelfDamageFrac: spell.braveSelfDamageFrac,
+    refreshAmount:       spell.refreshAmount,
+    drainDamage:         spell.drainDamage,
   };
 }
 

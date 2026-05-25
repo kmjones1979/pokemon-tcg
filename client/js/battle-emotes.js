@@ -104,6 +104,13 @@ export function spellResultToEvent(result) {
     case "power-strike": return "spell-power-strike";
     case "counter":      return "spell-counter";
     case "stop-time":    return "spell-stop-time";
+    // Slice 8:
+    case "confusion":    return "spell-confusion";
+    case "storm":        return "spell-storm";
+    case "burst":        return "spell-burst";
+    case "brave-strike": return "spell-brave-strike";
+    case "refresh":      return "spell-refresh";
+    case "drain":        return "spell-drain";
     default:             return null;
   }
 }

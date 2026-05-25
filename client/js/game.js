@@ -721,6 +721,151 @@ function playSpellCard(state, side, handIndex, card, cost, { spellTarget = null 
       return { ok: true, spell: card, effect: "counter", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name };
     }
 
+    // -------- CONFUSION (slice 8) ----------------------------------
+    // Apply "confuse" status. attack() rolls a 50% self-hit chance
+    // whenever an attacker has this status — the attack redirects to
+    // the attacker themselves. The status ticks down at end of the
+    // confused player's turn (handled in battle.tickStatus via the
+    // generic non-burn branch).
+    case "confusion": {
+      const r = requireEnemyTarget(state, side, spellTarget, "confuse");
+      if (r.err) return r.err;
+      const turns = Math.max(1, card.confuseTurns || 2);
+      r.enemy.status = { kind: "confuse", turnsLeft: turns };
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `🌀 ${card.name}: ${r.enemy.card.name} is confused for ${turns} turns!`, "status");
+      return { ok: true, spell: card, effect: "confusion", targetSide: r.otherSide, targetSlot: spellTarget, targetName: r.enemy.card.name };
+    }
+
+    // -------- STORM (slice 8) --------------------------------------
+    // Both-sides AOE. Hits every Pokémon on the field (yours + theirs)
+    // for `stormDamage`. Risky but high-tempo: useful when your board
+    // is healthier than theirs.
+    case "storm": {
+      const dmg = Math.max(1, card.stormDamage || 2);
+      const sides = ["player", "ai"];
+      let totalHits = 0, totalKos = 0;
+      for (const sd of sides) {
+        const team = state.players[sd];
+        for (let i = 0; i < team.field.length; i++) {
+          const inst = team.field[i];
+          if (!inst) continue;
+          const dealt = Math.min(inst.currentHp, dmg);
+          inst.currentHp -= dealt;
+          totalHits++;
+          if (inst.currentHp <= 0) {
+            team.discard.push(inst.card);
+            team.field[i] = null;
+            totalKos++;
+          }
+        }
+      }
+      if (totalHits === 0) {
+        return { ok: false, reason: "No Pokémon on the field to storm." };
+      }
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `⛈ ${card.name}: ${dmg} damage to ${totalHits} Pokémon (both sides)${totalKos > 0 ? ` — ${totalKos} KO` : ""}.`, "status");
+      return { ok: true, spell: card, effect: "storm", damage: dmg, hits: totalHits, kos: totalKos };
+    }
+
+    // -------- BURST (slice 8) --------------------------------------
+    // Cheap 1-energy direct damage. Like Bolt at half the cost but
+    // less damage — common-rarity finisher for low-HP enemies.
+    case "burst": {
+      const r = requireEnemyTarget(state, side, spellTarget, "burst");
+      if (r.err) return r.err;
+      const dmg = Math.max(1, card.burstDamage || 3);
+      const dealt = Math.min(r.enemy.currentHp, dmg);
+      r.enemy.currentHp -= dealt;
+      let kod = false;
+      if (r.enemy.currentHp <= 0) {
+        state.players[r.otherSide].discard.push(r.enemy.card);
+        state.players[r.otherSide].field[spellTarget] = null;
+        kod = true;
+      }
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `💥 ${card.name}: ${r.enemy.card.name} took ${dealt} damage${kod ? " — KO!" : ""}.`, kod ? "ko" : "status");
+      return { ok: true, spell: card, effect: "burst", damage: dealt, knockedOut: kod, targetSide: r.otherSide, targetSlot: spellTarget, targetName: r.enemy.card.name };
+    }
+
+    // -------- BRAVE STRIKE (slice 8) -------------------------------
+    // Self-damage for a big attack buff. Ally loses 50% of currentHp
+    // (floor, min 1). powerStrikeBonus is set to attacker's own base
+    // cardAttack — that doubles their next attack's damage (since the
+    // bonus is added to attackBonus, effectively +100% on top of base).
+    case "brave-strike": {
+      const r = requireAllyTarget(state, side, spellTarget, "brave");
+      if (r.err) return r.err;
+      const selfDmg = Math.max(1, Math.floor(r.ally.currentHp * (card.braveSelfDamageFrac || 0.5)));
+      r.ally.currentHp = Math.max(1, r.ally.currentHp - selfDmg);
+      // Doubling = adding the base attack as a bonus.
+      const baseAtk = r.ally.card?.cardAttack || 0;
+      r.ally.powerStrikeBonus = (r.ally.powerStrikeBonus || 0) + baseAtk;
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `💢 ${card.name}: ${r.ally.card.name} sacrificed ${selfDmg} HP for a doubled-power next attack!`, "status");
+      return { ok: true, spell: card, effect: "brave-strike", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name, selfDamage: selfDmg };
+    }
+
+    // -------- REFRESH (slice 8) ------------------------------------
+    // Lighter Mass Heal: +2 HP to every ally on the field. Uncommon
+    // tier, no target needed.
+    case "refresh": {
+      const amount = Math.max(1, card.refreshAmount || 2);
+      const allies = p.field.filter((s) => s !== null);
+      if (allies.length === 0) return { ok: false, reason: "No Pokémon on the field to refresh." };
+      let total = 0;
+      for (const ally of allies) {
+        const cap = ally.maxHp ?? ally.card.cardHp;
+        const before = ally.currentHp;
+        ally.currentHp = Math.min(cap, ally.currentHp + amount);
+        total += ally.currentHp - before;
+      }
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `🌿 ${card.name}: restored ${total} HP across ${allies.length} Pokémon.`, "status");
+      return { ok: true, spell: card, effect: "refresh", healed: total, allies: allies.length };
+    }
+
+    // -------- DRAIN (slice 8) --------------------------------------
+    // Damage one enemy AND heal your lowest-HP ally by the same amount.
+    // If no allies on field, heals trainer HP instead.
+    case "drain": {
+      const r = requireEnemyTarget(state, side, spellTarget, "drain");
+      if (r.err) return r.err;
+      const dmg = Math.max(1, card.drainDamage || 3);
+      const dealt = Math.min(r.enemy.currentHp, dmg);
+      r.enemy.currentHp -= dealt;
+      let kod = false;
+      if (r.enemy.currentHp <= 0) {
+        state.players[r.otherSide].discard.push(r.enemy.card);
+        state.players[r.otherSide].field[spellTarget] = null;
+        kod = true;
+      }
+      // Find lowest-HP ally to heal.
+      let bestAlly = null, bestFrac = Infinity;
+      for (const a of p.field) {
+        if (!a) continue;
+        const cap = a.maxHp ?? a.card.cardHp;
+        const frac = a.currentHp / cap;
+        if (frac < bestFrac) { bestFrac = frac; bestAlly = a; }
+      }
+      let healed = 0;
+      if (bestAlly) {
+        const cap = bestAlly.maxHp ?? bestAlly.card.cardHp;
+        const before = bestAlly.currentHp;
+        bestAlly.currentHp = Math.min(cap, bestAlly.currentHp + dealt);
+        healed = bestAlly.currentHp - before;
+      } else {
+        // No allies → heal trainer HP.
+        const maxTrainer = p.maxTrainerHp ?? 30;
+        const before = p.trainerHp;
+        p.trainerHp = Math.min(maxTrainer, p.trainerHp + dealt);
+        healed = p.trainerHp - before;
+      }
+      consumeSpell(p, handIndex, card, cost);
+      log(state, `🦇 ${card.name}: drained ${dealt} HP from ${r.enemy.card.name}${healed > 0 ? `, restored ${healed} to your side` : ""}.`, kod ? "ko" : "status");
+      return { ok: true, spell: card, effect: "drain", damage: dealt, healed, knockedOut: kod, targetSide: r.otherSide, targetSlot: spellTarget, targetName: r.enemy.card.name };
+    }
+
     // -------- STOP TIME (slice 7) -----------------------------------
     // Set a flag on the opposing player; the turn-end → next-player
     // switch checks it and skips their turn entirely (clearing the
@@ -846,6 +991,23 @@ export function attack(
   if (!attackerInst) return { ok: false, reason: "no attacker" };
   if (attackerInst.summoningSickness) return { ok: false, reason: "summoning sickness" };
   if (attackerInst.attackedThisTurn) return { ok: false, reason: "already attacked" };
+  // Confusion (slice 8): 50% chance the attacker hits THEMSELVES this
+  // strike. The check fires before the regular lockout / target / damage
+  // pipeline so a confused attacker who self-hits doesn't also burn
+  // through ability cost or deal damage to the chosen target.
+  if (attackerInst.status?.kind === "confuse" && (rand() < 0.5)) {
+    const baseAtk = attackerInst.card.cardAttack || 1;
+    const selfDmg = Math.max(1, baseAtk);
+    attackerInst.currentHp = Math.max(0, attackerInst.currentHp - selfDmg);
+    log(state, `🌀 ${attackerInst.card.name} is confused — hit itself for ${selfDmg}!`, "status");
+    attackerInst.attackedThisTurn = true;
+    if (attackerInst.currentHp <= 0) {
+      log(state, `${attackerInst.card.name} fainted in confusion!`, "ko");
+      p.discard.push(attackerInst.card);
+      p.field[fromSlot] = null;
+    }
+    return { ok: true, damage: selfDmg, multiplier: 1, verdict: { text: "Confusion!", tone: "miss" }, target: "self", selfHit: true, abilityId, abilityName: "Confused" };
+  }
   if (isLockedOut(attackerInst)) {
     log(state, `${attackerInst.card.name} can't move (${attackerInst.status.kind})!`, "status");
     attackerInst.attackedThisTurn = true;
@@ -1310,6 +1472,23 @@ export function spellPlayable(card, ai, opp) {
       // opponent has at least one attacker on the board, otherwise
       // skipping their turn doesn't deny them anything.
       return oppHasField;
+    case "confusion":
+    case "burst":
+    case "drain":
+      return aiHasField && oppHasField;
+    case "storm":
+      // Worth it if THEIR board has more / equal Pokémon than ours
+      // (otherwise we hurt ourselves net).
+      return ((opp?.field?.filter((s) => s !== null).length || 0)
+            >= (ai?.field?.filter((s) => s !== null).length || 0))
+        && oppHasField;
+    case "brave-strike":
+      // Need an ally with enough HP to survive the self-damage
+      // (>1 HP) AND an enemy to clobber afterwards.
+      return ai?.field?.some((s) => s !== null && s.currentHp > 1)
+        && oppHasField;
+    case "refresh":
+      return ai?.field?.some((s) => s !== null && s.currentHp < (s.maxHp ?? s.card?.cardHp ?? 1)) ?? false;
     default:
       return false;
   }
@@ -1395,15 +1574,39 @@ function aiPickSpellTarget(state, side, card) {
     }
     case "shield":
     case "counter":
-    case "power-strike": {
+    case "power-strike":
+    case "brave-strike": {
       // Pick the ally with the highest base attack (the one most
       // likely to be a target / get an attack off).
       let best = null, bestScore = -Infinity;
       for (let i = 0; i < allyField.length; i++) {
         const a = allyField[i];
         if (!a) continue;
+        if (card.effect === "brave-strike" && a.currentHp <= 1) continue;
         const atk = (a.card?.cardAttack || 0) + (a.attackBoost || 0);
         if (atk > bestScore) { bestScore = atk; best = i; }
+      }
+      return best;
+    }
+    case "confusion": {
+      // Same as freeze/paralyze — disable the strongest enemy threat.
+      let best = null, bestScore = -Infinity;
+      for (let i = 0; i < enemyField.length; i++) {
+        const e = enemyField[i];
+        if (!e) continue;
+        const atk = (e.card?.cardAttack || 0) + (e.attackBoost || 0);
+        if (atk > bestScore) { bestScore = atk; best = i; }
+      }
+      return best;
+    }
+    case "burst":
+    case "drain": {
+      // Lowest-HP enemy (finisher), same as Bolt.
+      let best = null, bestHp = Infinity;
+      for (let i = 0; i < enemyField.length; i++) {
+        const e = enemyField[i];
+        if (!e) continue;
+        if (e.currentHp < bestHp) { bestHp = e.currentHp; best = i; }
       }
       return best;
     }
@@ -1413,6 +1616,8 @@ function aiPickSpellTarget(state, side, card) {
     case "phoenix":
     case "mass-heal":
     case "stop-time":
+    case "storm":
+    case "refresh":
     default:
       // No target slot — caller passes spellTarget: null.
       return null;
