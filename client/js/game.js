@@ -27,6 +27,11 @@ import {
   signatureFor, fieldAttackBonusFor, enemyFieldAttackPenaltyFor, fieldCritBonus,
 } from "./passives.js";
 import { defaultKit, useItem as _useItem } from "./items.js";
+// Evolution chain threshold — the server stamps `evolves_to_card`
+// directly on each card at pokedex-load time, so the engine doesn't
+// need the full chain table at runtime. Just the KO threshold.
+import * as _evoModule from "../../shared/evolution-chains.js";
+const { EVOLUTION_KO_THRESHOLD } = _evoModule.default ?? _evoModule;
 export const useItem = _useItem;
 // _useItem is re-used by the AI item phase below.
 
@@ -91,12 +96,50 @@ function instantiate(card, playerState) {
     // KO-level-up system adds to this further.
     attackBoost: shiny,
     level: shiny,
+    // Evolution tracking — kos counts THIS-INSTANCE knockouts. When
+    // it crosses EVOLUTION_KO_THRESHOLD AND the card has an
+    // evolves_to mapping, the engine transforms the instance on the
+    // next eligible moment (see `tryEvolveInstance`).
+    kos: 0,
   };
 }
 
 // Phase 2 spec mentions "Pokémon with the Quick trait can attack the turn
 // they're played." We don't have data for that in PokeAPI per-card, so for now
 // pure-Flying types act as the "Quick" set — fluffy + thematic. Easy to change.
+// Try to evolve an instance into its next form. Called after the
+// instance scores a KO. Returns true if a transformation happened.
+//
+// Rules:
+//   - The instance must have hit EVOLUTION_KO_THRESHOLD KOs this life.
+//   - The card must have `evolves_to_card` baked on it (server adds
+//     this at pokedex-load time so the engine doesn't need a
+//     separate lookup table at runtime).
+//   - HP percentage carries over (so a 50%-HP Charmander becomes a
+//     50%-HP Charmeleon).
+//   - kos resets to 0 on the evolved form — so a Charmander →
+//     Charmeleon can later evolve again into Charizard with another
+//     2 KOs (if Charmeleon's card also has evolves_to_card set).
+//   - level / attackBoost from KOs and shiny flags are preserved.
+function tryEvolveInstance(state, side, instance) {
+  if (!instance) return false;
+  if ((instance.kos || 0) < EVOLUTION_KO_THRESHOLD) return false;
+  const evolved = instance.card?.evolves_to_card;
+  if (!evolved) return false;
+  const oldName = instance.card?.name || "Pokémon";
+  const oldMax = instance.maxHp || instance.card?.cardHp || 1;
+  const hpFrac = Math.max(0.1, instance.currentHp / oldMax);
+  const newMax = (evolved.cardHp || 1) + (instance.level || 0);
+  instance.card = evolved;
+  instance.maxHp = newMax;
+  instance.currentHp = Math.max(1, Math.round(newMax * hpFrac));
+  instance.kos = 0;
+  // Visual hint for the renderer — UI flashes any inst with this stamp.
+  instance.justEvolved = { fromName: oldName, toName: evolved.name, at: Date.now() };
+  log(state, `✨ ${oldName} evolved into ${evolved.name}!`, "summon");
+  return true;
+}
+
 function hasQuickTrait(card) {
   return Array.isArray(card.types) && card.types[0] === "flying" && !card.is_legendary;
 }
@@ -472,13 +515,36 @@ function playSpellCard(state, side, handIndex, card, cost, { spellTarget = null 
     }
 
     // -------- EVOLVE --------------------------------------------------
-    // Multiplies one ally's max HP and adds an attack boost. The boost
-    // rides on the instance's attackBoost field (same as shiny/level
-    // mechanics) so attack-damage math stays unified. Marks evolved=
-    // true so the UI can show a sparkle.
+    // Tries to species-transform the target into its next evolution
+    // form (Charmander → Charmeleon → Charizard). Falls back to a
+    // stat buff (+50% HP, +50% ATK) for Pokémon that have no chain
+    // entry (Mewtwo, single-form rares, etc.), so the spell always
+    // does SOMETHING good.
     case "evolve": {
       const r = requireAllyTarget(state, side, spellTarget, "evolve");
       if (r.err) return r.err;
+      // Force the evolution by pre-bumping kos past the threshold;
+      // tryEvolveInstance handles the actual transformation. If it
+      // succeeds we return without applying the stat buff.
+      const beforeCardId = r.ally.card?.id;
+      r.ally.kos = Math.max(r.ally.kos || 0, EVOLUTION_KO_THRESHOLD);
+      const evolved = tryEvolveInstance(state, side, r.ally);
+      if (evolved) {
+        consumeSpell(p, handIndex, card, cost);
+        return {
+          ok: true, spell: card, effect: "evolve",
+          targetSide: side, targetSlot: spellTarget,
+          targetName: r.ally.card.name,
+          transformed: true,
+          fromName: r.ally.justEvolved?.fromName,
+          toName: r.ally.justEvolved?.toName,
+        };
+      }
+      // Fallback: no chain available → apply the original stat buff.
+      // Restore kos to its pre-attempt value so we don't accidentally
+      // queue a future KO-triggered evolution for a Pokémon that
+      // doesn't have one.
+      r.ally.kos = 0;
       const hpMult  = card.evolveHpMult  || 1.5;
       const atkMult = card.evolveAtkMult || 1.5;
       const oldMax = r.ally.maxHp ?? r.ally.card.cardHp;
@@ -491,8 +557,8 @@ function playSpellCard(state, side, handIndex, card, cost, { spellTarget = null 
       r.ally.attackBoost = (r.ally.attackBoost || 0) + atkGain;
       r.ally.evolved = true;
       consumeSpell(p, handIndex, card, cost);
-      log(state, `✨ ${card.name}: ${r.ally.card.name} evolved! +${hpGain} HP, +${atkGain} ATK.`, "status");
-      return { ok: true, spell: card, effect: "evolve", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name, hpGain, atkGain };
+      log(state, `✨ ${card.name}: ${r.ally.card.name} powered up! +${hpGain} HP, +${atkGain} ATK.`, "status");
+      return { ok: true, spell: card, effect: "evolve", targetSide: side, targetSlot: spellTarget, targetName: r.ally.card.name, hpGain, atkGain, transformed: false };
     }
 
     // -------- AOE -----------------------------------------------------
@@ -1304,8 +1370,17 @@ export function attack(
         attackerInst.currentHp = Math.min(attackerInst.maxHp, attackerInst.currentHp + 1);
         attackerInst.attackBoost = (attackerInst.attackBoost || 0) + 1;
         result.attackerLeveled = lvls;
-        log(state, `⚡ ${attackerInst.card.name} evolved to L${lvls} (+1 HP, +1 ATK)`, "summon");
+        log(state, `⚡ ${attackerInst.card.name} grew stronger (L${lvls}, +1 HP, +1 ATK)`, "summon");
       }
+      // Species evolution (slice 9): increment this-instance KO count
+      // and transform if the chain says we should. Runs AFTER the
+      // level-up bump so the evolved form inherits the snowball stats.
+      attackerInst.kos = (attackerInst.kos || 0) + 1;
+      const evolved = tryEvolveInstance(state, side, attackerInst);
+      if (evolved) result.attackerEvolved = {
+        fromName: attackerInst.justEvolved?.fromName,
+        toName: attackerInst.justEvolved?.toName,
+      };
       } // closes phoenix-saved else
     }
   }

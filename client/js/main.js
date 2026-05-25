@@ -1977,8 +1977,17 @@ function animateHit(attackerEl, defenderEl, attackerInst, result, done) {
       knockOut(defenderEl).then(() => {
         if (result.attackerLeveled && attackerEl) {
           attackerEl.classList.add("leveled-up");
-          flashVerdict(`Evolved! L${result.attackerLeveled}`, "super");
           setTimeout(() => attackerEl.classList.remove("leveled-up"), 850);
+        }
+        // Species evolution (slice 9): bigger fanfare than the
+        // L-up bump because the card itself changed.
+        if (result.attackerEvolved && attackerEl) {
+          attackerEl.classList.add("evolving");
+          const { fromName, toName } = result.attackerEvolved;
+          flashVerdict(`${fromName} → ${toName}!`, "super");
+          setTimeout(() => attackerEl.classList.remove("evolving"), 1400);
+        } else if (result.attackerLeveled) {
+          flashVerdict(`+1 HP, +1 ATK!`, "super");
         }
         done && done();
       });

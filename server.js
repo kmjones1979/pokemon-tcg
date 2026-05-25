@@ -150,6 +150,20 @@ function loadPokedex() {
       from += PAGE;
     }
     pokedex = all.map(toCard);
+    // Bake the evolution-target card data onto each card so the engine
+    // can transform a Pokémon mid-match without needing a separate
+    // pokedex lookup. The chain table is static (shared/evolution-
+    // chains.js) so this pass is O(n) over the dex on first load.
+    {
+      const { evolutionFor } = require("./shared/evolution-chains");
+      const byId = new Map(pokedex.map((c) => [c.id, c]));
+      for (const c of pokedex) {
+        const nextId = evolutionFor(c.id);
+        if (nextId && byId.has(nextId)) {
+          c.evolves_to_card = byId.get(nextId);
+        }
+      }
+    }
     // Append all active spell cards so drops + deck-builder see them
     // alongside Pokémon. allSpellCards() only returns spells whose
     // engine effect is wired (see ACTIVE_EFFECTS in shared/spell-cards

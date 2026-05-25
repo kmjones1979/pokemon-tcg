@@ -678,3 +678,24 @@ body.dragging-attack .trainer-block.ai {
 .field-slot .card .card-status.status-freeze ~ .card-art {
   filter: brightness(0.85) hue-rotate(180deg) saturate(0.85);
 }
+
+/* --- Species evolution flash (slice 9) -------------------------------
+ * Fires when a Pokémon transforms into its next evolution form
+ * mid-match (Charmander → Charmeleon). A bigger, more dramatic
+ * version of the existing level-up bump.
+ */
+.card.evolving {
+  animation: speciesEvolve 1.4s ease-out;
+  position: relative;
+  z-index: 10;
+}
+@keyframes speciesEvolve {
+  0%   { transform: scale(1);    filter: brightness(1) drop-shadow(0 0 0 transparent); }
+  25%  { transform: scale(1.15) rotate(-3deg);
+         filter: brightness(2.5) drop-shadow(0 0 18px #fff) drop-shadow(0 0 28px #fbbf24); }
+  50%  { transform: scale(0.95) rotate(2deg);
+         filter: brightness(3) drop-shadow(0 0 28px #fff) drop-shadow(0 0 40px #fbbf24); }
+  75%  { transform: scale(1.1);
+         filter: brightness(1.8) drop-shadow(0 0 18px #fbbf24); }
+  100% { transform: scale(1);    filter: brightness(1) drop-shadow(0 0 0 transparent); }
+}
