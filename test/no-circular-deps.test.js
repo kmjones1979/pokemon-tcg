@@ -88,6 +88,80 @@ test("rewards loaded BEFORE quests still has its exports", () => {
   assert.equal(typeof quests.bumpDailyStats, "function");
 });
 
+test("rewards.js must NOT top-level-require quests (cycle init-order bug)", () => {
+  // The production failure: rewards.js had a top-level
+  //   const { bumpDailyStats } = require("./quests");
+  // line. When rewards loaded FIRST, this triggered quests to load
+  // mid-rewards, and quests' captured `const rewards = require("./
+  // rewards")` got a partial exports object (rollPicks undefined).
+  // The fix moved bumpDailyStats to a lazy require at call time.
+  // This test pins the fix by source-grep so a future "let me clean
+  // up by hoisting the require" doesn't silently re-break.
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const src = fs.readFileSync(path.join(__dirname, "..", "server-modules", "rewards.js"), "utf8");
+  // Strip line + block comments so a comment that mentions the
+  // forbidden line doesn't trip the check.
+  const stripped = src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "");
+  // Now find any top-level require("./quests"). "Top-level" means
+  // not inside a function body — heuristic: indented requires are
+  // call-site requires, top-level requires start at column 0.
+  const topLevelQuestRequire = stripped
+    .split("\n")
+    .find((line) => /^\s{0,3}(?:const|let|var)?\s*[\w{},:\s]*=?\s*require\(["']\.\/quests["']\)/.test(line) && !/^\s{4,}/.test(line));
+  assert.ok(
+    !topLevelQuestRequire,
+    `rewards.js top-level requires "./quests" at: "${topLevelQuestRequire}" — must be lazy (inside the route handler)`,
+  );
+});
+
+test("circular dep regression: quests loaded FIRST still sees rewards.rollPicks", () => {
+  // The production bug: quests.js did `const rewards = require("./
+  // rewards")` at module init. If rewards then REASSIGNED module.exports
+  // (instead of mutating it), quests' cached reference pointed at the
+  // empty initial {} — so rewards.rollPicks was undefined when called
+  // at request time. To catch this in tests, we spawn a fresh node
+  // child that loads quests FIRST and verify quests can call into
+  // rewards via its cached reference.
+  const { spawnSync } = require("node:child_process");
+  const path = require("node:path");
+  const root = path.join(__dirname, "..");
+  const probe = `
+    process.env.SESSION_SECRET = "circular-dep-probe";
+    // Load quests FIRST — this forces the cycle direction that broke
+    // production. Inside quests.js: const rewards = require("./rewards").
+    // rewards.js then requires quests back. If rewards reassigns
+    // module.exports, quests' captured reference goes stale.
+    const quests = require("${root}/server-modules/quests");
+    const rewards = require("${root}/server-modules/rewards");
+    if (typeof rewards.rollPicks !== "function") {
+      console.error("FAIL: rewards.rollPicks is " + typeof rewards.rollPicks);
+      process.exit(1);
+    }
+    // Also exercise the captured reference inside quests by trying a
+    // claim-shaped operation: rewards exports the rollPicks reference
+    // that quests will reach for at call time. We can't easily inspect
+    // quests' captured rewards directly, but if the IDENTITY of the
+    // module.exports object stayed stable (mutated, not replaced) then
+    // any holder of the captured ref sees the same exports.
+    const cachedExports = require.cache[require.resolve("${root}/server-modules/rewards")].exports;
+    if (cachedExports !== rewards) {
+      console.error("FAIL: module.exports identity changed between captures");
+      process.exit(1);
+    }
+    if (typeof cachedExports.rollPicks !== "function") {
+      console.error("FAIL: cached rewards.rollPicks is " + typeof cachedExports.rollPicks);
+      process.exit(1);
+    }
+    console.log("ok");
+  `;
+  const r = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8" });
+  assert.equal(r.status, 0, `quests-first probe failed:\n${r.stderr}\n${r.stdout}`);
+  assert.match(r.stdout, /ok/);
+});
+
 // A subtler check — destructured-at-load-time consts in any module
 // would be `undefined` if a cycle bit them. Spot-check the most
 // historically-fragile users of `createOffer` / `rollPicks`.

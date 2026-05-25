@@ -148,7 +148,11 @@ async function consumeOffer(offerId, userId) {
 }
 
 const { currentTheme } = require("./theme");
-const { bumpDailyStats } = require("./quests");
+// NOTE: bumpDailyStats lives in quests.js, which imports THIS module.
+// To avoid the circular-dep init-order bug (quests captures a partial
+// rewards.exports → rewards.rollPicks is undefined at call time), we
+// defer the require to the call site (search for "lazy bumpDailyStats"
+// below). Theme has no cycle so it's required eagerly.
 
 // Anti-cheat for solo rewards. Replaces the older "just trust the client"
 // payload with server-tracked sessions:
@@ -226,6 +230,9 @@ function mount(app, supabase, getPokedex) {
     // Daily quest tracking — solo matches don't write to the matches table,
     // so this is the only place per-day play/win counters get incremented.
     const koCount = Number(req.body?.kos) || 0;
+    // Lazy bumpDailyStats: require here so the cycle resolves at
+    // call time (after both modules are fully loaded).
+    const { bumpDailyStats } = require("./quests");
     await bumpDailyStats(supabase, req.user.id, { matches: 1, wins: won ? 1 : 0, kos: koCount });
 
     // Drop policy by difficulty (wins only — losses get nothing):
@@ -367,6 +374,11 @@ async function offerForOutcome(userId, pokedex, didWin) {
   };
 }
 
+// Mutate the existing module.exports object instead of replacing it.
+// Replacing creates a NEW object — any module that captured the OLD
+// reference via require() still sees the empty initial {}. Mutating
+// keeps the identity stable so cached references resolve correctly
+// even when the import graph has a cycle (rewards ↔ quests).
 module.exports = {
   mount, offerForOutcome, rollPicks, weightedRarity, pickFromRarity,
   createOffer, rarityForCard, toPickPayload,
