@@ -58,10 +58,20 @@ async function bumpDailyStats(supabase, userId, delta = {}) {
     today.wins    += delta.wins    || 0;
     today.kos     += delta.kos     || 0;
     progress[dayKey] = today;
+    // Roll up cross-day totals (used by achievements like beat_hard).
+    // Stored under a reserved key that won't collide with YYYY-MM-DD entries.
+    if (delta.totals && typeof delta.totals === "object") {
+      const totals = progress.totals || {};
+      for (const k of Object.keys(delta.totals)) {
+        totals[k] = (Number(totals[k]) || 0) + (Number(delta.totals[k]) || 0);
+      }
+      progress.totals = totals;
+    }
     // Garbage-collect: only keep the last 14 days so the column doesn't
-    // grow unbounded.
+    // grow unbounded. Skip the "totals" key — it's not a date.
     const cutoff = Date.now() - 14 * 86_400_000;
     for (const k of Object.keys(progress)) {
+      if (k === "totals") continue;
       if (new Date(k + "T00:00:00Z").getTime() < cutoff) delete progress[k];
     }
     await supabase.from("users").update({ quest_progress: progress }).eq("id", userId);

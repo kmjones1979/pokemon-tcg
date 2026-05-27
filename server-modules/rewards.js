@@ -233,7 +233,11 @@ function mount(app, supabase, getPokedex) {
     // Lazy bumpDailyStats: require here so the cycle resolves at
     // call time (after both modules are fully loaded).
     const { bumpDailyStats } = require("./quests");
-    await bumpDailyStats(supabase, req.user.id, { matches: 1, wins: won ? 1 : 0, kos: koCount });
+    const totalsDelta = (won && session.difficulty === "hard") ? { hardWins: 1 } : null;
+    await bumpDailyStats(supabase, req.user.id, {
+      matches: 1, wins: won ? 1 : 0, kos: koCount,
+      ...(totalsDelta ? { totals: totalsDelta } : {}),
+    });
 
     // Drop policy by difficulty (wins only — losses get nothing):
     //   easy   → 0 cards (signal effort, not luck)

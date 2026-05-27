@@ -60,15 +60,17 @@ const DEFS = [
     progress: streakOf },
 
   // --- Collection breadth -----------------------------------------------
+  // NOTE: user_stats.cards_owned counts DISTINCT rows in owned_cards, not the
+  // total quantity. We want the latter here, so sum quantities directly.
   { id: "collector_100",    name: "Collector",           icon: "📚",  goal: 100,  tier: "bronze",
     description: "Own 100 cards.",
-    progress: (c) => c.stats.cards_owned || c.owned.reduce((s, o) => s + (o.quantity || 0), 0) },
+    progress: (c) => c.owned.reduce((s, o) => s + (o.quantity || 0), 0) },
   { id: "collector_300",    name: "Pokémaster",          icon: "🎴",  goal: 300,  tier: "silver",
     description: "Own 300 cards.",
-    progress: (c) => c.stats.cards_owned || c.owned.reduce((s, o) => s + (o.quantity || 0), 0) },
+    progress: (c) => c.owned.reduce((s, o) => s + (o.quantity || 0), 0) },
   { id: "collector_1000",   name: "Curator",             icon: "🗄️",  goal: 1000, tier: "gold",
     description: "Own 1,000 cards.",
-    progress: (c) => c.stats.cards_owned || c.owned.reduce((s, o) => s + (o.quantity || 0), 0) },
+    progress: (c) => c.owned.reduce((s, o) => s + (o.quantity || 0), 0) },
   { id: "dex_50",           name: "Pokédex Researcher",  icon: "🔬",  goal: 50,   tier: "silver",
     description: "Own at least one copy of 50 different Pokémon.",
     progress: (c) => new Set(c.owned.map((o) => o.pokemon_id)).size },
@@ -125,7 +127,7 @@ const DEFS = [
   // --- Difficulty / quality of wins -------------------------------------
   { id: "beat_hard",        name: "Stone-Cold",          icon: "💀",  goal: 1,    tier: "silver",
     description: "Beat the AI on Hard.",
-    progress: (c) => Math.min(1, c.stats.wins) },
+    progress: (c) => Math.min(1, c.hardWins) },
   { id: "champion_one",     name: "Slayer of Champions", icon: "⚔️",  goal: 1,    tier: "gold",
     description: "Defeat your first Champion.",
     progress: (c) => c.championWins.size },
@@ -174,7 +176,10 @@ const DEFS = [
 // ----- Helpers --------------------------------------------------------------
 
 function streakOf(c) {
-  // Most-recent consecutive wins from match history.
+  // Prefer the server-authoritative best streak (covers solo / story / MP,
+  // bumped by /me/xp/grant). Falls back to scanning the multiplayer-only
+  // matches history when the column is missing (older accounts).
+  if (c.bestStreak > 0) return c.bestStreak;
   let s = 0;
   for (const m of c.matches) {
     if (m.winner_id === c.stats.user_id) s += 1;
@@ -233,7 +238,9 @@ async function computeFor(supabase, userId, getPokedex) {
       .order("ended_at", { ascending: false, nullsFirst: false })
       .limit(50),
     supabase.from("owned_cards").select("pokemon_id, quantity, shiny_level").eq("user_id", userId),
-    supabase.from("users").select("story_progress, champion_wins, quest_progress").eq("id", userId).maybeSingle(),
+    supabase.from("users")
+      .select("story_progress, champion_wins, quest_progress, match_win_streak, match_win_streak_best")
+      .eq("id", userId).maybeSingle(),
   ]);
 
   const stats = statsRes.data || {
@@ -250,6 +257,9 @@ async function computeFor(supabase, userId, getPokedex) {
     let soloWins = 0;
     let soloMatches = 0;
     for (const k of Object.keys(qp)) {
+      // Skip the reserved "totals" rollup key — it holds cross-day stats
+      // like hardWins, not per-day match counters.
+      if (k === "totals") continue;
       const d = qp[k];
       if (!d) continue;
       soloWins   += Number(d.wins    || 0);
@@ -268,8 +278,15 @@ async function computeFor(supabase, userId, getPokedex) {
   const storyProgress = (userRes.data?.story_progress) || { completed: [] };
   const championWins = new Set((userRes.data?.champion_wins) || []);
   const pokedex = (typeof getPokedex === "function") ? (await getPokedex() || []) : [];
+  // Cross-day totals are stored under users.quest_progress.totals (see
+  // bumpDailyStats in quests.js). beat_hard reads totals.hardWins from here.
+  const totals = userRes.data?.quest_progress?.totals || {};
+  const hardWins = Number(totals.hardWins || 0);
+  // Best win streak — server-authoritative across all match types
+  // (solo / story / MP), bumped by /me/xp/grant after every match.
+  const bestStreak = Number(userRes.data?.match_win_streak_best || 0);
 
-  const ctx = { stats, matches, owned, pokedex, storyProgress, championWins, personalBests: getBests(userId) };
+  const ctx = { stats, matches, owned, pokedex, storyProgress, championWins, hardWins, bestStreak, personalBests: getBests(userId) };
 
   const out = { unlocked: [], locked: [] };
   for (const def of DEFS) {
