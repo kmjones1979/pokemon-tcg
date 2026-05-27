@@ -323,6 +323,7 @@ function renderMenu() {
           <button class="mode-btn" id="mode-explore" title="Browse every Pokémon in the Pokédex">🔍 Explore</button>
           <button class="mode-btn" id="mode-redeem" title="Got a code? Redeem it for a random Pokémon">🎁 Redeem Code</button>
           ${currentUser?.is_admin ? `<button class="mode-btn" id="mode-admin" title="Generate codes, manage admins">🛠 Admin Panel</button>` : ""}
+          <button class="mode-btn" id="mode-settings" title="Game settings">⚙ Settings</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -512,6 +513,7 @@ function renderMenu() {
   $("#mode-explore")?.addEventListener("click", openExplore);
   $("#mode-redeem")?.addEventListener("click", openRedeemDialog);
   $("#mode-admin")?.addEventListener("click", () => { window.location.href = "/admin"; });
+  $("#mode-settings")?.addEventListener("click", openSettings);
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).
@@ -890,6 +892,54 @@ async function startChampionFight(championId) {
   } catch (err) {
     alert("Couldn't start: " + (err.message || "unknown"));
   }
+}
+
+// Game settings modal. Currently a single toggle (battle timer
+// on/off) but the natural home for future toggles (sound, emotes,
+// reduce-motion, etc.). Preferences persist in localStorage and
+// take effect on the next render / next match.
+function openSettings() {
+  document.querySelector(".settings-overlay")?.remove();
+  const timerOff = (() => { try { return localStorage.getItem("pokemon-tcg-timer-off") === "1"; } catch { return false; } })();
+  const emotesOff = (() => { try { return localStorage.getItem("pokemon-tcg-emotes") === "off"; } catch { return false; } })();
+  const overlay = document.createElement("div");
+  overlay.className = "settings-overlay howto-overlay";
+  overlay.innerHTML = `
+    <div class="howto-card" style="max-width: 460px; text-align: left;">
+      <h2 style="margin: 0 0 14px;">⚙ Settings</h2>
+      <label style="display: flex; align-items: center; gap: 12px; padding: 10px; background: rgba(255,255,255,0.04); border-radius: 8px; margin-bottom: 8px; cursor: pointer;">
+        <input type="checkbox" id="setting-timer" ${timerOff ? "checked" : ""} style="width: 22px; height: 22px; flex-shrink: 0;">
+        <div>
+          <div style="font-weight: 700;">Turn off battle timer</div>
+          <div style="opacity: 0.7; font-size: 13px;">Play without the 60-second countdown per turn. The "Rival timed out" auto-skip still fires after 25s on AI turns so the game can't hang.</div>
+        </div>
+      </label>
+      <label style="display: flex; align-items: center; gap: 12px; padding: 10px; background: rgba(255,255,255,0.04); border-radius: 8px; margin-bottom: 8px; cursor: pointer;">
+        <input type="checkbox" id="setting-emotes-off" ${emotesOff ? "checked" : ""} style="width: 22px; height: 22px; flex-shrink: 0;">
+        <div>
+          <div style="font-weight: 700;">Mute battle emotes</div>
+          <div style="opacity: 0.7; font-size: 13px;">Stops the kid-voiced "Pow!" / "Super effective!" clips during battle. Music + Pokémon cries are unaffected.</div>
+        </div>
+      </label>
+      <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+        <button class="primary" id="settings-close">Done</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#setting-timer").addEventListener("change", (e) => {
+    try { localStorage.setItem("pokemon-tcg-timer-off", e.target.checked ? "1" : "0"); } catch {}
+    // If currently in a match, hide/show the timer immediately.
+    const el = $("#turn-timer");
+    if (el) {
+      if (e.target.checked) { el.textContent = ""; el.classList.add("disabled"); }
+      else { el.classList.remove("disabled"); startTurnTimer(); }
+    }
+  });
+  overlay.querySelector("#setting-emotes-off").addEventListener("change", (e) => {
+    try { localStorage.setItem("pokemon-tcg-emotes", e.target.checked ? "off" : "on"); } catch {}
+  });
+  overlay.querySelector("#settings-close").addEventListener("click", () => overlay.remove());
 }
 
 // Redeem-code dialog. Tiny modal — input + submit. Reveals the
@@ -2947,9 +2997,21 @@ function handleMpAnim(anim) {
 // Turn-timer ticker — updates the countdown element every 250ms. Auto-ends
 // the player's turn when the deadline passes.
 let _turnTimerHandle = null;
+function isTimerDisabled() {
+  try { return localStorage.getItem("pokemon-tcg-timer-off") === "1"; }
+  catch { return false; }
+}
 function startTurnTimer() {
   stopTurnTimer();
   const el = $("#turn-timer");
+  // Timer disabled in settings → hide the countdown element AND skip
+  // the auto-end watchdog. AI hard-timeout in onEndTurn still fires
+  // independently so the game can't hang on a stuck AI turn.
+  if (isTimerDisabled()) {
+    if (el) el.textContent = "";
+    if (el) el.classList.add("disabled");
+    return;
+  }
   if (!el || !state || state.winner || !state.turnEndsAt) return;
   const update = () => {
     if (!state || state.winner) { stopTurnTimer(); return; }

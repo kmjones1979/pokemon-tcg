@@ -295,14 +295,11 @@ test("spellPlayable(non-spell card): always passes through", () => {
 // so a future "tone down Hard" doesn't silently revert.
 // =====================================================================
 
-test("Hard policy carries atkBonus=1 and critBoost=0.08", async () => {
-  // Re-import POLICIES via the engine's public surface. We don't
-  // export the POLICIES object directly; instead we exercise the
-  // observable contract — running aiTakeTurn on Hard stamps the
-  // matching aiCombatBonus on state. (Engine internal — verified
-  // through state inspection.)
+test("Hard policy stamps atkBonus=2, critBoost=0.15, defenseBonus=1", async () => {
+  // Re-import via the engine's public surface — POLICIES isn't
+  // exported. We exercise the observable contract: running
+  // aiTakeTurn on Hard stamps the matching aiCombatBonus on state.
   const { aiTakeTurn, FIELD_SIZE: FS } = await import("../client/js/game.js");
-
   const state = {
     turn: 5, activePlayer: "ai", phase: "main", winner: null, log: [],
     players: {
@@ -314,14 +311,16 @@ test("Hard policy carries atkBonus=1 and critBoost=0.08", async () => {
                 field: Array(FS).fill(null), discard: [] },
     },
   };
-
   await aiTakeTurn(state, { difficulty: "hard" });
   assert.ok(state.aiCombatBonus, "Hard mode should stamp an aiCombatBonus on state");
-  assert.equal(state.aiCombatBonus.atkBonus, 1);
-  assert.equal(state.aiCombatBonus.critBoost, 0.08);
+  assert.equal(state.aiCombatBonus.atkBonus, 2);
+  assert.equal(state.aiCombatBonus.critBoost, 0.15);
+  assert.equal(state.aiCombatBonus.defenseBonus, 1);
 });
 
-test("Medium policy carries no AI combat bonus (regression: only Hard gets it)", async () => {
+test("Medium policy stamps a SMALL combat bonus (atk=1, crit=0.05, no defense)", async () => {
+  // Medium was bumped to be a little harder — slight offensive bite,
+  // but no defense bonus so there's a clear gap from Hard.
   const { aiTakeTurn, FIELD_SIZE: FS } = await import("../client/js/game.js");
   const state = {
     turn: 5, activePlayer: "ai", phase: "main", winner: null, log: [],
@@ -335,14 +334,39 @@ test("Medium policy carries no AI combat bonus (regression: only Hard gets it)",
     },
   };
   await aiTakeTurn(state, { difficulty: "medium" });
-  assert.ok(state.aiCombatBonus, "medium also stamps the field (just with 0 values)");
-  assert.equal(state.aiCombatBonus.atkBonus, 0);
-  assert.equal(state.aiCombatBonus.critBoost, 0);
+  assert.ok(state.aiCombatBonus);
+  assert.equal(state.aiCombatBonus.atkBonus, 1);
+  assert.equal(state.aiCombatBonus.critBoost, 0.05);
+  assert.equal(state.aiCombatBonus.defenseBonus, 0,
+    "Medium must NOT get the defense buff — that's Hard's signature");
 });
 
-test("Hard AI attack lands +1 damage compared to baseline", async () => {
-  // Direct integration: an AI Pokémon with cardAttack=4 attacking a
-  // defenseless dummy should hit for 4 on Medium and 5 on Hard.
+test("Easy policy stamps zero combat bonus (no bite, no tank)", async () => {
+  const { aiTakeTurn, FIELD_SIZE: FS } = await import("../client/js/game.js");
+  const state = {
+    turn: 5, activePlayer: "ai", phase: "main", winner: null, log: [],
+    players: {
+      player: { name: "P", ability: "brock", trainerHp: 30, maxTrainerHp: 30,
+                energy: 5, maxEnergy: 10, deck: [], hand: [],
+                field: Array(FS).fill(null), discard: [] },
+      ai:     { name: "AI", ability: "brock", trainerHp: 30, maxTrainerHp: 30,
+                energy: 5, maxEnergy: 10, deck: [], hand: [],
+                field: Array(FS).fill(null), discard: [] },
+    },
+  };
+  await aiTakeTurn(state, { difficulty: "easy" });
+  assert.equal(state.aiCombatBonus.atkBonus, 0);
+  assert.equal(state.aiCombatBonus.critBoost, 0);
+  assert.equal(state.aiCombatBonus.defenseBonus, 0);
+});
+
+test("Hard AI attack lands MORE damage than Medium (offensive delta)", async () => {
+  // Direct integration: an AI Pokémon attacking a defenseless dummy.
+  // Hard should hit harder than Medium, and both should hit harder
+  // than a zero-bonus baseline. Exact deltas:
+  //   no-bonus baseline → 4 (cardAttack)
+  //   Medium (atk +1)   → 5
+  //   Hard   (atk +2)   → 6
   const { attack, FIELD_SIZE: FS } = await import("../client/js/game.js");
 
   function mkInst(card, hp = null) {
@@ -387,16 +411,74 @@ test("Hard AI attack lands +1 damage compared to baseline", async () => {
   // Deterministic rand: returns 0.99 so no random crits / status rolls fire.
   const rand = () => 0.99;
 
-  const mediumState = mkState({ atkBonus: 0, critBoost: 0 });
+  const mediumState = mkState({ atkBonus: 1, critBoost: 0, defenseBonus: 0 });
   const beforeMid = mediumState.players.player.field[0].currentHp;
   attack(mediumState, "ai", 0, 0, { rand });
   const dmgMid = beforeMid - mediumState.players.player.field[0].currentHp;
 
-  const hardState = mkState({ atkBonus: 1, critBoost: 0 });
+  const hardState = mkState({ atkBonus: 2, critBoost: 0, defenseBonus: 1 });
   const beforeHard = hardState.players.player.field[0].currentHp;
   attack(hardState, "ai", 0, 0, { rand });
   const dmgHard = beforeHard - hardState.players.player.field[0].currentHp;
 
   assert.equal(dmgHard, dmgMid + 1,
-    `Hard should hit for +1 damage. Medium: ${dmgMid}, Hard: ${dmgHard}`);
+    `Hard should hit for one MORE damage than Medium. Medium: ${dmgMid}, Hard: ${dmgHard}`);
+});
+
+test("Hard AI defense bonus reduces incoming damage by 1", async () => {
+  // Pin: when the player attacks an AI Pokémon, Hard mode's defense
+  // bonus shaves 1 off the damage.
+  const { attack, FIELD_SIZE: FS } = await import("../client/js/game.js");
+  function mkInst(card, hp = null) {
+    return {
+      instanceId: "i" + card.id, card,
+      currentHp: hp ?? card.cardHp, maxHp: card.cardHp,
+      status: null, summoningSickness: false, attackedThisTurn: false,
+      attackBoost: 0, level: 0,
+    };
+  }
+  function mkPokemon(id, atk) {
+    return {
+      id, name: "M" + id, types: ["normal"],
+      energyCost: 1, cardHp: 20, cardAttack: atk,
+      tier: 2, rarity: "uncommon",
+      raw: { hp: 200, attack: atk * 15, defense: 0, sp_attack: 0, sp_defense: 0, speed: 30 },
+    };
+  }
+  function mkState(bonus) {
+    return {
+      turn: 5, activePlayer: "player", phase: "main", winner: null, log: [],
+      aiCombatBonus: bonus,
+      players: {
+        player: {
+          name: "P", ability: "brock", trainerHp: 30, maxTrainerHp: 30,
+          energy: 5, maxEnergy: 10, deck: [], hand: [],
+          field: [mkInst(mkPokemon(1, 5))].concat(Array(FS - 1).fill(null)),
+          discard: [],
+        },
+        ai: {
+          name: "AI", ability: "brock", trainerHp: 30, maxTrainerHp: 30,
+          energy: 5, maxEnergy: 10, deck: [], hand: [],
+          field: [mkInst(mkPokemon(99, 1))].concat(Array(FS - 1).fill(null)),
+          discard: [],
+        },
+      },
+    };
+  }
+  const rand = () => 0.99;
+
+  // Without defense bonus.
+  const noDefState = mkState({ atkBonus: 0, critBoost: 0, defenseBonus: 0 });
+  const beforeNoDef = noDefState.players.ai.field[0].currentHp;
+  attack(noDefState, "player", 0, 0, { rand });
+  const dmgNoDef = beforeNoDef - noDefState.players.ai.field[0].currentHp;
+
+  // With Hard defense bonus.
+  const hardDefState = mkState({ atkBonus: 0, critBoost: 0, defenseBonus: 1 });
+  const beforeHardDef = hardDefState.players.ai.field[0].currentHp;
+  attack(hardDefState, "player", 0, 0, { rand });
+  const dmgHardDef = beforeHardDef - hardDefState.players.ai.field[0].currentHp;
+
+  assert.equal(dmgHardDef, dmgNoDef - 1,
+    `Hard AI should take 1 less damage. Without bonus: ${dmgNoDef}, with bonus: ${dmgHardDef}`);
 });

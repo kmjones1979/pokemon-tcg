@@ -1227,7 +1227,14 @@ export function attack(
       damageBase = Math.max(1, Math.round(damageBase / 2));
       solidRockApplied = true;
     }
-    let damage = Math.max(calc.multiplier === 0 ? 0 : 1, damageBase - defReduction);
+    // Per-difficulty AI defense bonus (Hard mode tanks 1 less per hit).
+    // Only fires when the AI is the DEFENDER — symmetric with how
+    // aiDifficultyAtk only fires when the AI is the attacker.
+    const aiDifficultyDef =
+      opponentSide === "ai" && state.aiCombatBonus
+        ? (state.aiCombatBonus.defenseBonus || 0)
+        : 0;
+    let damage = Math.max(calc.multiplier === 0 ? 0 : 1, damageBase - defReduction - aiDifficultyDef);
     // Shield (slice 7): if the defender's instance is shielded by a
     // prior Shield spell, the next incoming attack does 0 damage and
     // the shield is consumed.
@@ -1496,18 +1503,21 @@ import { basicAbility, specialAbility } from "./abilities.js";
 //   easy  → forgiving, lots of passes / skipped attacks for new players
 //   medium → competent: bestDmg targets, never skips, "smart" card pick
 //             (lighter heuristic than Hard's signature-aware version)
-//   hard  → fully optimal play + small combat bonuses (+1 ATK, +8% crit
-//             chance on AI strikes). The bonuses make every Hard fight
-//             noticeably tighter without crushing — most attacks still
-//             follow the same type-chart math, just with extra bite.
+//   hard  → fully optimal play + combat bonuses on BOTH offense AND
+//             defense. Slice-9 tune (atk:+1, crit:+8%) wasn't biting
+//             enough; raised to atk:+2, crit:+15%, and added a new
+//             defenseBonus:+1 so incoming damage to AI Pokémon is
+//             also softened by 1.
 //
-// Per-policy combat bonuses (read by attack() when side === "ai"):
-//   atkBonus   → flat damage bonus on every AI attack
-//   critBoost  → additive crit chance (0.08 = +8%)
+// Per-policy combat bonuses (read by attack() when side === "ai" for
+// atkBonus/critBoost, or when defender side === "ai" for defenseBonus):
+//   atkBonus     → flat damage bonus on every AI attack
+//   critBoost    → additive crit chance (0.15 = +15%)
+//   defenseBonus → flat damage REDUCTION on every hit AI takes
 const POLICIES = {
-  easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false, useSpecial: false,        atkBonus: 0, critBoost: 0 },
-  medium: { pickCard: "smart",     pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "sometimes",  atkBonus: 0, critBoost: 0 },
-  hard:   { pickCard: "smartSig",  pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart",      atkBonus: 1, critBoost: 0.08 },
+  easy:   { pickCard: "cheapest",  pickTarget: "random",   passPlayChance: 0.55, skipAttackChance: 0.4,  useTypeEff: false, useSpecial: false,        atkBonus: 0, critBoost: 0,    defenseBonus: 0 },
+  medium: { pickCard: "smart",     pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "sometimes",  atkBonus: 1, critBoost: 0.05, defenseBonus: 0 },
+  hard:   { pickCard: "smartSig",  pickTarget: "bestDmg",  passPlayChance: 0,    skipAttackChance: 0,    useTypeEff: true,  useSpecial: "smart",      atkBonus: 2, critBoost: 0.15, defenseBonus: 1 },
 };
 
 // True if a spell can actually do something useful given the current
@@ -1971,8 +1981,9 @@ async function aiTakeTurnInner(state, { rand, difficulty, onAction, personality 
   // Re-set every turn so it stays in sync if difficulty ever changes
   // mid-match (boss fights override this with their own attack bonus).
   state.aiCombatBonus = {
-    atkBonus:  policy.atkBonus  || 0,
-    critBoost: policy.critBoost || 0,
+    atkBonus:     policy.atkBonus     || 0,
+    critBoost:    policy.critBoost    || 0,
+    defenseBonus: policy.defenseBonus || 0,
   };
   const ai = state.players.ai;
   const mood = personality || PERSONALITIES[Math.floor(rand() * PERSONALITIES.length)];
