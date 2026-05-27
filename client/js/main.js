@@ -934,8 +934,8 @@ function openRedeemDialog() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Redeem failed (${res.status})`);
-      overlay.remove();
-      flashVerdict(`🎉 You got ${data.card.name}!`, "super");
+      // Swap the modal contents to a card-reveal panel + spawn confetti.
+      showRedeemReveal(overlay, data.card, data.newQuantity);
     } catch (e) {
       err.textContent = e.message || "Couldn't redeem.";
     }
@@ -943,6 +943,76 @@ function openRedeemDialog() {
   overlay.querySelector("#redeem-submit").addEventListener("click", submit);
   overlay.querySelector("#redeem-cancel").addEventListener("click", () => overlay.remove());
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+}
+
+// Card-reveal panel that replaces the redeem input on success. Renders
+// the granted card with renderCard (same styling as in-match cards),
+// adds a rarity ribbon + "Added to your collection" line, and triggers
+// a confetti burst. A "Sweet!" button dismisses.
+function showRedeemReveal(overlay, card, newQuantity) {
+  // Inflate the card to the shape renderCard expects. /me/redeem
+  // already sends most of the fields; pad in raw stats so the
+  // renderer has a sensible HP/ATK number.
+  const fullCard = {
+    ...card,
+    cardHp:     card.cardHp     ?? Math.max(1, Math.round((card.cardHp || 5))),
+    cardAttack: card.cardAttack ?? 5,
+    energyCost: card.energyCost ?? Math.min(5, card.tier || 1),
+    raw: card.raw || { hp: 60, attack: 60, defense: 30, sp_attack: 30, sp_defense: 30, speed: 30 },
+  };
+  const cardEl = renderCard(fullCard);
+  cardEl.classList.add("redeem-reveal-card");
+  const rarity = card.rarity || "common";
+  const rarityLabel = rarity.charAt(0).toUpperCase() + rarity.slice(1);
+  const dialog = overlay.querySelector(".howto-card");
+  dialog.innerHTML = `
+    <h2 style="margin: 0 0 4px;">🎉 You got a card!</h2>
+    <p style="opacity: 0.78; margin: 0 0 18px; font-size: 14px;">Added to your collection — you now have ${newQuantity}.</p>
+    <div class="redeem-card-slot"></div>
+    <div class="redeem-meta">
+      <strong>${escape(card.name)}</strong>
+      <span class="redeem-rarity-pill rarity-${escape(rarity)}">${escape(rarityLabel)}</span>
+    </div>
+    <button class="primary" id="redeem-close-btn" style="margin-top: 18px;">Sweet!</button>
+  `;
+  dialog.querySelector(".redeem-card-slot").appendChild(cardEl);
+  dialog.querySelector("#redeem-close-btn").addEventListener("click", () => overlay.remove());
+  // Drop confetti behind the card and slightly in front. Two layers
+  // for depth — back layer is bigger + slower, front layer is small
+  // and fast.
+  spawnConfetti(overlay);
+  sfxVictory();
+}
+
+// CSS-driven confetti burst. Spawns ~60 colored squares with random
+// drift + rotation, attached to the overlay so they're cleaned up
+// when the modal closes. Pure CSS animation (no rAF loop).
+function spawnConfetti(rootEl) {
+  const layer = document.createElement("div");
+  layer.className = "redeem-confetti";
+  const COLORS = ["#fbbf24", "#f87171", "#34d399", "#60a5fa", "#c084fc", "#f472b6", "#fb923c"];
+  const N = 60;
+  for (let i = 0; i < N; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+    const left = Math.random() * 100;
+    const delay = Math.random() * 0.5;
+    const dur = 1.6 + Math.random() * 1.4;
+    const rot = Math.random() * 720 - 360;
+    const drift = (Math.random() - 0.5) * 200;
+    piece.style.left = `${left}%`;
+    piece.style.background = COLORS[i % COLORS.length];
+    piece.style.animationDelay = `${delay}s`;
+    piece.style.animationDuration = `${dur}s`;
+    piece.style.setProperty("--confetti-rot", `${rot}deg`);
+    piece.style.setProperty("--confetti-drift", `${drift}px`);
+    if (i % 5 === 0) piece.classList.add("big");
+    layer.appendChild(piece);
+  }
+  rootEl.appendChild(layer);
+  // Garbage-collect once animations are done — defense against a
+  // long-lived overlay leaking 60 elements per redeem.
+  setTimeout(() => layer.remove(), 4000);
 }
 
 // Opens the Pokédex Explore overlay. Lazy-loads so the ~6KB module +

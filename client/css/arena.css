@@ -4099,3 +4099,90 @@ html { overscroll-behavior: none; }
   .field-slot .card .card-name { font-size: 9px; max-width: 56px; }
   .hand .card { width: 78px; flex: 0 0 78px; }
 }
+
+/* =====================================================================
+ * Redeem-code card reveal + confetti (slice: redeem visibility)
+ *
+ * Fires when a player redeems a code via the main-menu modal. The
+ * input dialog content is replaced in-place with a card-reveal panel:
+ *   - the granted card rendered big (renderCard output)
+ *   - rarity pill + new-quantity line
+ *   - a confetti burst behind/in-front of the card
+ *
+ * Confetti is pure CSS — 60 colored squares with random
+ * left-position + drift + rotation, animated from above the viewport
+ * down past the bottom edge. The whole layer is removed after 4s so
+ * a long-lived overlay doesn't leak DOM.
+ * ================================================================= */
+.redeem-card-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 4px 0;
+  perspective: 600px;
+}
+.redeem-card-slot .card.redeem-reveal-card {
+  /* Slight scale-up + entrance animation so the card lands with
+   * authority instead of just appearing. */
+  animation: redeemRevealIn 0.7s cubic-bezier(0.18, 1.1, 0.4, 1.2);
+  transform: scale(1.05);
+}
+@keyframes redeemRevealIn {
+  0%   { transform: scale(0.4) rotate(-12deg); opacity: 0; filter: brightness(2); }
+  60%  { transform: scale(1.18) rotate(4deg);  opacity: 1; filter: brightness(1.4); }
+  100% { transform: scale(1.05) rotate(0);     opacity: 1; filter: brightness(1); }
+}
+
+.redeem-meta {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.redeem-meta strong { font-size: 18px; }
+.redeem-rarity-pill {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.redeem-rarity-pill.rarity-common    { color: #cbd5e1; border-color: rgba(203,213,225,0.5); }
+.redeem-rarity-pill.rarity-uncommon  { color: #6ee7b7; border-color: rgba(110,231,183,0.55); }
+.redeem-rarity-pill.rarity-rare      { color: #60a5fa; border-color: rgba(96,165,250,0.6); }
+.redeem-rarity-pill.rarity-epic      { color: #c084fc; border-color: rgba(192,132,252,0.65); box-shadow: 0 0 14px rgba(192,132,252,0.35); }
+.redeem-rarity-pill.rarity-legendary { color: #fbbf24; border-color: rgba(251,191,36,0.7);  box-shadow: 0 0 18px rgba(251,191,36,0.5); }
+
+/* Confetti layer — pinned to the overlay, falls past the bottom. */
+.redeem-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  transform: translateY(-20px) rotate(0deg);
+  animation: confettiFall linear forwards;
+  will-change: transform;
+}
+.confetti-piece.big {
+  width: 12px;
+  height: 18px;
+  animation-duration: 2.6s !important;
+}
+@keyframes confettiFall {
+  0%   { transform: translate(0, -40px) rotate(0deg); opacity: 1; }
+  10%  { opacity: 1; }
+  100% { transform: translate(var(--confetti-drift, 0), 110vh) rotate(var(--confetti-rot, 360deg)); opacity: 0.4; }
+}
