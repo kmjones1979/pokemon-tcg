@@ -258,14 +258,41 @@ function mount(app, supabase, getPokedex) {
 
   // GET /me/admin/codes — list codes (newest first). Limit clamped to
   // 200 so the panel response stays small even if an admin's been
-  // generating a lot of codes.
+  // generating a lot of codes. Each claimed code is enriched with the
+  // claimant's display_name so the panel doesn't show raw UUIDs.
   app.get("/me/admin/codes", requireAdmin(), async (req, res) => {
     const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
     let index = (await store.kvGet(CODE_INDEX_KEY)) || [];
     if (!Array.isArray(index)) index = [];
     const slice = index.slice(0, limit);
-    const codes = await Promise.all(slice.map((c) => store.kvGet(CODE_PREFIX + c)));
-    res.json({ codes: codes.filter(Boolean) });
+    const codes = (await Promise.all(slice.map((c) => store.kvGet(CODE_PREFIX + c)))).filter(Boolean);
+
+    // Batch-resolve display names for everyone who's claimed a code +
+    // everyone who created one, so the panel can show "Leon-ug0"
+    // instead of "b5134fec…".
+    const userIds = new Set();
+    for (const c of codes) {
+      if (c.claimedBy) userIds.add(c.claimedBy);
+      if (c.createdBy) userIds.add(c.createdBy);
+    }
+    const nameById = new Map();
+    if (supabase && userIds.size) {
+      try {
+        const { data } = await supabase
+          .from("users")
+          .select("id, display_name")
+          .in("id", [...userIds]);
+        for (const row of data || []) nameById.set(row.id, row.display_name);
+      } catch (err) {
+        console.warn("[admin] claimant-name lookup failed:", err.message);
+      }
+    }
+    const enriched = codes.map((c) => ({
+      ...c,
+      claimedByName: c.claimedBy ? (nameById.get(c.claimedBy) || null) : null,
+      createdByName: c.createdBy ? (nameById.get(c.createdBy) || null) : null,
+    }));
+    res.json({ codes: enriched });
   });
 
   // ===== Admin allowlist (KV-promoted) ===============================
@@ -447,7 +474,10 @@ function renderAdminPage({ adminOk, userId }) {
   .code { font-family: ui-monospace, monospace; font-size: 14px; font-weight: 700; background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 6px; letter-spacing: 1px; }
   .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
   .pill.active { background: #06402d; color: #6ee7b7; }
-  .pill.claimed { background: #2a1f4e; color: #c084fc; }
+  .pill.claimed { background: #4a1e0d; color: #fbbf24; }
+  tr.is-claimed { background: rgba(251, 191, 36, 0.04); }
+  .claimed-cell { font-size: 12px; line-height: 1.4; }
+  .claimed-when { opacity: 0.7; font-size: 11px; display: block; }
   .pill.env { background: #1e3a5f; color: #93c5fd; }
   .pill.promoted { background: #2a3658; color: #cbd5e1; }
   .muted { opacity: 0.65; font-size: 12px; }
@@ -470,10 +500,12 @@ ${adminOk ? `
   <div class="row">
     <input type="text" id="note-input" placeholder="Note (optional) — e.g. ‘Halloween giveaway’">
     <button id="create-code">Generate Code</button>
+    <button id="refresh-codes" class="ghost" title="Refresh — shows newly-redeemed codes">↻ Refresh</button>
   </div>
+  <div class="muted" id="codes-summary" style="margin-bottom: 8px;"></div>
   <div id="codes-error" class="err"></div>
   <table id="codes-table">
-    <thead><tr><th>Code</th><th>Status</th><th>Note</th><th>Claimed by</th><th>Reward</th></tr></thead>
+    <thead><tr><th>Code</th><th>Status</th><th>Note</th><th>Redeemed by</th><th>Reward</th></tr></thead>
     <tbody id="codes-body"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
   </table>
 </section>
@@ -502,27 +534,71 @@ const toast = (msg) => {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2400);
 };
+// Human-readable relative timestamp ("2 min ago", "1 day ago").
+// Falls back to absolute ISO date for >7 day.
+function relTime(iso) {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 0 || isNaN(ms)) return iso.slice(0, 10);
+  const s = Math.floor(ms / 1000);
+  if (s < 60)       return s + "s ago";
+  const m = Math.floor(s / 60);
+  if (m < 60)       return m + " min ago";
+  const h = Math.floor(m / 60);
+  if (h < 24)       return h + "h ago";
+  const d = Math.floor(h / 24);
+  if (d < 7)        return d + " day" + (d === 1 ? "" : "s") + " ago";
+  return iso.slice(0, 10);
+}
 async function refreshCodes() {
   $("#codes-error").textContent = "";
   try {
     const r = await fetch("/me/admin/codes?limit=100");
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
     const { codes } = await r.json();
+    // Summary header — quick read on how many codes are out there.
+    const active  = codes.filter((c) => !c.claimedBy).length;
+    const claimed = codes.filter((c) =>  c.claimedBy).length;
+    $("#codes-summary").textContent =
+      codes.length === 0
+        ? ""
+        : (active + " active · " + claimed + " redeemed · " + codes.length + " total");
     const body = $("#codes-body");
-    if (!codes.length) { body.innerHTML = '<tr><td colspan="5" class="empty">No codes yet — generate one above.</td></tr>'; return; }
-    body.innerHTML = codes.map((c) => \`
-      <tr>
-        <td><span class="code">\${escape(c.code)}</span>
-            <button class="ghost" style="margin-left:6px; padding:2px 8px; font-size:11px;" onclick="navigator.clipboard.writeText('\${escape(c.code)}').then(()=>toast('Copied'))">Copy</button></td>
-        <td><span class="pill \${c.claimedBy ? 'claimed' : 'active'}">\${c.claimedBy ? 'CLAIMED' : 'ACTIVE'}</span></td>
-        <td>\${escape(c.note || '')}</td>
-        <td>\${c.claimedBy ? '<code>' + escape(c.claimedBy.slice(0,8)) + '…</code>' : '<span class="muted">—</span>'}</td>
-        <td>\${c.claimedPokemonName ? escape(c.claimedPokemonName) : '<span class="muted">—</span>'}</td>
-      </tr>\`).join("");
+    if (!codes.length) {
+      body.innerHTML = '<tr><td colspan="5" class="empty">No codes yet — generate one above.</td></tr>';
+      return;
+    }
+    body.innerHTML = codes.map((c) => {
+      const claimed = !!c.claimedBy;
+      const claimedByDisplay = c.claimedByName
+        ? '<strong>' + escape(c.claimedByName) + '</strong>'
+        : (c.claimedBy ? '<code>' + escape(c.claimedBy.slice(0, 8)) + '…</code>' : '');
+      const whenCell = claimed
+        ? '<div class="claimed-cell">' + claimedByDisplay
+          + '<span class="claimed-when">' + escape(relTime(c.claimedAt)) + '</span></div>'
+        : '<span class="muted">—</span>';
+      const rewardCell = claimed
+        ? '<strong>🎁 ' + escape(c.claimedPokemonName || '?') + '</strong>'
+        : '<span class="muted">—</span>';
+      return \`
+        <tr class="\${claimed ? 'is-claimed' : ''}">
+          <td><span class="code">\${escape(c.code)}</span>
+              <button class="ghost" style="margin-left:6px; padding:2px 8px; font-size:11px;"
+                      onclick="navigator.clipboard.writeText('\${escape(c.code)}').then(()=>toast('Copied'))">Copy</button></td>
+          <td><span class="pill \${claimed ? 'claimed' : 'active'}">\${claimed ? 'REDEEMED ✓' : 'ACTIVE'}</span></td>
+          <td>\${escape(c.note || '')}</td>
+          <td>\${whenCell}</td>
+          <td>\${rewardCell}</td>
+        </tr>\`;
+    }).join("");
   } catch (err) {
     $("#codes-error").textContent = err.message;
   }
 }
+$("#refresh-codes").addEventListener("click", refreshCodes);
+// Auto-refresh every 20s so a redemption shows up without manual
+// reload. Stop if the tab is hidden to avoid background polling.
+setInterval(() => { if (!document.hidden) refreshCodes(); }, 20000);
 $("#create-code").addEventListener("click", async () => {
   const note = $("#note-input").value;
   $("#codes-error").textContent = "";
