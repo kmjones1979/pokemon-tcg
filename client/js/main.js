@@ -322,6 +322,7 @@ function renderMenu() {
           <button class="mode-btn" id="mode-reading" title="Read along with Pokémon friends">📚 Story Time</button>
           <button class="mode-btn" id="mode-explore" title="Browse every Pokémon in the Pokédex">🔍 Explore</button>
           <button class="mode-btn" id="mode-redeem" title="Got a code? Redeem it for a random Pokémon">🎁 Redeem Code</button>
+          ${currentUser?.is_admin ? `<button class="mode-btn" id="mode-admin" title="Generate codes, manage admins">🛠 Admin Panel</button>` : ""}
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -510,6 +511,7 @@ function renderMenu() {
   $("#mode-reading")?.addEventListener("click", openReadingMode);
   $("#mode-explore")?.addEventListener("click", openExplore);
   $("#mode-redeem")?.addEventListener("click", openRedeemDialog);
+  $("#mode-admin")?.addEventListener("click", () => { window.location.href = "/admin"; });
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).

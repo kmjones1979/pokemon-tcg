@@ -76,10 +76,17 @@ function mount(app, supabase) {
 
   app.use(attach(supabase));
 
-  // GET /auth/me -- light identity probe
-  app.get("/auth/me", (req, res) => {
+  // GET /auth/me -- light identity probe. Also includes an admin flag
+  // so the client can conditionally render admin-only UI affordances
+  // (the "Admin" panel button on the main menu).
+  app.get("/auth/me", async (req, res) => {
     if (!req.user) return res.json({ user: null });
-    res.json({ user: req.user });
+    let isAdmin = false;
+    try {
+      const adminMod = require("./admin");
+      isAdmin = await adminMod.isAdminAsync(req.user.id);
+    } catch { /* admin module not mounted in some test harnesses */ }
+    res.json({ user: { ...req.user, is_admin: isAdmin } });
   });
 
   app.post("/auth/logout", (req, res) => {
