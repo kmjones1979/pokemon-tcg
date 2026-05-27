@@ -201,7 +201,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   champions.mount(app, authSupabase);
   story.mount(app, authSupabase, ensurePokedex);
   readingMode.mount(app);
-  admin.mount(app, authSupabase);
+  admin.mount(app, authSupabase, ensurePokedex);
   trading.mount(app, authSupabase, ensurePokedex);
   dailyBoss.mount(app, authSupabase, ensurePokedex);
   dailyPuzzle.mount(app, authSupabase);

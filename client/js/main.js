@@ -321,6 +321,7 @@ function renderMenu() {
           <button class="mode-btn puzzle-launch" id="mode-puzzle" title="Today's chess-style card puzzle">🧩 Daily Puzzle</button>
           <button class="mode-btn" id="mode-reading" title="Read along with Pokémon friends">📚 Story Time</button>
           <button class="mode-btn" id="mode-explore" title="Browse every Pokémon in the Pokédex">🔍 Explore</button>
+          <button class="mode-btn" id="mode-redeem" title="Got a code? Redeem it for a random Pokémon">🎁 Redeem Code</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
         </div>
       </div>
@@ -508,6 +509,7 @@ function renderMenu() {
   $("#mode-puzzle")?.addEventListener("click", () => puzzle.openPuzzle({ currentUser }));
   $("#mode-reading")?.addEventListener("click", openReadingMode);
   $("#mode-explore")?.addEventListener("click", openExplore);
+  $("#mode-redeem")?.addEventListener("click", openRedeemDialog);
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
 
   // Daily streak banner + trainer level chip + daily quests (signed-in only).
@@ -886,6 +888,59 @@ async function startChampionFight(championId) {
   } catch (err) {
     alert("Couldn't start: " + (err.message || "unknown"));
   }
+}
+
+// Redeem-code dialog. Tiny modal — input + submit. Reveals the
+// granted Pokémon via a flashVerdict on success.
+function openRedeemDialog() {
+  if (!currentUser) {
+    alert("Sign in first to redeem a code.");
+    return;
+  }
+  document.querySelector(".redeem-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.className = "redeem-overlay howto-overlay";
+  overlay.innerHTML = `
+    <div class="howto-card" style="max-width: 460px; text-align: center;">
+      <h2>🎁 Redeem a Code</h2>
+      <p style="opacity: 0.8; margin: 6px 0 16px;">Enter your code below to add a random Pokémon to your collection.</p>
+      <input type="text" id="redeem-input" placeholder="e.g. ABC234XYZ7" autocomplete="off"
+             style="width: 92%; padding: 12px 14px; font-size: 18px; letter-spacing: 2px;
+                    text-transform: uppercase; font-family: ui-monospace, monospace;
+                    background: rgba(255,255,255,0.07); color: inherit;
+                    border: 1px solid rgba(255,255,255,0.18); border-radius: 10px;">
+      <div id="redeem-error" style="color: #fca5a5; font-size: 13px; min-height: 18px; margin-top: 8px;"></div>
+      <div style="display: flex; gap: 10px; justify-content: center; margin-top: 12px;">
+        <button class="howto-close" id="redeem-cancel">Cancel</button>
+        <button class="primary" id="redeem-submit">Redeem</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const input = overlay.querySelector("#redeem-input");
+  const err = overlay.querySelector("#redeem-error");
+  input.focus();
+  const submit = async () => {
+    const code = input.value.trim().toUpperCase();
+    if (!code) { err.textContent = "Enter a code."; return; }
+    err.textContent = "";
+    try {
+      const res = await fetch("/me/redeem", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Redeem failed (${res.status})`);
+      overlay.remove();
+      flashVerdict(`🎉 You got ${data.card.name}!`, "super");
+    } catch (e) {
+      err.textContent = e.message || "Couldn't redeem.";
+    }
+  };
+  overlay.querySelector("#redeem-submit").addEventListener("click", submit);
+  overlay.querySelector("#redeem-cancel").addEventListener("click", () => overlay.remove());
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
 }
 
 // Opens the Pokédex Explore overlay. Lazy-loads so the ~6KB module +

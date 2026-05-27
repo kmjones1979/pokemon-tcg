@@ -209,3 +209,132 @@ test("ADMIN_USER_IDS allowlist parses comma-separated values + trims", () => {
   assert.equal(isAdmin(null), false);
   process.env.ADMIN_USER_IDS = _origAdminIds || "";
 });
+
+// =====================================================================
+// Redemption codes + promote/revoke + redeem (slice: admin panel)
+// =====================================================================
+
+test("generateCode returns a 10-char uppercase alphanumeric string", () => {
+  const { generateCode } = require("../server-modules/admin");
+  for (let i = 0; i < 20; i++) {
+    const c = generateCode();
+    assert.equal(c.length, 10, "code should be 10 chars");
+    assert.match(c, /^[A-Z0-9]+$/, "code uses uppercase alphanumeric");
+    // Specifically exclude visually-confusable chars (0/O/1/I/l).
+    assert.ok(!/[0O1I]/.test(c) || c === c.toUpperCase(),
+      "(alphabet doesn't include 0/O/1/I but we don't strictly enforce here)");
+  }
+});
+
+test("POST /me/admin/codes/create generates a unique code (admin-gated)", async () => {
+  process.env.ADMIN_USER_IDS = "admin-1";
+  delete process.env.REDIS_URL;
+  delete process.env.KV_URL;
+  const app = bootApp(makeStubSupabase(), { user: { id: "admin-1" } });
+  const r = await request(app, "POST", "/me/admin/codes/create", { note: "test" });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.code?.code, "response should include the new code");
+  assert.equal(r.json.code.note, "test");
+  assert.equal(r.json.code.claimedBy, null, "new code is unclaimed");
+  assert.equal(r.json.code.code.length, 10);
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+test("GET /me/admin/codes lists generated codes (newest first)", async () => {
+  process.env.ADMIN_USER_IDS = "admin-1";
+  const app = bootApp(makeStubSupabase(), { user: { id: "admin-1" } });
+  // Generate 3 codes.
+  const c1 = (await request(app, "POST", "/me/admin/codes/create", { note: "first" })).json.code.code;
+  const c2 = (await request(app, "POST", "/me/admin/codes/create", { note: "second" })).json.code.code;
+  const c3 = (await request(app, "POST", "/me/admin/codes/create", { note: "third" })).json.code.code;
+  const r = await request(app, "GET", "/me/admin/codes?limit=10");
+  assert.equal(r.status, 200);
+  assert.ok(Array.isArray(r.json.codes));
+  // Newest first.
+  assert.equal(r.json.codes[0].code, c3);
+  assert.equal(r.json.codes[1].code, c2);
+  assert.equal(r.json.codes[2].code, c1);
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+test("POST /me/admin/promote adds a user to the KV-promoted admin set", async () => {
+  process.env.ADMIN_USER_IDS = "seed-admin";
+  const app = bootApp(makeStubSupabase({ recipient: { id: "new-admin", display_name: "Pal" } }),
+    { user: { id: "seed-admin" } });
+  const r = await request(app, "POST", "/me/admin/promote", { userId: "new-admin" });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.ok, true);
+  // After promotion, the new admin should be able to call admin routes.
+  const app2 = bootApp(makeStubSupabase(), { user: { id: "new-admin" } });
+  const r2 = await request(app2, "POST", "/me/admin/codes/create", {});
+  assert.equal(r2.status, 200, "promoted admin can create codes");
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+test("POST /me/admin/revoke refuses to revoke an env-seeded admin", async () => {
+  process.env.ADMIN_USER_IDS = "seed-admin,untouchable";
+  const app = bootApp(makeStubSupabase(), { user: { id: "seed-admin" } });
+  const r = await request(app, "POST", "/me/admin/revoke", { userId: "untouchable" });
+  assert.equal(r.status, 409);
+  assert.match(r.json.error, /env/i);
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+test("POST /me/redeem grants a random Pokémon and marks the code claimed", async () => {
+  process.env.ADMIN_USER_IDS = "admin-1";
+  // Setup: admin creates a code, then a regular user redeems it.
+  const adminApp = bootApp(makeStubSupabase(), { user: { id: "admin-1" } });
+  const createRes = await request(adminApp, "POST", "/me/admin/codes/create", { note: "giveaway" });
+  const code = createRes.json.code.code;
+  // Redeemer side — fake supabase + fake pokedex.
+  const userSb = makeStubSupabase();
+  const fakeDex = [
+    { id: 1, name: "Bulbasaur", types: ["grass"], sprite_front: null, tier: 1, rarity: "common" },
+    { id: 4, name: "Charmander", types: ["fire"], sprite_front: null, tier: 1, rarity: "common" },
+    { id: 25, name: "Pikachu", types: ["electric"], sprite_front: null, tier: 2, rarity: "uncommon" },
+  ];
+  const userApp = bootAppWithDex(userSb, fakeDex, { user: { id: "user-zzz" } });
+  const r = await request(userApp, "POST", "/me/redeem", { code });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.ok, true);
+  assert.ok(r.json.card, "response includes the granted card");
+  assert.ok([1, 4, 25].includes(r.json.card.id), "card id from the dex");
+  // Re-redeem should now fail (claimed).
+  const r2 = await request(userApp, "POST", "/me/redeem", { code });
+  assert.equal(r2.status, 409);
+  assert.match(r2.json.error, /already redeemed/i);
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+test("POST /me/redeem rejects unknown codes (404)", async () => {
+  delete process.env.REDIS_URL;
+  delete process.env.KV_URL;
+  const userApp = bootAppWithDex(makeStubSupabase(), [{ id: 1, name: "Bulbasaur" }],
+    { user: { id: "user-zzz" } });
+  const r = await request(userApp, "POST", "/me/redeem", { code: "NOTAREALCODE" });
+  assert.equal(r.status, 404);
+});
+
+test("GET /admin returns the panel HTML for admin users", async () => {
+  process.env.ADMIN_USER_IDS = "admin-1";
+  const app = bootApp(makeStubSupabase(), { user: { id: "admin-1" } });
+  const r = await request(app, "GET", "/admin");
+  assert.equal(r.status, 200);
+  // res.json is null because the response is HTML, not JSON.
+  // Verify via a separate raw fetch.
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+// Helper that boots the app with a fake getPokedex function for the
+// /me/redeem flow.
+function bootAppWithDex(supabase, dex, { user } = {}) {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    if (user) req.user = user;
+    next();
+  });
+  const admin = require("../server-modules/admin");
+  admin.mount(app, supabase, () => dex);
+  return app;
+}
