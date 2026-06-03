@@ -105,8 +105,8 @@ test("mulberry32 is deterministic and uniform-ish", () => {
 });
 
 // Card threshold isn't surprising
-test("CARD_THRESHOLD is the documented 100", () => {
-  assert.equal(CARD_THRESHOLD, 100);
+test("CARD_THRESHOLD is the documented 50 (≈15 min of work per card)", () => {
+  assert.equal(CARD_THRESHOLD, 50);
 });
 
 // Each grade has Singapore-style topics on top of the standard ones —

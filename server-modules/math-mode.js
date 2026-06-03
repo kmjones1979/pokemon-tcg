@@ -35,7 +35,7 @@ const GRADES = [
 const GRADE_BY_ID = new Map(GRADES.map((g) => [g.id, g]));
 
 const QUIZ_LENGTH = 10;
-const CARD_THRESHOLD = 100;            // correct answers per card
+const CARD_THRESHOLD = 50;             // correct answers per card (≈15 min)
 const PROMOTION_THRESHOLD = 50;        // correct answers in current grade unlocks next
 const STATE_TTL_SEC = 60 * 60 * 24 * 365; // 1 year
 const QUIZ_SESSION_TTL_SEC = 60 * 30;     // 30 min to complete a quiz
