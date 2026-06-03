@@ -75,23 +75,14 @@ test("3rd grade includes multiplication or division across seeds", () => {
   assert.ok(count > 0, "expected some × or ÷ questions in 100 g3 questions");
 });
 
-// Grade-progression / unlock logic.
-test("Pre-K and K are always unlocked, others require accumulated progress", () => {
+// All grades are unlocked — let the kid (or parent) pick whatever level
+// fits, no gating.
+test("every grade is unlocked from the start", () => {
   const fresh = { perGradeCorrect: {} };
   const unlocked = unlockedGrades(fresh);
-  assert.ok(unlocked.includes("prek"));
-  assert.ok(unlocked.includes("k"));
-  assert.ok(!unlocked.includes("g1"), "g1 should be locked at start");
-});
-
-test("unlocking propagates as a single grade accumulates correct answers", () => {
-  // 50 correct in any grade unlocks the next-order grade (g1), 100 unlocks g2, etc.
-  // The unlock formula reads "best progress in any lower grade".
-  const s50 = { perGradeCorrect: { prek: 50 } };
-  assert.ok(unlockedGrades(s50).includes("g1"), "50 in prek should unlock g1");
-  const s100 = { perGradeCorrect: { k: 100 } };
-  assert.ok(unlockedGrades(s100).includes("g2"), "100 in k should unlock g2");
-  assert.ok(!unlockedGrades(s100).includes("g3"), "100 should NOT yet unlock g3");
+  for (const id of ["prek", "k", "g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]) {
+    assert.ok(unlocked.includes(id), `${id} should be unlocked`);
+  }
 });
 
 // mulberry32 is deterministic — same seed → same sequence.

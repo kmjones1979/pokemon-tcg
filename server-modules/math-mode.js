@@ -1219,21 +1219,11 @@ async function saveState(userId, s) {
   await store.kvSet(`math:${userId}`, s, STATE_TTL_SEC);
 }
 
-// Which grades has the player unlocked? Starts with prek+k always
-// available; each grade past K requires PROMOTION_THRESHOLD correct
-// answers cumulatively in any single lower grade to unlock.
-function unlockedGrades(state) {
-  const out = new Set(["prek", "k"]);
-  // Track best progress in any unlocked grade — once that exceeds the
-  // threshold, the next grade in order unlocks.
-  let bestSoFar = 0;
-  for (const g of GRADES) {
-    const c = Number(state.perGradeCorrect?.[g.id] || 0);
-    bestSoFar = Math.max(bestSoFar, c);
-    if (g.order <= 1) continue; // prek + k always unlocked
-    if (bestSoFar >= PROMOTION_THRESHOLD * (g.order - 1)) out.add(g.id);
-  }
-  return [...out];
+// All grades are always unlocked — pick whichever level fits the learner.
+// The PROMOTION_THRESHOLD constant is kept for tests/back-compat but the
+// gate is open.
+function unlockedGrades(_state) {
+  return GRADES.map((g) => g.id);
 }
 
 // ---- Routes ---------------------------------------------------------------
