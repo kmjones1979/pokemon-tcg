@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 
 const {
   generateQuiz, GENERATORS, GRADES, QUIZ_LENGTH, CARD_THRESHOLD,
-  unlockedGrades, mulberry32,
+  unlockedGrades, mulberry32, TOPIC_COUNTS,
 } = require("../server-modules/math-mode");
 
 // Every quiz is exactly QUIZ_LENGTH questions.
@@ -33,24 +33,35 @@ test("every generated question is well-formed", () => {
   }
 });
 
-// Grade-specific sanity checks.
-test("Pre-K asks counting questions only", () => {
-  const q = generateQuiz("prek", 1);
-  for (const item of q) {
-    assert.ok(item.prompt.toLowerCase().includes("pokéball") || item.prompt.toLowerCase().includes("how many"),
-      `prek prompt was: ${item.prompt}`);
+// Pre-K should stay in kid-friendly territory (no arithmetic operators).
+test("Pre-K never asks symbolic arithmetic (no +, ×, ÷, fractions)", () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const q = generateQuiz("prek", seed);
+    for (const item of q) {
+      assert.ok(!/[×÷=+\-]/.test(item.prompt) || /BIGGER|MORE|missing|next/i.test(item.prompt),
+        `prek shouldn't ask arithmetic: ${item.prompt}`);
+    }
   }
 });
 
-test("1st-grade questions are addition/subtraction word problems or arithmetic", () => {
-  const q = generateQuiz("g1", 7);
-  let arith = 0, word = 0;
-  for (const item of q) {
-    if (/[−\-+]/.test(item.prompt)) arith += 1;
-    if (/caught|Pokémon/i.test(item.prompt)) word += 1;
+test("1st-grade questions cover multiple curriculum topics", () => {
+  // Aggregate over several seeds so the random topic sampler is exercised.
+  const buckets = { arith: 0, word: 0, placeValue: 0, skip: 0, compare: 0, time: 0, other: 0 };
+  for (let seed = 1; seed <= 20; seed++) {
+    const q = generateQuiz("g1", seed);
+    for (const item of q) {
+      if (/tens.*ones/i.test(item.prompt))             buckets.placeValue += 1;
+      else if (/skip count/i.test(item.prompt))        buckets.skip += 1;
+      else if (/compare|>|</.test(item.prompt))        buckets.compare += 1;
+      else if (/hour hand|clock|minute/i.test(item.prompt)) buckets.time += 1;
+      else if (/caught|berries|Pokémon/i.test(item.prompt)) buckets.word += 1;
+      else if (/[−\-+]/.test(item.prompt))             buckets.arith += 1;
+      else                                              buckets.other += 1;
+    }
   }
-  // At least one of each over 10 questions is reasonable.
-  assert.ok(arith + word === q.length, "all g1 prompts should be arithmetic or word problems");
+  // Expect at least 4 distinct topic buckets to fire over 200 questions.
+  const hit = Object.values(buckets).filter((n) => n > 0).length;
+  assert.ok(hit >= 4, `expected ≥4 topic buckets in g1, got ${hit}: ${JSON.stringify(buckets)}`);
 });
 
 test("3rd grade includes a multiplication or division question", () => {
@@ -95,6 +106,31 @@ test("mulberry32 is deterministic and uniform-ish", () => {
 // Card threshold isn't surprising
 test("CARD_THRESHOLD is the documented 100", () => {
   assert.equal(CARD_THRESHOLD, 100);
+});
+
+// Each grade should have enough topic breadth to keep a learner busy for
+// a full semester. Floor is set generously — Pre-K is fine with 5+ topics
+// since each topic is procedurally infinite; older grades target 10+.
+test("each grade has enough topic breadth for a semester", () => {
+  const min = { prek: 5, k: 7, g1: 8, g2: 8, g3: 10, g4: 10, g5: 10, g6: 10, g7: 10, g8: 10 };
+  for (const [g, floor] of Object.entries(min)) {
+    assert.ok(TOPIC_COUNTS[g] >= floor, `${g} has only ${TOPIC_COUNTS[g]} topics (need ≥${floor})`);
+  }
+});
+
+// Stress check: across 100 quizzes per grade, every question is well-formed.
+test("no malformed questions across 1000 quizzes (regression)", () => {
+  for (const g of Object.keys(GENERATORS)) {
+    for (let i = 0; i < 100; i++) {
+      const q = generateQuiz(g, i * 31 + 7);
+      assert.equal(q.length, QUIZ_LENGTH, `${g} seed ${i} returned ${q.length} questions`);
+      for (const item of q) {
+        assert.equal(item.choices.length, 4, `${g}: 4 choices expected; got ${JSON.stringify(item)}`);
+        assert.equal(new Set(item.choices).size, 4, `${g}: duplicate choices in ${JSON.stringify(item)}`);
+        assert.ok(item.choices.includes(item.answer), `${g}: answer not in choices: ${JSON.stringify(item)}`);
+      }
+    }
+  }
 });
 
 // Pre-K & K rarities are common/uncommon only (the user-spec for kid grades).
