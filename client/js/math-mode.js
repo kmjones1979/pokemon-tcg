@@ -6,6 +6,16 @@
 
 const root = () => document.getElementById("math-root");
 
+// Quiz format preference: "quick" (one question at a time, animated) or
+// "worksheet" (all 10 visible on one page, like a printed sheet).
+const FORMAT_KEY = "pokemon-tcg-math-format";
+function getFormat() {
+  try { return localStorage.getItem(FORMAT_KEY) || "quick"; } catch { return "quick"; }
+}
+function setFormat(f) {
+  try { localStorage.setItem(FORMAT_KEY, f); } catch {}
+}
+
 const GRADE_VIBE = {
   prek:  { emoji: "🎈", color: "#fbcfe8" },
   k:     { emoji: "✏️", color: "#fde68a" },
@@ -98,21 +108,13 @@ function speak(text) {
     window.speechSynthesis.speak(u);
   } catch {}
 }
-// Speak the prompt followed by the four labeled choices, with natural
-// pauses between segments via "." punctuation. Pure-visual choices (just
-// a single emoji like ▲) get skipped — there's nothing to say.
+// Speak ONLY the question prompt. We intentionally do NOT read the four
+// options out loud — the kid sees them and can pick visually. That keeps
+// the audio short and prevents the speech from becoming a long droning
+// list (which gets tiresome on every question).
 function speakQuestion(q) {
   if (!q) return;
-  const promptText = stripVisuals(q.prompt);
-  const choiceText = q.choices
-    .map((c, i) => {
-      const v = stripVisuals(c);
-      return v ? `${"ABCD"[i]}: ${v}` : "";
-    })
-    .filter(Boolean)
-    .join(". ");
-  const full = choiceText ? `${promptText}. ${choiceText}` : promptText;
-  speak(full);
+  speak(stripVisuals(q.prompt));
 }
 
 // ---- API ------------------------------------------------------------------
@@ -193,6 +195,20 @@ async function renderHub() {
         </div>
       </div>
 
+      <div class="math-format-toggle" role="tablist" aria-label="Quiz format">
+        <button class="math-format-btn ${getFormat() === "quick" ? "active" : ""}" data-format="quick">
+          ⚡ Quick Quiz
+        </button>
+        <button class="math-format-btn ${getFormat() === "worksheet" ? "active" : ""}" data-format="worksheet">
+          📝 Worksheet
+        </button>
+      </div>
+      <p class="math-format-hint">
+        ${getFormat() === "worksheet"
+          ? "All 10 questions on one page — fill them in, then submit."
+          : "One question at a time with a streak counter and hearts."}
+      </p>
+
       <h3 class="math-grade-heading">Choose a Grade</h3>
       <div class="math-grade-grid">
         ${state.grades.map((g) => {
@@ -219,10 +235,17 @@ async function renderHub() {
       const grade = btn.dataset.grade;
       try {
         const quiz = await startQuiz(grade);
-        renderQuiz(quiz);
+        if (getFormat() === "worksheet") renderWorksheet(quiz);
+        else renderQuiz(quiz);
       } catch (err) {
         alert(err.message);
       }
+    });
+  });
+  el.querySelectorAll(".math-format-btn[data-format]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setFormat(btn.dataset.format);
+      renderHub();
     });
   });
 }
@@ -269,14 +292,7 @@ function renderQuiz(quiz) {
             <div class="math-q-prompt">${escape(q.prompt)}</div>
             <button class="math-tts-btn" id="math-tts-btn" title="Read aloud" aria-label="Read aloud">🔊</button>
           </div>
-          <div class="math-q-choices">
-            ${q.choices.map((c, i) => `
-              <button class="math-choice ${isEmojiChoice(c) ? "emoji" : ""}" data-i="${i}" data-val="${escapeAttr(c)}">
-                <span class="math-choice-letter">${"ABCD"[i]}</span>
-                <span class="math-choice-text">${escape(c)}</span>
-              </button>
-            `).join("")}
-          </div>
+          ${renderAnswerArea(q)}
           <div class="math-feedback" id="math-feedback"></div>
           <div class="math-q-actions">
             <button class="math-hint-btn" id="math-hint-btn" ${state.hintShown ? "disabled" : ""}>
@@ -290,9 +306,7 @@ function renderQuiz(quiz) {
       cancelSpeech();
       if (confirm("Leave the quiz? Progress on this quiz won't count.")) renderHub();
     });
-    el.querySelectorAll(".math-choice").forEach((btn) => {
-      btn.addEventListener("click", () => onChoose(btn));
-    });
+    wireAnswerArea(q, onAnswerSubmitted);
     el.querySelector("#math-hint-btn")?.addEventListener("click", showHint);
     el.querySelector("#math-tts-btn")?.addEventListener("click", () => speakQuestion(q));
 
@@ -314,20 +328,13 @@ function renderQuiz(quiz) {
     if (btn) btn.disabled = true;
   }
 
-  function onChoose(btn) {
+  // Called by the per-type answer area (MC button, input submit, TF tap)
+  // when the kid has committed an answer. Advances the quiz.
+  function onAnswerSubmitted(value) {
     if (state.locked) return;
     state.locked = true;
     cancelSpeech();
-    const val = btn.dataset.val;
-    state.answers[state.idx] = val;
-    btn.classList.add("chosen");
-    el.querySelectorAll(".math-choice").forEach((b) => b.classList.add("answered"));
-
-    // We need the server to grade. To make the quiz feel snappy, we
-    // submit at the END and reveal results on the review screen. For
-    // mid-quiz feedback we instead show a quick neutral "Answered ✓"
-    // and move on. The streak/hearts visible during the quiz are an
-    // optimistic preview only — the real verdict comes from the server.
+    state.answers[state.idx] = value;
     setTimeout(() => {
       state.idx += 1;
       state.locked = false;
@@ -352,10 +359,217 @@ function renderQuiz(quiz) {
   draw();
 }
 
+// ---- Worksheet mode (all 10 questions on one page) -----------------------
+// Same /me/math/start-quiz quiz data, different layout — printed-sheet
+// feel. Kid fills in everything then taps Submit Worksheet at the bottom.
+// All MC/input/TF widgets are inline, scoped by question index so they
+// don't collide.
+function renderWorksheet(quiz) {
+  const el = root();
+  if (!el) return;
+  const answers = new Array(quiz.questions.length).fill(null);
+
+  el.innerHTML = `
+    <div class="math-worksheet">
+      <div class="math-ws-top">
+        <button class="math-quit" id="math-quit-btn">←</button>
+        <h2 class="math-ws-title">${quiz.grade.toUpperCase()} Worksheet</h2>
+        <button class="math-tts-btn" id="math-ws-tts" title="Read questions aloud">🔊</button>
+      </div>
+      <p class="math-ws-sub">${quiz.questions.length} questions. Fill in your answers and submit.</p>
+
+      <ol class="math-ws-list">
+        ${quiz.questions.map((q, i) => `
+          <li class="math-ws-row" data-qi="${i}">
+            <div class="math-ws-num">${i + 1}.</div>
+            <div class="math-ws-body">
+              <div class="math-ws-prompt">${escape(q.prompt)}</div>
+              ${renderWorksheetAnswerArea(q, i)}
+            </div>
+          </li>
+        `).join("")}
+      </ol>
+
+      <div class="math-ws-submit-wrap">
+        <button class="math-btn math-btn-primary math-ws-submit" id="math-ws-submit">Submit Worksheet</button>
+      </div>
+    </div>
+  `;
+
+  el.querySelector("#math-quit-btn").addEventListener("click", () => {
+    cancelSpeech();
+    if (confirm("Leave the worksheet? Your answers won't be saved.")) renderHub();
+  });
+
+  // Wire each row's answer widgets.
+  quiz.questions.forEach((q, i) => {
+    wireWorksheetAnswerArea(q, i, (v) => { answers[i] = v; });
+  });
+
+  // 🔊 button reads questions aloud in order.
+  el.querySelector("#math-ws-tts")?.addEventListener("click", () => {
+    quiz.questions.forEach((q, i) => {
+      setTimeout(() => speak(`Question ${i + 1}. ${stripVisuals(q.prompt)}`), i * 3000);
+    });
+  });
+
+  el.querySelector("#math-ws-submit").addEventListener("click", async () => {
+    cancelSpeech();
+    // Allow blanks — they just count as wrong. Confirm if many blanks.
+    const blanks = answers.filter((a) => a == null || String(a).trim() === "").length;
+    if (blanks > 3 && !confirm(`You have ${blanks} blanks. Submit anyway?`)) return;
+    const btn = el.querySelector("#math-ws-submit");
+    btn.disabled = true;
+    btn.textContent = "Grading…";
+    let result;
+    try {
+      result = await submitQuiz(quiz.quizId, answers);
+    } catch (err) {
+      alert(err.message);
+      btn.disabled = false;
+      btn.textContent = "Submit Worksheet";
+      return;
+    }
+    renderResult(quiz, answers, result, false);
+  });
+}
+
+// Worksheet row answer widget — same UI primitives as the quiz, but
+// scoped by index so multiple rows can coexist on one page.
+function renderWorksheetAnswerArea(q, i) {
+  const mode = q.inputMode || "mc";
+  if (mode === "input") {
+    return `
+      <input type="text" inputmode="numeric" autocomplete="off"
+             class="math-q-input math-ws-input" data-qi="${i}"
+             placeholder="Type answer" />
+    `;
+  }
+  if (mode === "tf") {
+    return `
+      <div class="math-q-tf math-ws-tf">
+        <button class="math-tf-btn math-tf-true"  data-qi="${i}" data-val="true"><span>✓</span><small>TRUE</small></button>
+        <button class="math-tf-btn math-tf-false" data-qi="${i}" data-val="false"><span>✗</span><small>FALSE</small></button>
+      </div>`;
+  }
+  return `
+    <div class="math-q-choices math-ws-choices">
+      ${(q.choices || []).map((c, ci) => `
+        <button class="math-choice ${isEmojiChoice(c) ? "emoji" : ""}" data-qi="${i}" data-val="${escapeAttr(c)}">
+          <span class="math-choice-letter">${"ABCD"[ci]}</span>
+          <span class="math-choice-text">${escape(c)}</span>
+        </button>
+      `).join("")}
+    </div>`;
+}
+
+function wireWorksheetAnswerArea(q, i, onChange) {
+  const el = root();
+  if (!el) return;
+  const mode = q.inputMode || "mc";
+  const row = el.querySelector(`.math-ws-row[data-qi="${i}"]`);
+  if (!row) return;
+  if (mode === "input") {
+    const input = row.querySelector(`.math-ws-input`);
+    input?.addEventListener("input", () => onChange(input.value.trim()));
+    return;
+  }
+  if (mode === "tf") {
+    row.querySelectorAll(".math-tf-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        row.querySelectorAll(".math-tf-btn").forEach((b) => b.classList.remove("chosen"));
+        btn.classList.add("chosen");
+        onChange(btn.dataset.val);
+      });
+    });
+    return;
+  }
+  row.querySelectorAll(".math-choice").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      row.querySelectorAll(".math-choice").forEach((b) => b.classList.remove("chosen"));
+      btn.classList.add("chosen");
+      onChange(btn.dataset.val);
+    });
+  });
+}
+
 function renderHearts(n) {
   let html = "";
   for (let i = 0; i < MAX_HEARTS; i++) html += i < n ? "❤️" : "🤍";
   return html;
+}
+
+// ---- Per-type answer rendering -------------------------------------------
+// Each question has an inputMode: "mc" (4-choice), "input" (text field),
+// or "tf" (true/false). renderAnswerArea returns the HTML; wireAnswerArea
+// hooks up the event listeners. Both call onCommit(value) when an answer
+// is submitted.
+
+function renderAnswerArea(q) {
+  const mode = q.inputMode || "mc";
+  if (mode === "input") {
+    return `
+      <div class="math-q-input-wrap">
+        <input type="text" inputmode="numeric" autocomplete="off"
+               class="math-q-input" id="math-q-input"
+               placeholder="Type your answer" />
+        <button class="math-btn math-btn-primary math-q-input-submit" id="math-q-input-submit">Submit</button>
+      </div>`;
+  }
+  if (mode === "tf") {
+    return `
+      <div class="math-q-tf">
+        <button class="math-tf-btn math-tf-true"  data-val="true"><span>✓</span><small>TRUE</small></button>
+        <button class="math-tf-btn math-tf-false" data-val="false"><span>✗</span><small>FALSE</small></button>
+      </div>`;
+  }
+  // Default: multiple choice
+  return `
+    <div class="math-q-choices">
+      ${(q.choices || []).map((c, i) => `
+        <button class="math-choice ${isEmojiChoice(c) ? "emoji" : ""}" data-i="${i}" data-val="${escapeAttr(c)}">
+          <span class="math-choice-letter">${"ABCD"[i]}</span>
+          <span class="math-choice-text">${escape(c)}</span>
+        </button>
+      `).join("")}
+    </div>`;
+}
+
+function wireAnswerArea(q, onCommit) {
+  const el = root();
+  if (!el) return;
+  const mode = q.inputMode || "mc";
+  if (mode === "input") {
+    const input = el.querySelector("#math-q-input");
+    const submit = el.querySelector("#math-q-input-submit");
+    const go = () => {
+      const v = (input?.value || "").trim();
+      if (!v) return;
+      onCommit(v);
+    };
+    submit?.addEventListener("click", go);
+    input?.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    setTimeout(() => input?.focus(), 100);
+    return;
+  }
+  if (mode === "tf") {
+    el.querySelectorAll(".math-tf-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const val = btn.dataset.val;
+        btn.classList.add("chosen");
+        el.querySelectorAll(".math-tf-btn").forEach((b) => b.classList.add("answered"));
+        onCommit(val);
+      });
+    });
+    return;
+  }
+  el.querySelectorAll(".math-choice").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btn.classList.add("chosen");
+      el.querySelectorAll(".math-choice").forEach((b) => b.classList.add("answered"));
+      onCommit(btn.dataset.val);
+    });
+  });
 }
 
 // ---- Result screen --------------------------------------------------------

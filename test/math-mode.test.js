@@ -18,17 +18,22 @@ test("each grade produces exactly QUIZ_LENGTH questions", () => {
   }
 });
 
-// Every question has a prompt, 4 choices, and the correct answer is one
-// of the choices.
+// Every question has a prompt + answer + inputMode. MC adds a 4-choice
+// list including the answer. Input / TF skip the choices array.
 test("every generated question is well-formed", () => {
   for (const g of GRADES) {
     const q = generateQuiz(g.id, 99);
     for (const item of q) {
       assert.ok(item.prompt && typeof item.prompt === "string", `bad prompt in ${g.id}`);
-      assert.equal(item.choices.length, 4, `${g.id}: expected 4 choices`);
-      assert.ok(item.choices.includes(item.answer), `${g.id}: correct answer "${item.answer}" not in choices ${JSON.stringify(item.choices)}`);
-      // Choices are unique.
-      assert.equal(new Set(item.choices).size, 4, `${g.id}: duplicate choices ${JSON.stringify(item.choices)}`);
+      assert.ok(["mc", "input", "tf"].includes(item.inputMode), `${g.id}: bad inputMode ${item.inputMode}`);
+      assert.ok(item.answer != null && String(item.answer).length > 0, `${g.id}: missing answer`);
+      if (item.inputMode === "mc") {
+        assert.equal(item.choices.length, 4, `${g.id}: expected 4 choices`);
+        assert.ok(item.choices.includes(item.answer), `${g.id}: correct answer "${item.answer}" not in choices ${JSON.stringify(item.choices)}`);
+        assert.equal(new Set(item.choices).size, 4, `${g.id}: duplicate choices ${JSON.stringify(item.choices)}`);
+      } else if (item.inputMode === "tf") {
+        assert.ok(["true", "false"].includes(item.answer), `${g.id}: TF answer must be true/false, got ${item.answer}`);
+      }
     }
   }
 });
@@ -107,10 +112,40 @@ test("CARD_THRESHOLD is the documented 100", () => {
 // Each grade has Singapore-style topics on top of the standard ones —
 // numbers below are floor counts including bar models, number bonds, etc.
 test("each grade has enough topic breadth for a semester", () => {
-  const min = { prek: 8, k: 12, g1: 14, g2: 14, g3: 15, g4: 15, g5: 15, g6: 15, g7: 15, g8: 15 };
+  // Bumped after adding input/TF variants on top of the standard MC pool.
+  const min = { prek: 8, k: 14, g1: 19, g2: 19, g3: 20, g4: 20, g5: 20, g6: 20, g7: 20, g8: 20 };
   for (const [g, floor] of Object.entries(min)) {
     assert.ok(TOPIC_COUNTS[g] >= floor, `${g} has only ${TOPIC_COUNTS[g]} topics (need ≥${floor})`);
   }
+});
+
+test("G1+ grades include input-mode AND true/false topics", () => {
+  // K and Pre-K stay tap-only (kids can't type yet) — they get tf only
+  // starting in K. Validate the mix for G1-G8.
+  for (const g of Object.keys(GENERATORS)) {
+    if (g === "prek" || g === "k") continue;
+    let mc = 0, input = 0, tf = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      for (const item of generateQuiz(g, seed)) {
+        if (item.inputMode === "input") input += 1;
+        else if (item.inputMode === "tf") tf += 1;
+        else mc += 1;
+      }
+    }
+    assert.ok(input > 0, `${g} never produced an input-mode question in 300 samples`);
+    assert.ok(tf > 0, `${g} never produced a true/false question in 300 samples`);
+    assert.ok(mc > 0, `${g} sanity: should still have MC questions`);
+  }
+});
+
+test("Kindergarten has true/false topics (tap-only, no typing)", () => {
+  let tf = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    for (const item of generateQuiz("k", seed)) {
+      if (item.inputMode === "tf") tf += 1;
+    }
+  }
+  assert.ok(tf > 0, "K should produce true/false questions");
 });
 
 test("every generated question has an explanation", () => {
@@ -128,15 +163,19 @@ test("every generated question has an explanation", () => {
 });
 
 // Stress check: across 100 quizzes per grade, every question is well-formed.
+// Now grades have a mix of MC/input/TF — only validate MC's choice array.
 test("no malformed questions across 1000 quizzes (regression)", () => {
   for (const g of Object.keys(GENERATORS)) {
     for (let i = 0; i < 100; i++) {
       const q = generateQuiz(g, i * 31 + 7);
       assert.equal(q.length, QUIZ_LENGTH, `${g} seed ${i} returned ${q.length} questions`);
       for (const item of q) {
-        assert.equal(item.choices.length, 4, `${g}: 4 choices expected; got ${JSON.stringify(item)}`);
-        assert.equal(new Set(item.choices).size, 4, `${g}: duplicate choices in ${JSON.stringify(item)}`);
-        assert.ok(item.choices.includes(item.answer), `${g}: answer not in choices: ${JSON.stringify(item)}`);
+        assert.ok(["mc", "input", "tf"].includes(item.inputMode), `${g}: bad inputMode`);
+        if (item.inputMode === "mc") {
+          assert.equal(item.choices.length, 4, `${g}: 4 choices expected; got ${JSON.stringify(item)}`);
+          assert.equal(new Set(item.choices).size, 4, `${g}: duplicate choices in ${JSON.stringify(item)}`);
+          assert.ok(item.choices.includes(item.answer), `${g}: answer not in choices: ${JSON.stringify(item)}`);
+        }
       }
     }
   }

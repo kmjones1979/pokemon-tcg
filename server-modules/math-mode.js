@@ -293,6 +293,22 @@ const TOPICS_K = [
     return { ...makeMC(`A ten frame has ${a} filled. How many more to fill it?`, 10 - a, rand, { minChoice: 0 }),
       explanation: `Ten frame holds 10. Already filled: ${a}. Still need: 10 − ${a} = ${10 - a}.` };
   },
+  // ---- True/False (Kindergarten verification) ----
+  (rand) => { // TF: addition check
+    const a = pickInt(rand, 1, 6), b = pickInt(rand, 1, 6);
+    const isTrue = rand() < 0.5;
+    const shown = isTrue ? a + b : a + b + pickInt(rand, 1, 3) * (rand() < 0.5 ? 1 : -1);
+    return tfQ(`Is this right?  ${a} + ${b} = ${Math.max(0, shown)}`,
+      Math.max(0, shown) === a + b,
+      `${a} + ${b} = ${a + b}.`);
+  },
+  (rand) => { // TF: even/odd
+    const n = pickInt(rand, 1, 20);
+    const claim = rand() < 0.5 ? "even" : "odd";
+    const isTrue = (claim === "even") === (n % 2 === 0);
+    return tfQ(`Is ${n} ${claim}?`, isTrue,
+      `${n} is ${n % 2 === 0 ? "even" : "odd"} (last digit is ${n % 10}).`);
+  },
 ];
 
 // ---- 1st grade topics (within 20, place value, time, money intro) ----------
@@ -382,6 +398,28 @@ const TOPICS_G1 = [
     const a = pickInt(rand, 1, 9);
     return { ...makeMC(`Two ten frames hold 20 dots. One has ${a} filled. How many empty across both?`, 20 - a, rand, { minChoice: 0 }),
       explanation: `Both ten frames = 20 dots total. ${a} filled, so ${20 - a} empty.` };
+  },
+  // ---- Input mode (type the answer) ----
+  (rand) => { // Input: addition within 20
+    const a = pickInt(rand, 3, 12), b = pickInt(rand, 3, 12);
+    return inputQ(`Type the answer:  ${a} + ${b}`, a + b, `${a} + ${b} = ${a + b}.`);
+  },
+  (rand) => { // Input: subtraction within 20
+    const a = pickInt(rand, 8, 20), b = pickInt(rand, 1, a - 1);
+    return inputQ(`Type the answer:  ${a} − ${b}`, a - b, `${a} − ${b} = ${a - b}.`);
+  },
+  (rand) => { // Input: missing addend (number bond)
+    const total = pickInt(rand, 8, 18), a = pickInt(rand, 1, total - 1);
+    return inputQ(`${a} + ___ = ${total}.  Type the missing number.`, total - a, `${total} − ${a} = ${total - a}.`);
+  },
+  // ---- True/False ----
+  (rand) => { // TF: addition verification
+    const a = pickInt(rand, 3, 12), b = pickInt(rand, 3, 12);
+    const isTrue = rand() < 0.5;
+    const shown = isTrue ? a + b : a + b + pickInt(rand, 1, 4) * (rand() < 0.5 ? 1 : -1);
+    return tfQ(`True or False:  ${a} + ${b} = ${Math.max(0, shown)}`,
+      Math.max(0, shown) === a + b,
+      `${a} + ${b} = ${a + b}.`);
   },
 ];
 
@@ -481,6 +519,28 @@ const TOPICS_G2 = [
     const a = pickInt(rand, 5, 20), b = pickInt(rand, 5, 20), c = pickInt(rand, 5, 20);
     return { ...makeMC(`${a} + ${b} + ${c} = ?`, a + b + c, rand, { minChoice: 0 }),
       explanation: `Add in steps: ${a} + ${b} = ${a + b}; then ${a + b} + ${c} = ${a + b + c}.` };
+  },
+  // ---- Input mode ----
+  (rand) => { // Input: addition within 100
+    const a = pickInt(rand, 15, 60), b = pickInt(rand, 15, 60);
+    return inputQ(`Type the answer:  ${a} + ${b}`, a + b, `Add tens, then ones. ${a} + ${b} = ${a + b}.`);
+  },
+  (rand) => { // Input: subtraction within 100
+    const a = pickInt(rand, 30, 99), b = pickInt(rand, 5, a - 5);
+    return inputQ(`Type the answer:  ${a} − ${b}`, a - b, `${a} − ${b} = ${a - b}.`);
+  },
+  (rand) => { // Input: place value
+    const h = pickInt(rand, 1, 9), t = pickInt(rand, 0, 9), o = pickInt(rand, 0, 9);
+    return inputQ(`Type the number with ${h} hundreds, ${t} tens, ${o} ones.`, h * 100 + t * 10 + o,
+      `${h} × 100 + ${t} × 10 + ${o} = ${h * 100 + t * 10 + o}.`);
+  },
+  // ---- True/False ----
+  (rand) => { // TF: addition fact
+    const a = pickInt(rand, 10, 50), b = pickInt(rand, 10, 50);
+    const isTrue = rand() < 0.5;
+    const shown = isTrue ? a + b : a + b + pickInt(rand, 1, 10) * (rand() < 0.5 ? 1 : -1);
+    return tfQ(`True or False:  ${a} + ${b} = ${Math.max(0, shown)}`,
+      Math.max(0, shown) === a + b, `${a} + ${b} = ${a + b}.`);
   },
 ];
 
@@ -582,6 +642,39 @@ const TOPICS_G3 = [
     const each = pickInt(rand, 2, 9), count = pickInt(rand, 3, 8);
     return { ...makeMC(`A Poké-snack costs $${each}. How much for ${count} snacks?`, each * count, rand, { minChoice: 1 }),
       explanation: `${count} × $${each} = $${each * count}.` };
+  },
+  // ---- Input mode ----
+  (rand) => { // Input: times tables
+    const a = pickInt(rand, 3, 10), b = pickInt(rand, 3, 10);
+    return inputQ(`Type the answer:  ${a} × ${b}`, a * b, `${a} × ${b} = ${a * b}.`);
+  },
+  (rand) => { // Input: division
+    const b = pickInt(rand, 2, 10), q = pickInt(rand, 3, 10);
+    return inputQ(`Type the answer:  ${b * q} ÷ ${b}`, q, `${b} × ${q} = ${b * q}, so ${b * q} ÷ ${b} = ${q}.`);
+  },
+  (rand) => { // Input: round to nearest 10
+    const n = pickInt(rand, 11, 99);
+    return inputQ(`Round ${n} to the nearest 10. Type the answer.`, Math.round(n / 10) * 10,
+      `Ones digit ${n % 10} → round ${n % 10 >= 5 ? "UP" : "DOWN"} → ${Math.round(n / 10) * 10}.`);
+  },
+  // ---- True/False ----
+  (rand) => { // TF: multiplication fact
+    const a = pickInt(rand, 2, 10), b = pickInt(rand, 2, 10);
+    const isTrue = rand() < 0.5;
+    const shown = isTrue ? a * b : a * b + pickInt(rand, 1, 5) * (rand() < 0.5 ? 1 : -1);
+    return tfQ(`True or False:  ${a} × ${b} = ${shown}`, shown === a * b, `${a} × ${b} = ${a * b}.`);
+  },
+  (rand) => { // TF: equivalent fraction
+    const setups = [
+      { left: "1/2", right: "2/4", true: true },
+      { left: "1/2", right: "2/3", true: false },
+      { left: "1/3", right: "2/6", true: true },
+      { left: "3/4", right: "6/8", true: true },
+      { left: "1/4", right: "2/6", true: false },
+    ];
+    const s = setups[pickInt(rand, 0, setups.length - 1)];
+    return tfQ(`True or False:  ${s.left} = ${s.right}`, s.true,
+      s.true ? `Yes — both equal ${s.left}.` : `No — ${s.left} ≠ ${s.right}.`);
   },
 ];
 
@@ -697,6 +790,30 @@ const TOPICS_G4 = [
     const val = tenths * 0.1 + hundredths * 0.01;
     return { ...makeMC(`What is the hundredths digit of ${val.toFixed(2)}?`, hundredths, rand, { choicesFrom: [hundredths, tenths, 0, hundredths + 1] }),
       explanation: `${val.toFixed(2)} → tenths = ${tenths}, hundredths = ${hundredths}.` };
+  },
+  // ---- Input mode ----
+  (rand) => { // Input: 2-digit × 1-digit
+    const a = pickInt(rand, 12, 35), b = pickInt(rand, 3, 9);
+    return inputQ(`Type the answer:  ${a} × ${b}`, a * b, `${a} × ${b} = ${a * b}.`);
+  },
+  (rand) => { // Input: division with no remainder
+    const b = pickInt(rand, 3, 10), q = pickInt(rand, 6, 15);
+    return inputQ(`Type the answer:  ${b * q} ÷ ${b}`, q, `${b * q} ÷ ${b} = ${q}.`);
+  },
+  (rand) => { // Input: fraction of a set
+    const denom = [3, 4, 5][pickInt(rand, 0, 2)];
+    const num = pickInt(rand, 1, denom - 1);
+    const whole = denom * pickInt(rand, 3, 10);
+    return inputQ(`What is ${num}/${denom} of ${whole}? Type the answer.`, (num * whole) / denom,
+      `${whole} ÷ ${denom} = ${whole / denom}. Then ${num} × ${whole / denom} = ${(num * whole) / denom}.`);
+  },
+  // ---- True/False ----
+  (rand) => { // TF: factor
+    const n = [12, 18, 24, 30, 36][pickInt(rand, 0, 4)];
+    const candidate = pickInt(rand, 2, n - 1);
+    const isTrue = n % candidate === 0;
+    return tfQ(`True or False:  ${candidate} is a factor of ${n}.`, isTrue,
+      isTrue ? `${n} ÷ ${candidate} = ${n / candidate} (no remainder).` : `${n} ÷ ${candidate} has a remainder, so ${candidate} is NOT a factor.`);
   },
 ];
 
@@ -816,6 +933,34 @@ const TOPICS_G5 = [
     const whole = pickInt(rand, 4, 20) * 4;
     return { ...makeMC(`${pct}% of ${whole} = ?`, (pct * whole) / 100, rand, { minChoice: 0 }),
       explanation: `${pct}% = ${pct}/100. So ${pct}/100 × ${whole} = ${(pct * whole) / 100}.` };
+  },
+  // ---- Input mode ----
+  (rand) => { // Input: decimal addition
+    const a = pickInt(rand, 10, 99) / 10, b = pickInt(rand, 10, 99) / 10;
+    return inputQ(`Type the answer:  ${a.toFixed(1)} + ${b.toFixed(1)}`, (a + b).toFixed(1),
+      `Line up decimal points, then add: ${(a + b).toFixed(1)}.`);
+  },
+  (rand) => { // Input: order of operations
+    const a = pickInt(rand, 2, 9), b = pickInt(rand, 2, 9), c = pickInt(rand, 2, 9);
+    return inputQ(`Type the answer:  ${a} + ${b} × ${c}`, a + b * c,
+      `PEMDAS: ${b} × ${c} = ${b * c}, then ${a} + ${b * c} = ${a + b * c}.`);
+  },
+  (rand) => { // Input: percent of a number
+    const pct = [10, 25, 50][pickInt(rand, 0, 2)];
+    const whole = pickInt(rand, 4, 20) * 4;
+    return inputQ(`Type the answer:  ${pct}% of ${whole}`, (pct * whole) / 100,
+      `${pct}/100 × ${whole} = ${(pct * whole) / 100}.`);
+  },
+  // ---- True/False ----
+  (rand) => { // TF: fraction comparison
+    const setups = [
+      { l: "1/2", r: "3/5", cmp: "<", true: false }, { l: "1/2", r: "3/5", cmp: ">", true: false },
+      { l: "1/2", r: "1/3", cmp: ">", true: true }, { l: "2/3", r: "3/4", cmp: "<", true: true },
+      { l: "3/4", r: "1/2", cmp: ">", true: true },
+    ];
+    const s = setups[pickInt(rand, 0, setups.length - 1)];
+    return tfQ(`True or False:  ${s.l} ${s.cmp} ${s.r}`, s.true,
+      s.true ? `Correct comparison.` : `Wrong direction — flip the symbol.`);
   },
 ];
 
@@ -938,6 +1083,37 @@ const TOPICS_G6 = [
     return { ...makeMC(`A trainer had $${before} and spent ${pct}% on Pokéballs. How much is left?`, before - spent, rand, { minChoice: 0 }),
       explanation: `Spent: ${pct}% × ${before} = ${spent}. Left: ${before} − ${spent} = ${before - spent}.` };
   },
+  // ---- Input mode ----
+  (rand) => { // Input: percent of number
+    const pct = [10, 20, 25, 50][pickInt(rand, 0, 3)], whole = pickInt(rand, 4, 25) * 4;
+    return inputQ(`Type the answer:  ${pct}% of ${whole}`, (pct * whole) / 100,
+      `${pct}/100 × ${whole} = ${(pct * whole) / 100}.`);
+  },
+  (rand) => { // Input: integer arithmetic
+    const a = pickInt(rand, -10, 10), b = pickInt(rand, -10, 10);
+    if (a === 0 && b === 0) return inputQ(`Type the answer:  5 + −3`, 2, `5 + (−3) = 2.`);
+    return inputQ(`Type the answer:  ${a} + ${b}`, a + b, `${a} + ${b} = ${a + b}.`);
+  },
+  (rand) => { // Input: one-step equation
+    const x = pickInt(rand, 2, 15), b = pickInt(rand, 1, 20);
+    return inputQ(`Solve and type x:  x + ${b} = ${x + b}`, x, `x = ${x + b} − ${b} = ${x}.`);
+  },
+  // ---- True/False ----
+  (rand) => { // TF: percent
+    const pct = [10, 25, 50][pickInt(rand, 0, 2)], whole = pickInt(rand, 4, 20) * 4;
+    const isTrue = rand() < 0.5;
+    const shown = isTrue ? (pct * whole) / 100 : (pct * whole) / 100 + pickInt(rand, 1, 5) * (rand() < 0.5 ? 1 : -1);
+    return tfQ(`True or False:  ${pct}% of ${whole} = ${shown}`, shown === (pct * whole) / 100,
+      `${pct}/100 × ${whole} = ${(pct * whole) / 100}.`);
+  },
+  (rand) => { // TF: integer sign
+    const a = pickInt(rand, -8, 8), b = pickInt(rand, -8, 8);
+    if (a === 0 || b === 0) return tfQ(`True or False:  0 × anything = 0`, true, `Yes! Zero times anything is zero.`);
+    const isTrue = rand() < 0.5;
+    const shown = isTrue ? a * b : a * b + (rand() < 0.5 ? 1 : -1);
+    return tfQ(`True or False:  ${a} × ${b} = ${shown}`, shown === a * b,
+      `Same signs → positive, different signs → negative. ${a} × ${b} = ${a * b}.`);
+  },
 ];
 
 // ---- 7th grade topics ------------------------------------------------------
@@ -1044,6 +1220,36 @@ const TOPICS_G7 = [
     const p = pickInt(rand, 100, 500), r = [5, 10][pickInt(rand, 0, 1)], t = pickInt(rand, 1, 3);
     return { ...makeMC(`Simple interest on $${p} at ${r}% for ${t} year(s)?`, (p * r * t) / 100, rand),
       explanation: `I = P × R × T / 100 = ${p} × ${r} × ${t} / 100 = $${(p * r * t) / 100}.` };
+  },
+  // ---- Input mode ----
+  (rand) => { // Input: two-step equation
+    const x = pickInt(rand, 2, 12), m = pickInt(rand, 2, 9), b = pickInt(rand, 1, 15);
+    return inputQ(`Solve and type x:  ${m}x + ${b} = ${m * x + b}`, x,
+      `Subtract ${b}: ${m}x = ${m * x}. Divide by ${m}: x = ${x}.`);
+  },
+  (rand) => { // Input: square root
+    const n = [4, 9, 16, 25, 36, 49, 64, 81, 100][pickInt(rand, 0, 8)];
+    return inputQ(`Type the answer:  √${n}`, Math.sqrt(n), `${Math.sqrt(n)}² = ${n}.`);
+  },
+  (rand) => { // Input: discount
+    const price = pickInt(rand, 10, 50) * 2, pct = [10, 20, 25][pickInt(rand, 0, 2)];
+    return inputQ(`Type the savings:  ${pct}% off $${price}`, (pct * price) / 100,
+      `${pct}/100 × ${price} = ${(pct * price) / 100}.`);
+  },
+  // ---- True/False ----
+  (rand) => { // TF: proportion
+    const r1 = pickInt(rand, 2, 5), r2 = pickInt(rand, 2, 5), k = pickInt(rand, 2, 5);
+    const isTrue = rand() < 0.5;
+    const claimed = isTrue ? r1 * k : r1 * k + pickInt(rand, 1, 3) * (rand() < 0.5 ? 1 : -1);
+    return tfQ(`True or False:  ${r1}/${r2} = ${claimed}/${r2 * k}`,
+      claimed === r1 * k,
+      `Cross-multiply: ${r1} × ${r2 * k} should equal ${r2} × ${r1 * k} = ${r1 * r2 * k}.`);
+  },
+  (rand) => { // TF: square root
+    const n = [4, 9, 16, 25, 36, 49, 64, 81, 100][pickInt(rand, 0, 8)];
+    const isTrue = rand() < 0.5;
+    const claimed = isTrue ? Math.sqrt(n) : Math.sqrt(n) + (rand() < 0.5 ? 1 : -1);
+    return tfQ(`True or False:  √${n} = ${claimed}`, claimed === Math.sqrt(n), `√${n} = ${Math.sqrt(n)}.`);
   },
 ];
 
@@ -1153,6 +1359,38 @@ const TOPICS_G8 = [
     return { ...makeMC(`Three quantities are in the ratio 1:2:3. Total: ${total}. What's the middle one?`, r2 * k, rand, { minChoice: 1 }),
       explanation: `Total units = 1+2+3 = 6. One unit = ${total} ÷ 6 = ${k}. Middle = 2 × ${k} = ${r2 * k}.` };
   },
+  // ---- Input mode ----
+  (rand) => { // Input: square
+    const n = pickInt(rand, 3, 15);
+    return inputQ(`Type the answer:  ${n}²`, n * n, `${n} × ${n} = ${n * n}.`);
+  },
+  (rand) => { // Input: Pythagorean
+    const triples = [[3, 4, 5], [5, 12, 13], [6, 8, 10], [8, 15, 17]];
+    const [a, b, c] = triples[pickInt(rand, 0, triples.length - 1)];
+    return inputQ(`Right triangle: legs ${a} and ${b}. Type the hypotenuse.`, c,
+      `${a}² + ${b}² = ${a * a + b * b} = ${c}².`);
+  },
+  (rand) => { // Input: evaluate function
+    const m = pickInt(rand, 2, 5), b = pickInt(rand, -4, 5), x = pickInt(rand, 1, 6);
+    return inputQ(`f(x) = ${m}x ${b >= 0 ? "+" : "−"} ${Math.abs(b)}.  Type f(${x}).`, m * x + b,
+      `${m} × ${x} ${b >= 0 ? "+" : "−"} ${Math.abs(b)} = ${m * x + b}.`);
+  },
+  // ---- True/False ----
+  (rand) => { // TF: exponent rule
+    const a = pickInt(rand, 2, 5), b = pickInt(rand, 2, 5);
+    const isTrue = rand() < 0.5;
+    const claimed = isTrue ? `x^${a + b}` : (rand() < 0.5 ? `x^${a * b}` : `x^${a - b}`);
+    return tfQ(`True or False:  x^${a} · x^${b} = ${claimed}`, claimed === `x^${a + b}`,
+      `Same base — add exponents. x^${a} · x^${b} = x^${a + b}.`);
+  },
+  (rand) => { // TF: Pythagorean check
+    const triples = [[3, 4, 5], [5, 12, 13], [6, 8, 10]];
+    const [a, b, c] = triples[pickInt(rand, 0, triples.length - 1)];
+    const isTrue = rand() < 0.5;
+    const claimed = isTrue ? c : c + (rand() < 0.5 ? 1 : -1);
+    return tfQ(`True or False:  In a right triangle with legs ${a} and ${b}, the hypotenuse is ${claimed}.`,
+      claimed === c, `Pythagorean: √(${a}² + ${b}²) = √${a * a + b * b} = ${c}.`);
+  },
 ];
 
 // Helpers used by some topics above.
@@ -1191,18 +1429,56 @@ function generateQuiz(gradeId, seed) {
   const gen = GENERATORS[gradeId];
   if (!gen) throw new Error(`Unknown grade: ${gradeId}`);
   const questions = [];
-  // Soft dedup: avoid the SAME prompt appearing back-to-back. We allow
-  // repetition across the quiz so small-question-space grades (Pre-K,
-  // Kindergarten) can still fill 10 slots without becoming exotic.
   let lastPrompt = null;
   let safety = 0;
   while (questions.length < QUIZ_LENGTH && safety++ < 200) {
     const q = gen(rand);
     if (q.prompt === lastPrompt) continue;
     lastPrompt = q.prompt;
+    // Default to multiple-choice when a topic doesn't specify a type.
+    if (!q.inputMode) q.inputMode = "mc";
     questions.push(q);
   }
   return questions;
+}
+
+// Type-the-answer questions (input mode). No choices — kid types into a
+// text field. Server grades with normalizeAnswer so "8", "8.0", " 8 ",
+// and "$8" all count as 8.
+function inputQ(prompt, answer, explanation) {
+  return { prompt, answer: String(answer), explanation: explanation || "", inputMode: "input" };
+}
+
+// True/False questions. Always include a coin flip so kids can't just
+// learn to always pick one side.
+function tfQ(prompt, isTrue, explanation) {
+  return {
+    prompt, answer: isTrue ? "true" : "false",
+    explanation: explanation || "",
+    inputMode: "tf",
+  };
+}
+
+// Loose-equality normalizer for grading. Strips whitespace + $ + commas,
+// lowercases, and number-normalizes ("8.0" → "8") so trivial format
+// differences don't cause false negatives.
+function normalizeAnswer(a, mode) {
+  if (a == null) return "";
+  const s = String(a).trim().toLowerCase();
+  if (mode === "input") {
+    const stripped = s.replace(/[$,\s]/g, "");
+    if (/^-?\d+\.?\d*$/.test(stripped)) {
+      const n = Number(stripped);
+      if (Number.isFinite(n)) return String(n);
+    }
+    return stripped;
+  }
+  if (mode === "tf") {
+    if (s === "true" || s === "t" || s === "yes" || s === "y" || s === "✓") return "true";
+    if (s === "false" || s === "f" || s === "no" || s === "n" || s === "✗") return "false";
+    return s;
+  }
+  return s;
 }
 
 // ---- State helpers --------------------------------------------------------
@@ -1283,6 +1559,7 @@ function mount(app, supabase, getPokedex) {
       grade,
       answers: full.map((q) => q.answer),
       explanations: full.map((q) => q.explanation || ""),
+      modes: full.map((q) => q.inputMode || "mc"),
       startedAt: Date.now(),
     }, QUIZ_SESSION_TTL_SEC);
 
@@ -1296,7 +1573,11 @@ function mount(app, supabase, getPokedex) {
     res.json({
       quizId,
       grade,
-      questions: full.map((q) => ({ prompt: q.prompt, choices: q.choices })),
+      questions: full.map((q) => ({
+        prompt: q.prompt,
+        choices: q.choices || [],
+        inputMode: q.inputMode || "mc",
+      })),
     });
   });
 
@@ -1310,7 +1591,10 @@ function mount(app, supabase, getPokedex) {
     if (!session) return res.status(404).json({ error: "Quiz expired or already submitted." });
     if (session.userId !== req.user.id) return res.status(403).json({ error: "Not your quiz." });
 
-    const correctness = session.answers.map((a, i) => String(answers[i] ?? "") === String(a));
+    const modes = session.modes || session.answers.map(() => "mc");
+    const correctness = session.answers.map((a, i) =>
+      normalizeAnswer(answers[i], modes[i]) === normalizeAnswer(a, modes[i])
+    );
     const correct = correctness.filter(Boolean).length;
     const total = session.answers.length;
 
