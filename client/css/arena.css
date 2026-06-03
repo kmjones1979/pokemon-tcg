@@ -4186,3 +4186,35 @@ html { overscroll-behavior: none; }
   10%  { opacity: 1; }
   100% { transform: translate(var(--confetti-drift, 0), 110vh) rotate(var(--confetti-rot, 360deg)); opacity: 0.4; }
 }
+
+/* Site credit footer. Pinned to the bottom of the viewport, low-contrast
+   so it never competes with arena UI but is always discoverable. */
+#site-footer {
+  position: fixed;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+  pointer-events: auto;
+  z-index: 5;
+  font-family: "Inter", system-ui, sans-serif;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+#site-footer a {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.3);
+}
+#site-footer a:hover {
+  color: #fff;
+  border-bottom-color: rgba(255, 255, 255, 0.8);
+}
+@media (orientation: portrait) and (max-width: 500px) {
+  #site-footer {
+    font-size: 9px;
+    bottom: 3px;
+  }
+}
