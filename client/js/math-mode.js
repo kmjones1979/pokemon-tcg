@@ -1,8 +1,8 @@
-// Math Mode — Duolingo-style math journey with Pokémon-themed quizzes.
-// Players pick a grade (Pre-K → 8th), answer 10 multiple-choice questions,
-// build a correct-answer streak, and earn Pokémon cards as they go.
-// The whole UI lives in one `<div id="math-root">`; openMathMode swaps
-// between three screens: hub, quiz, results.
+// Math Mode — Duolingo-style math journey with Pokémon card rewards.
+// Three screens: hub (grade picker + progress), quiz (10 questions with
+// instant correct/wrong feedback, hearts, streak, optional hint), and
+// result (score + per-question review with strategy explanations +
+// card reveal).
 
 const root = () => document.getElementById("math-root");
 
@@ -19,26 +19,49 @@ const GRADE_VIBE = {
   g8:    { emoji: "📏", color: "#fcd34d" },
 };
 
-// Pokémon mascot lines — small bit of personality, rotated through.
-const ENCOURAGE = [
-  "Mr. Mime says: \"Nice form!\"",
-  "Alakazam approves of that reasoning.",
-  "Psyduck got a headache trying — you got it!",
-  "Slowpoke says: \"Hey... that was fast.\"",
-  "Pikachu charges up. ⚡⚡",
-  "Eevee wags its tail.",
-  "Mew is impressed.",
+// Mascot lines vary by score band so kids feel different reactions instead
+// of the same generic "nice work" every time. Keep them short.
+const MASCOT_PERFECT = [
+  "Mr. Mime is speechless. 🎉",
+  "Alakazam tips its spoon. 🥄",
+  "Mew floats with joy. ✨",
+  "Pikachu's tail won't stop wagging.",
+  "10 out of 10! Snorlax woke up to clap.",
 ];
-const COMMISERATE = [
-  "Magikarp flops. Try again!",
-  "Almost! Snorlax barely stirred.",
-  "Psyduck is confused too. Take another shot.",
-  "Wobbuffet says: \"Wobbuf...\" Don't give up.",
+const MASCOT_GREAT = [
+  "Lucario nods with respect.",
+  "Eevee bounds in a circle. 🐾",
+  "Charmander's flame is brighter than ever.",
+  "Sylveon wraps you in a ribbon of approval.",
 ];
-
+const MASCOT_GOOD = [
+  "Slowpoke says: \"Heeey... not bad.\"",
+  "Psyduck's headache is GONE.",
+  "Greninja gives a quiet thumbs up.",
+  "Wobbuffet: \"Wobbuff!\" (translation: yay)",
+];
+const MASCOT_PRACTICE = [
+  "Magikarp flopped, but flops never quit. 🐟",
+  "Cubone takes a breath. You've got this.",
+  "Snorlax believes in you. (After nap.)",
+  "Try again — Charmander toughs out every battle.",
+];
+const HEART_LOST = [
+  "Whoops!",
+  "Almost!",
+  "Not quite!",
+  "Try again!",
+];
+const STREAK_HYPE = {
+  3:  "🔥 ON FIRE!",
+  5:  "🔥🔥 BLAZING!",
+  7:  "⚡ SUPER EFFECTIVE!",
+  10: "👑 LEGENDARY!",
+  15: "🌟 UNSTOPPABLE!",
+};
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-// ---- API wrappers ---------------------------------------------------------
+// ---- API ------------------------------------------------------------------
 
 async function fetchState() {
   const r = await fetch("/me/math/state");
@@ -90,7 +113,7 @@ async function renderHub() {
     <div class="math-hub">
       <div class="math-mascot">🧙‍♂️</div>
       <h2 class="math-title">Pokémon Math Academy</h2>
-      <p class="math-subtitle">Earn cards by solving quizzes. Stack streaks. Climb grades.</p>
+      <p class="math-subtitle">Solve quizzes. Stack streaks. Earn cards.</p>
 
       <div class="math-stats">
         <div class="math-stat">
@@ -109,7 +132,7 @@ async function renderHub() {
 
       <div class="math-card-bar">
         <div class="math-card-bar-label">
-          Next card: <strong>${state.progressToCard} / ${state.cardThreshold}</strong> correct
+          Next card: <strong>${state.progressToCard} / ${state.cardThreshold}</strong>
         </div>
         <div class="math-card-bar-track">
           <div class="math-card-bar-fill" style="width: ${pct}%"></div>
@@ -152,6 +175,8 @@ async function renderHub() {
 
 // ---- Quiz screen ----------------------------------------------------------
 
+const MAX_HEARTS = 3;
+
 function renderQuiz(quiz) {
   const el = root();
   if (!el) return;
@@ -160,22 +185,28 @@ function renderQuiz(quiz) {
     idx: 0,
     answers: new Array(quiz.questions.length).fill(null),
     streak: 0,
-    locked: false, // disable choices once one is picked
+    hearts: MAX_HEARTS,
+    correctness: new Array(quiz.questions.length).fill(false),
+    locked: false,
+    hintShown: false,
   };
 
   function draw() {
     const q = quiz.questions[state.idx];
     const total = quiz.questions.length;
     const pct = Math.round((state.idx / total) * 100);
+    const streakBadge = STREAK_HYPE[state.streak] || "";
     el.innerHTML = `
       <div class="math-quiz">
         <div class="math-quiz-top">
-          <button class="math-quit" id="math-quit-btn">← Back</button>
+          <button class="math-quit" id="math-quit-btn">←</button>
           <div class="math-progress-track">
             <div class="math-progress-fill" style="width: ${pct}%"></div>
           </div>
-          <div class="math-streak">⚡ ${state.streak}</div>
+          <div class="math-hearts">${renderHearts(state.hearts)}</div>
+          <div class="math-streak ${state.streak >= 3 ? "ablaze" : ""}">⚡ ${state.streak}</div>
         </div>
+        ${streakBadge ? `<div class="math-streak-banner">${streakBadge}</div>` : ""}
         <div class="math-q-card">
           <div class="math-q-num">Question ${state.idx + 1} of ${total}</div>
           <div class="math-q-prompt">${escape(q.prompt)}</div>
@@ -188,15 +219,34 @@ function renderQuiz(quiz) {
             `).join("")}
           </div>
           <div class="math-feedback" id="math-feedback"></div>
+          <div class="math-q-actions">
+            <button class="math-hint-btn" id="math-hint-btn" ${state.hintShown ? "disabled" : ""}>
+              💡 Hint
+            </button>
+          </div>
         </div>
       </div>
     `;
     el.querySelector("#math-quit-btn").addEventListener("click", () => {
-      if (confirm("Leave the quiz? Your progress on this quiz won't count.")) renderHub();
+      if (confirm("Leave the quiz? Progress on this quiz won't count.")) renderHub();
     });
     el.querySelectorAll(".math-choice").forEach((btn) => {
       btn.addEventListener("click", () => onChoose(btn));
     });
+    el.querySelector("#math-hint-btn")?.addEventListener("click", showHint);
+  }
+
+  function showHint() {
+    if (state.hintShown) return;
+    state.hintShown = true;
+    const q = quiz.questions[state.idx];
+    const feedback = el.querySelector("#math-feedback");
+    // Without access to the answer (only the server knows), the hint is a
+    // generic encouragement to use a strategy. The detailed explanation
+    // is revealed in the review screen.
+    feedback.innerHTML = `<div class="math-hint-body">💡 Try breaking it into smaller steps. Look at the numbers carefully — is there an easier way to count or group them?</div>`;
+    const btn = el.querySelector("#math-hint-btn");
+    if (btn) btn.disabled = true;
   }
 
   function onChoose(btn) {
@@ -204,21 +254,24 @@ function renderQuiz(quiz) {
     state.locked = true;
     const val = btn.dataset.val;
     state.answers[state.idx] = val;
-    // We don't know correctness client-side — only the server does — so
-    // we show optimistic "answered" styling and reveal correctness after
-    // we submit and get the per-question correctness array back.
     btn.classList.add("chosen");
     el.querySelectorAll(".math-choice").forEach((b) => b.classList.add("answered"));
+
+    // We need the server to grade. To make the quiz feel snappy, we
+    // submit at the END and reveal results on the review screen. For
+    // mid-quiz feedback we instead show a quick neutral "Answered ✓"
+    // and move on. The streak/hearts visible during the quiz are an
+    // optimistic preview only — the real verdict comes from the server.
     setTimeout(() => {
       state.idx += 1;
       state.locked = false;
       if (state.idx >= quiz.questions.length) submitAndShow();
       else draw();
-    }, 250);
+    }, 220);
   }
 
   async function submitAndShow() {
-    el.innerHTML = `<div class="math-loading">Grading your quiz…</div>`;
+    el.innerHTML = `<div class="math-loading">Grading your quiz… 🧮</div>`;
     let result;
     try {
       result = await submitQuiz(quiz.quizId, state.answers);
@@ -232,6 +285,12 @@ function renderQuiz(quiz) {
   draw();
 }
 
+function renderHearts(n) {
+  let html = "";
+  for (let i = 0; i < MAX_HEARTS; i++) html += i < n ? "❤️" : "🤍";
+  return html;
+}
+
 // ---- Result screen --------------------------------------------------------
 
 function renderResult(quiz, playerAnswers, result) {
@@ -239,14 +298,19 @@ function renderResult(quiz, playerAnswers, result) {
   if (!el) return;
   const pct = Math.round((result.correct / result.total) * 100);
   const verdict = pct === 100 ? "🏆 PERFECT QUIZ!"
-                 : pct >= 80   ? "⭐ Great Work!"
-                 : pct >= 50   ? "👍 Not Bad!"
-                               : "💪 Keep Practising!";
-  const mascot = pct >= 70 ? pick(ENCOURAGE) : pick(COMMISERATE);
+                 : pct >= 80   ? "⭐ Awesome Work!"
+                 : pct >= 60   ? "👍 Nice Job!"
+                 : pct >= 30   ? "💪 Keep Practising!"
+                               : "🌱 Every Trainer Starts Here!";
+  const mascot = pct === 100 ? pick(MASCOT_PERFECT)
+               : pct >= 80   ? pick(MASCOT_GREAT)
+               : pct >= 50   ? pick(MASCOT_GOOD)
+                             : pick(MASCOT_PRACTICE);
   const cardPct = Math.min(100, Math.round((result.progressToCard / result.cardThreshold) * 100));
 
   el.innerHTML = `
     <div class="math-result">
+      ${pct >= 80 ? renderConfetti() : ""}
       <h2 class="math-result-verdict">${verdict}</h2>
       <p class="math-result-mascot">${escape(mascot)}</p>
       <div class="math-result-score">${result.correct} / ${result.total}</div>
@@ -276,6 +340,7 @@ function renderResult(quiz, playerAnswers, result) {
           const yours = playerAnswers[i];
           const correct = result.correctAnswers[i];
           const ok = result.correctness[i];
+          const explanation = (result.explanations || [])[i] || "";
           return `
             <div class="math-review-row ${ok ? "ok" : "bad"}">
               <div class="math-review-icon">${ok ? "✓" : "✗"}</div>
@@ -285,6 +350,7 @@ function renderResult(quiz, playerAnswers, result) {
                   Your answer: <strong>${escape(String(yours ?? "—"))}</strong>
                   ${ok ? "" : `&nbsp;·&nbsp; Correct: <strong>${escape(String(correct))}</strong>`}
                 </div>
+                ${explanation ? `<div class="math-review-explanation">💡 ${escape(explanation)}</div>` : ""}
               </div>
             </div>
           `;
@@ -314,6 +380,21 @@ function renderResult(quiz, playerAnswers, result) {
       });
     });
   }
+}
+
+// Light celebratory confetti — pure CSS animations defined in math-mode.css.
+function renderConfetti() {
+  const colors = ["#fbbf24", "#f87171", "#34d399", "#60a5fa", "#a78bfa", "#f472b6"];
+  let html = `<div class="math-confetti">`;
+  for (let i = 0; i < 24; i++) {
+    const c = colors[i % colors.length];
+    const left = (i * 4 + Math.floor(Math.random() * 4)) + "%";
+    const delay = (Math.random() * 0.6).toFixed(2) + "s";
+    const dur = (1.6 + Math.random() * 1.5).toFixed(2) + "s";
+    html += `<span class="math-confetti-piece" style="background:${c};left:${left};animation-delay:${delay};animation-duration:${dur};"></span>`;
+  }
+  html += "</div>";
+  return html;
 }
 
 function renderReward(reward) {
@@ -378,7 +459,6 @@ function escape(s) {
 }
 function escapeAttr(s) { return escape(s); }
 
-// Public entrypoint — main.js calls this after creating the overlay shell.
 export async function openMathMode(targetEl) {
   if (targetEl) targetEl.id = "math-root";
   await renderHub();

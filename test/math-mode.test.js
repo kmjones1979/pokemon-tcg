@@ -64,10 +64,15 @@ test("1st-grade questions cover multiple curriculum topics", () => {
   assert.ok(hit >= 4, `expected ≥4 topic buckets in g1, got ${hit}: ${JSON.stringify(buckets)}`);
 });
 
-test("3rd grade includes a multiplication or division question", () => {
-  const q = generateQuiz("g3", 42);
-  const hasMulOrDiv = q.some((x) => /[×÷]/.test(x.prompt));
-  assert.ok(hasMulOrDiv, "expected at least one × or ÷ in g3");
+test("3rd grade includes multiplication or division across seeds", () => {
+  // Now that g3 has 17 topics, any single quiz may skip × / ÷. Aggregate
+  // over multiple seeds — over 100 questions we expect at least a few.
+  let count = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    const q = generateQuiz("g3", seed);
+    for (const item of q) if (/[×÷]/.test(item.prompt)) count += 1;
+  }
+  assert.ok(count > 0, "expected some × or ÷ questions in 100 g3 questions");
 });
 
 // Grade-progression / unlock logic.
@@ -108,13 +113,26 @@ test("CARD_THRESHOLD is the documented 100", () => {
   assert.equal(CARD_THRESHOLD, 100);
 });
 
-// Each grade should have enough topic breadth to keep a learner busy for
-// a full semester. Floor is set generously — Pre-K is fine with 5+ topics
-// since each topic is procedurally infinite; older grades target 10+.
+// Each grade has Singapore-style topics on top of the standard ones —
+// numbers below are floor counts including bar models, number bonds, etc.
 test("each grade has enough topic breadth for a semester", () => {
-  const min = { prek: 5, k: 7, g1: 8, g2: 8, g3: 10, g4: 10, g5: 10, g6: 10, g7: 10, g8: 10 };
+  const min = { prek: 8, k: 12, g1: 14, g2: 14, g3: 15, g4: 15, g5: 15, g6: 15, g7: 15, g8: 15 };
   for (const [g, floor] of Object.entries(min)) {
     assert.ok(TOPIC_COUNTS[g] >= floor, `${g} has only ${TOPIC_COUNTS[g]} topics (need ≥${floor})`);
+  }
+});
+
+test("every generated question has an explanation", () => {
+  for (const g of Object.keys(GENERATORS)) {
+    for (let seed = 1; seed <= 10; seed++) {
+      const q = generateQuiz(g, seed);
+      for (const item of q) {
+        assert.ok(
+          typeof item.explanation === "string" && item.explanation.length > 0,
+          `${g} produced a question with no explanation: ${JSON.stringify(item)}`,
+        );
+      }
+    }
   }
 });
 
