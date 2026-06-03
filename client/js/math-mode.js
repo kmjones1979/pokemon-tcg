@@ -61,6 +61,60 @@ const STREAK_HYPE = {
 };
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+// ---- Text-to-speech (read prompts aloud for pre-readers) ------------------
+// Browser SpeechSynthesis is built-in, free, and works on iPad/iPhone/desktop.
+// Only auto-speaks for Pre-K and Kindergarten grades — those are kids who
+// most likely can't read the prompt yet. A 🔊 button lets older kids
+// (and anyone) replay the audio on demand.
+
+function isMuted() {
+  try { return localStorage.getItem("pokemon-tcg-muted") === "1"; } catch { return false; }
+}
+function ttsAvailable() {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
+}
+// Strip the visual decoration glyphs we use in prompts (Pokéball dots,
+// shape unicode, etc.) so the speech engine doesn't read them as
+// "black circle, black circle, black circle…" — the kid SEES those.
+function stripVisuals(s) {
+  return String(s ?? "")
+    .replace(/[●○⬤■▲★♥◆🔴🔵⭐]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function cancelSpeech() {
+  if (ttsAvailable()) { try { window.speechSynthesis.cancel(); } catch {} }
+}
+function speak(text) {
+  if (!ttsAvailable() || isMuted()) return;
+  const clean = stripVisuals(text);
+  if (!clean) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(clean);
+    u.rate = 0.9;
+    u.pitch = 1.1;
+    u.volume = 0.9;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
+// Speak the prompt followed by the four labeled choices, with natural
+// pauses between segments via "." punctuation. Pure-visual choices (just
+// a single emoji like ▲) get skipped — there's nothing to say.
+function speakQuestion(q) {
+  if (!q) return;
+  const promptText = stripVisuals(q.prompt);
+  const choiceText = q.choices
+    .map((c, i) => {
+      const v = stripVisuals(c);
+      return v ? `${"ABCD"[i]}: ${v}` : "";
+    })
+    .filter(Boolean)
+    .join(". ");
+  const full = choiceText ? `${promptText}. ${choiceText}` : promptText;
+  speak(full);
+}
+
 // ---- API ------------------------------------------------------------------
 
 async function fetchState() {
@@ -191,6 +245,8 @@ function renderQuiz(quiz) {
     hintShown: false,
   };
 
+  const isPreReader = quiz.grade === "prek" || quiz.grade === "k";
+
   function draw() {
     const q = quiz.questions[state.idx];
     const total = quiz.questions.length;
@@ -209,10 +265,13 @@ function renderQuiz(quiz) {
         ${streakBadge ? `<div class="math-streak-banner">${streakBadge}</div>` : ""}
         <div class="math-q-card">
           <div class="math-q-num">Question ${state.idx + 1} of ${total}</div>
-          <div class="math-q-prompt">${escape(q.prompt)}</div>
+          <div class="math-q-prompt-row">
+            <div class="math-q-prompt">${escape(q.prompt)}</div>
+            <button class="math-tts-btn" id="math-tts-btn" title="Read aloud" aria-label="Read aloud">🔊</button>
+          </div>
           <div class="math-q-choices">
             ${q.choices.map((c, i) => `
-              <button class="math-choice" data-i="${i}" data-val="${escapeAttr(c)}">
+              <button class="math-choice ${isEmojiChoice(c) ? "emoji" : ""}" data-i="${i}" data-val="${escapeAttr(c)}">
                 <span class="math-choice-letter">${"ABCD"[i]}</span>
                 <span class="math-choice-text">${escape(c)}</span>
               </button>
@@ -228,12 +287,18 @@ function renderQuiz(quiz) {
       </div>
     `;
     el.querySelector("#math-quit-btn").addEventListener("click", () => {
+      cancelSpeech();
       if (confirm("Leave the quiz? Progress on this quiz won't count.")) renderHub();
     });
     el.querySelectorAll(".math-choice").forEach((btn) => {
       btn.addEventListener("click", () => onChoose(btn));
     });
     el.querySelector("#math-hint-btn")?.addEventListener("click", showHint);
+    el.querySelector("#math-tts-btn")?.addEventListener("click", () => speakQuestion(q));
+
+    // Auto-read aloud for non-readers (Pre-K / K). Small delay so the DOM
+    // is painted first and the speech engine has the voices loaded.
+    if (isPreReader) setTimeout(() => speakQuestion(q), 200);
   }
 
   function showHint() {
@@ -252,6 +317,7 @@ function renderQuiz(quiz) {
   function onChoose(btn) {
     if (state.locked) return;
     state.locked = true;
+    cancelSpeech();
     const val = btn.dataset.val;
     state.answers[state.idx] = val;
     btn.classList.add("chosen");
@@ -271,6 +337,7 @@ function renderQuiz(quiz) {
   }
 
   async function submitAndShow() {
+    cancelSpeech();
     el.innerHTML = `<div class="math-loading">Grading your quiz… 🧮</div>`;
     let result;
     try {
@@ -279,7 +346,7 @@ function renderQuiz(quiz) {
       el.innerHTML = `<div class="math-error">${escape(err.message)}</div>`;
       return;
     }
-    renderResult(quiz, state.answers, result);
+    renderResult(quiz, state.answers, result, isPreReader);
   }
 
   draw();
@@ -293,7 +360,7 @@ function renderHearts(n) {
 
 // ---- Result screen --------------------------------------------------------
 
-function renderResult(quiz, playerAnswers, result) {
+function renderResult(quiz, playerAnswers, result, isPreReader = false) {
   const el = root();
   if (!el) return;
   const pct = Math.round((result.correct / result.total) * 100);
@@ -364,12 +431,18 @@ function renderResult(quiz, playerAnswers, result) {
     </div>
   `;
   el.querySelector("#math-again").addEventListener("click", async () => {
+    cancelSpeech();
     try {
       const q = await startQuiz(quiz.grade);
       renderQuiz(q);
     } catch (err) { alert(err.message); }
   });
-  el.querySelector("#math-back").addEventListener("click", () => renderHub());
+  el.querySelector("#math-back").addEventListener("click", () => { cancelSpeech(); renderHub(); });
+
+  // For pre-readers, read the verdict + score aloud so they know how they did.
+  if (isPreReader) {
+    setTimeout(() => speak(`${stripVisuals(verdict)}. You got ${result.correct} out of ${result.total}.`), 250);
+  }
 
   if (result.reward) {
     el.querySelectorAll(".math-reward-claim").forEach((btn) => {
@@ -458,6 +531,12 @@ function escape(s) {
     .replace(/"/g, "&quot;");
 }
 function escapeAttr(s) { return escape(s); }
+// True when a choice is a single visual glyph (emoji, shape symbol) and
+// not a word — so we can render it big enough for Pre-K to recognize.
+function isEmojiChoice(c) {
+  const s = String(c).trim();
+  return s.length <= 2 && !/[a-zA-Z0-9]/.test(s);
+}
 
 export async function openMathMode(targetEl) {
   if (targetEl) targetEl.id = "math-root";

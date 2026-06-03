@@ -139,29 +139,37 @@ const TOPICS_PREK = [
     return { ...makeMC(`Count: ${balls}`, n, rand, { minChoice: 1 }),
       explanation: `Point to each one and say a number out loud — 1, 2, 3… The answer is ${n}.` };
   },
-  // Which group has more?
+  // Which group has the MOST? — fully visual for pre-readers.
+  // Four rows of emojis; tap the emoji of the biggest row.
   (rand) => {
-    let a = pickInt(rand, 1, 8), b = pickInt(rand, 1, 8);
-    while (a === b) b = pickInt(rand, 1, 8);
-    const A = "★ ".repeat(a).trim(), B = "◆ ".repeat(b).trim();
-    const answer = a > b ? "Stars" : "Diamonds";
-    return { prompt: `Which has MORE?\n${A}\n${B}`, choices: shuffle(["Stars", "Diamonds", "Same", "Neither"], rand), answer,
-      explanation: `Stars: ${a}.  Diamonds: ${b}.  ${a > b ? "Stars" : "Diamonds"} has more (${Math.max(a, b)} > ${Math.min(a, b)}).` };
+    const emojis = shuffle(["★", "◆", "●", "▲"], rand);
+    const counts = shuffle([1, 2, 3, 4, 5, 6, 7].slice(0, 4), rand);
+    // Make sure exactly one row is the biggest (no ties).
+    const max = Math.max(...counts);
+    if (counts.filter((c) => c === max).length > 1) counts[counts.indexOf(max)] = max + 1;
+    const biggestIdx = counts.indexOf(Math.max(...counts));
+    const rows = emojis.map((e, i) => `${e} `.repeat(counts[i]).trim()).join("\n");
+    return { prompt: `Which has the MOST?\n${rows}`,
+      choices: emojis,
+      answer: emojis[biggestIdx],
+      explanation: `${emojis[biggestIdx]} has ${counts[biggestIdx]} — the biggest group!` };
   },
-  // Shape recognition.
+  // Shape recognition — VISUAL matching for pre-readers. Prompt names the
+  // shape (TTS reads it aloud); choices are emoji buttons so the kid taps
+  // the picture that matches the spoken word.
   (rand) => {
     const shapes = [
-      { name: "Circle",   emoji: "⬤" },
-      { name: "Square",   emoji: "■" },
-      { name: "Triangle", emoji: "▲" },
-      { name: "Star",     emoji: "★" },
-      { name: "Heart",    emoji: "♥" },
+      { emoji: "⬤", name: "circle" },
+      { emoji: "■", name: "square" },
+      { emoji: "▲", name: "triangle" },
+      { emoji: "★", name: "star" },
+      { emoji: "♥", name: "heart" },
     ];
     const pick = shapes[pickInt(rand, 0, shapes.length - 1)];
-    const others = shapes.filter((s) => s.name !== pick.name).map((s) => s.name);
-    const choices = shuffle([pick.name, ...shuffle(others, rand).slice(0, 3)], rand);
-    return { prompt: `What shape is this?  ${pick.emoji}`, choices, answer: pick.name,
-      explanation: `That's a ${pick.name.toLowerCase()}!` };
+    const others = shuffle(shapes.filter((s) => s.emoji !== pick.emoji), rand).slice(0, 3);
+    const choices = shuffle([pick.emoji, ...others.map((s) => s.emoji)], rand);
+    return { prompt: `Find the ${pick.name}.`, choices, answer: pick.emoji,
+      explanation: `That's a ${pick.name}!` };
   },
   // Pattern continuation: AB AB ? → A
   (rand) => {
