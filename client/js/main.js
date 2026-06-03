@@ -322,6 +322,7 @@ function renderMenu() {
           <button class="mode-btn" id="mode-reading" title="Read along with Pokémon friends">📚 Story Time</button>
           <button class="mode-btn" id="mode-explore" title="Browse every Pokémon in the Pokédex">🔍 Explore</button>
           <button class="mode-btn" id="mode-redeem" title="Got a code? Redeem it for a random Pokémon">🎁 Redeem Code</button>
+          <button class="mode-btn" id="mode-math" ${currentUser ? "" : "disabled"} title="${currentUser ? "Solve math quizzes and earn Pokémon cards" : "Sign in to play Math Mode"}">🧮 Math Mode</button>
           ${currentUser?.is_admin ? `<button class="mode-btn" id="mode-admin" title="Generate codes, manage admins">🛠 Admin Panel</button>` : ""}
           <button class="mode-btn" id="mode-settings" title="Game settings">⚙ Settings</button>
           <button class="mode-btn" id="how-to-play-btn">How to play</button>
@@ -512,6 +513,7 @@ function renderMenu() {
   $("#mode-reading")?.addEventListener("click", openReadingMode);
   $("#mode-explore")?.addEventListener("click", openExplore);
   $("#mode-redeem")?.addEventListener("click", openRedeemDialog);
+  $("#mode-math")?.addEventListener("click", openMathMode);
   $("#mode-admin")?.addEventListener("click", () => { window.location.href = "/admin"; });
   $("#mode-settings")?.addEventListener("click", openSettings);
   $("#how-to-play-btn").addEventListener("click", showHowToPlay);
@@ -1075,6 +1077,26 @@ async function openExplore() {
 // Opens the kid-friendly read-along Reading Mode as an overlay. The
 // reading-mode module owns its own DOM lifecycle — we just give it a
 // rooted container and clean up when the close button fires.
+async function openMathMode() {
+  // Lazy-load — keeps the math curriculum + UI out of the critical
+  // battle-path bundle. Same overlay shell as Reading Mode.
+  const mod = await import("./math-mode.js");
+  document.querySelector(".math-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.className = "math-overlay howto-overlay";
+  overlay.innerHTML = `
+    <div class="howto-card" style="max-width: 720px; padding: 0; overflow: hidden;">
+      <div style="display: flex; justify-content: flex-end; padding: 10px;">
+        <button class="howto-close" id="math-close">✕ Close</button>
+      </div>
+      <div id="math-root"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#math-close").addEventListener("click", () => overlay.remove());
+  await mod.openMathMode(overlay.querySelector("#math-root"));
+}
+
 async function openReadingMode() {
   // Lazy-load to keep the initial bundle lean. Reading Mode isn't on
   // the critical battle path; defer its 8KB until the user opens it.

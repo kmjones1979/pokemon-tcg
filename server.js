@@ -30,6 +30,7 @@ const dailyPuzzle = require("./server-modules/daily-puzzle");
 const analytics = require("./server-modules/analytics");
 const siteGate = require("./server-modules/site-gate");
 const guestMigrate = require("./server-modules/guest-migrate");
+const mathMode = require("./server-modules/math-mode");
 const deckShare = require("./server-modules/deck-share");
 const friendChallenge = require("./server-modules/friend-challenge");
 const mastery = require("./server-modules/mastery");
@@ -207,6 +208,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   dailyPuzzle.mount(app, authSupabase);
   analytics.mount(app);
   guestMigrate.mount(app, authSupabase);
+  mathMode.mount(app, authSupabase, ensurePokedex);
   deckShare.mount(app, authSupabase, ensurePokedex);
   friendChallenge.mount(app, authSupabase);
   mastery.mount(app, authSupabase);
