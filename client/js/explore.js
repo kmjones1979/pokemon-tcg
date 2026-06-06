@@ -37,6 +37,7 @@ export async function open() {
 }
 
 export function close() {
+  closeSwipeMode();
   document.querySelector(".explore-overlay")?.remove();
   _overlay = null;
   _allRows = [];
@@ -56,6 +57,7 @@ function render() {
       <div class="explore-search-row">
         <input type="search" class="explore-search" placeholder="Search by name, #id, type, or gen…" autocomplete="off" autocapitalize="off" spellcheck="false" value="${escapeAttr(_query)}">
         <span class="explore-count"></span>
+        <button class="explore-swipe-launch" title="Swipe through cards full-screen">🎴 Swipe Mode</button>
       </div>
       <div class="explore-body">
         <div class="explore-grid"></div>
@@ -70,6 +72,12 @@ function render() {
   searchEl.addEventListener("input", (e) => {
     _query = e.target.value;
     paintGrid();
+  });
+  _overlay.querySelector(".explore-swipe-launch")?.addEventListener("click", () => {
+    const rows = filterPokedexEntries(_allRows, _query);
+    if (!rows.length) return;
+    const startIdx = Math.max(0, rows.findIndex((r) => r.id === _selectedId));
+    openSwipeMode(rows, startIdx);
   });
   paintGrid();
   if (_selectedId) {
@@ -182,6 +190,208 @@ function renderDetail(row) {
         </div>` : ""}
     </div>
   `;
+}
+
+// ---- Swipe Mode -----------------------------------------------------------
+// Tactile full-screen card browser. One card at a time, idle float animation,
+// drag-and-snap touch gestures, keyboard arrows on desktop. Built for iPhone
+// but works anywhere. The card visibly responds to drag (translateX +
+// slight rotation), then either springs back or animates off-screen
+// depending on how far the user pulled it.
+
+let _swipeRoot = null;
+let _swipeKeyHandler = null;
+
+function openSwipeMode(rows, startIdx = 0) {
+  if (!rows?.length) return;
+  closeSwipeMode();
+  const state = { rows, idx: Math.max(0, Math.min(startIdx, rows.length - 1)) };
+
+  _swipeRoot = document.createElement("div");
+  _swipeRoot.className = "swipe-overlay";
+  _swipeRoot.innerHTML = `
+    <button class="swipe-close" aria-label="Close Swipe Mode">✕</button>
+    <div class="swipe-counter" id="swipe-counter"></div>
+    <div class="swipe-stage" id="swipe-stage"></div>
+    <div class="swipe-hint">
+      <span class="swipe-arrow">←</span>
+      <span class="swipe-hint-text">Swipe to flip through</span>
+      <span class="swipe-arrow">→</span>
+    </div>
+  `;
+  document.body.appendChild(_swipeRoot);
+
+  const stage = _swipeRoot.querySelector("#swipe-stage");
+  const counter = _swipeRoot.querySelector("#swipe-counter");
+
+  let dragStartX = 0, dragStartY = 0, dragging = false, currentDx = 0;
+  let card = null;
+
+  function paint(dir = "in") {
+    counter.textContent = `${state.idx + 1} / ${state.rows.length}`;
+    const row = state.rows[state.idx];
+    const old = card;
+    card = buildSwipeCard(row);
+    if (dir === "left")       card.classList.add("from-right");
+    else if (dir === "right") card.classList.add("from-left");
+    else                       card.classList.add("from-center");
+    stage.appendChild(card);
+    requestAnimationFrame(() => card.classList.add("landed"));
+    // Wire drag on the new card.
+    wireDrag(card);
+    // Remove the old card after the entry animation lands so it doesn't
+    // pile up DOM nodes between swipes.
+    if (old) {
+      old.classList.add("exiting");
+      setTimeout(() => old.remove(), 350);
+    }
+  }
+
+  function next() {
+    if (state.idx >= state.rows.length - 1) { bounce(card, "right"); return; }
+    state.idx += 1;
+    paint("left");
+  }
+  function prev() {
+    if (state.idx <= 0) { bounce(card, "left"); return; }
+    state.idx -= 1;
+    paint("right");
+  }
+
+  function bounce(node, side) {
+    if (!node) return;
+    node.classList.add(side === "left" ? "bounce-left" : "bounce-right");
+    setTimeout(() => node.classList.remove("bounce-left", "bounce-right"), 280);
+  }
+
+  function wireDrag(node) {
+    const onStart = (x, y) => {
+      dragStartX = x; dragStartY = y; dragging = true; currentDx = 0;
+      node.classList.add("dragging");
+    };
+    const onMove = (x, y) => {
+      if (!dragging) return;
+      const dx = x - dragStartX;
+      const dy = y - dragStartY;
+      // If the gesture is dominantly vertical (scrolling), bail.
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 14) {
+        dragging = false;
+        node.style.transform = "";
+        node.classList.remove("dragging");
+        return;
+      }
+      currentDx = dx;
+      const rot = Math.max(-15, Math.min(15, dx * 0.06));
+      node.style.transform = `translateX(${dx}px) rotate(${rot}deg)`;
+    };
+    const onEnd = () => {
+      if (!dragging) return;
+      dragging = false;
+      node.classList.remove("dragging");
+      const threshold = 80;
+      if (currentDx < -threshold) {
+        // Pulled left: advance.
+        node.style.transform = "translateX(-130%) rotate(-18deg)";
+        node.style.opacity = "0";
+        next();
+      } else if (currentDx > threshold) {
+        node.style.transform = "translateX(130%) rotate(18deg)";
+        node.style.opacity = "0";
+        prev();
+      } else {
+        // Spring back.
+        node.style.transform = "";
+      }
+      currentDx = 0;
+    };
+    node.addEventListener("touchstart", (e) => onStart(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+    node.addEventListener("touchmove",  (e) => onMove(e.touches[0].clientX, e.touches[0].clientY),  { passive: true });
+    node.addEventListener("touchend",   onEnd);
+    node.addEventListener("touchcancel", onEnd);
+    // Mouse-drag for desktop, too — same gesture model.
+    node.addEventListener("mousedown",  (e) => onStart(e.clientX, e.clientY));
+    window.addEventListener("mousemove", (e) => { if (dragging) onMove(e.clientX, e.clientY); });
+    window.addEventListener("mouseup",   onEnd);
+  }
+
+  // Keyboard nav on desktop. Esc closes.
+  _swipeKeyHandler = (e) => {
+    if (e.key === "ArrowLeft" || e.key === "PageUp")        { e.preventDefault(); prev(); }
+    else if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); next(); }
+    else if (e.key === "Escape")                              { closeSwipeMode(); }
+  };
+  window.addEventListener("keydown", _swipeKeyHandler);
+
+  _swipeRoot.querySelector(".swipe-close").addEventListener("click", closeSwipeMode);
+
+  paint("in");
+}
+
+function closeSwipeMode() {
+  if (_swipeKeyHandler) {
+    window.removeEventListener("keydown", _swipeKeyHandler);
+    _swipeKeyHandler = null;
+  }
+  if (_swipeRoot) {
+    _swipeRoot.classList.add("closing");
+    const r = _swipeRoot;
+    _swipeRoot = null;
+    setTimeout(() => r.remove(), 220);
+  }
+}
+
+function buildSwipeCard(row) {
+  const card = document.createElement("article");
+  const primary = row.types?.[0] || "normal";
+  const c1 = TYPE_COLORS[primary] || "#888";
+  card.className = "swipe-card";
+  if (row.is_legendary) card.classList.add("legendary");
+  else if (row.is_mythical) card.classList.add("mythical");
+  card.style.setProperty("--type-1", c1);
+  const rarityLabel = (row.rarity || "common").replace(/^./, (c) => c.toUpperCase());
+  const raw = row.raw || {};
+  const statBar = (label, val) => {
+    const pct = Math.min(100, Math.round(((val || 0) / 200) * 100));
+    return `
+      <div class="swipe-stat">
+        <span class="swipe-stat-label">${escapeHtml(label)}</span>
+        <span class="swipe-stat-val">${val ?? 0}</span>
+        <div class="swipe-stat-bar"><div class="swipe-stat-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  };
+  card.innerHTML = `
+    <div class="swipe-card-inner">
+      ${row.is_legendary ? `<div class="swipe-card-flag legendary">★ LEGENDARY ★</div>`
+        : row.is_mythical ? `<div class="swipe-card-flag mythical">✦ MYTHICAL ✦</div>` : ""}
+      <div class="swipe-card-art">
+        <img src="${escapeAttr(row.sprite_front || "")}" alt="${escapeAttr(row.name)}" draggable="false">
+      </div>
+      <div class="swipe-card-id">#${String(row.id).padStart(3, "0")}</div>
+      <h2 class="swipe-card-name">${escapeHtml(row.name)}</h2>
+      <div class="swipe-card-types">
+        ${(row.types || []).map((t) => `<span class="swipe-type-pill" style="background:${TYPE_COLORS[t] || "#888"}">${escapeHtml(t)}</span>`).join("")}
+      </div>
+      <div class="swipe-card-meta">
+        <span>Gen ${row.generation ?? "?"}</span>
+        <span>Tier ${row.tier ?? "?"} (${escapeHtml(rarityLabel)})</span>
+      </div>
+      <div class="swipe-card-quickstats">
+        <div><strong>${row.cardHp ?? "?"}</strong><span>HP</span></div>
+        <div><strong>${row.cardAttack ?? "?"}</strong><span>ATK</span></div>
+        <div><strong>${row.energyCost ?? "?"}</strong><span>⚡</span></div>
+      </div>
+      <div class="swipe-card-stats">
+        ${statBar("HP", raw.hp)}
+        ${statBar("ATK", raw.attack)}
+        ${statBar("DEF", raw.defense)}
+        ${statBar("SpA", raw.sp_attack)}
+        ${statBar("SpD", raw.sp_defense)}
+        ${statBar("SPD", raw.speed)}
+      </div>
+      ${row.flavor_text ? `<p class="swipe-card-flavor">${escapeHtml(row.flavor_text)}</p>` : ""}
+    </div>
+  `;
+  return card;
 }
 
 function escapeHtml(s) {

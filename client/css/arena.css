@@ -4218,3 +4218,306 @@ html { overscroll-behavior: none; }
     bottom: 3px;
   }
 }
+
+/* ============================================================
+   Swipe Mode — full-screen tactile card browser for Explore.
+   Idle float, drag-and-snap with rotation, rarity-glow.
+   Built mobile-first but works on desktop with arrow keys / mouse drag.
+   ============================================================ */
+.swipe-overlay {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.99)),
+    linear-gradient(180deg, #0f172a, #1e1b4b);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: swipeOverlayIn 0.22s ease-out;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+.swipe-overlay.closing { animation: swipeOverlayOut 0.22s ease-out forwards; }
+@keyframes swipeOverlayIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes swipeOverlayOut { from { opacity: 1; } to { opacity: 0; } }
+
+.swipe-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  z-index: 2;
+}
+.swipe-close:hover { background: rgba(255, 255, 255, 0.18); }
+
+.swipe-counter {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 6px 14px;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  z-index: 2;
+}
+
+.swipe-hint {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  z-index: 2;
+  pointer-events: none;
+  animation: swipeHintBob 2.4s ease-in-out infinite;
+}
+.swipe-arrow { font-size: 18px; opacity: 0.7; }
+@keyframes swipeHintBob {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.85; }
+}
+
+.swipe-stage {
+  position: relative;
+  width: min(94vw, 380px);
+  height: min(92vh, 640px);
+  perspective: 1200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The card itself: idle float when at rest. JS sets inline transforms
+   while dragging, so the keyframe animation only runs in the .landed
+   state (after entry) and pauses naturally while .dragging. */
+.swipe-card {
+  position: absolute;
+  width: 100%;
+  max-height: 100%;
+  border-radius: 22px;
+  background: linear-gradient(160deg, #fff, #f5f3ff 85%, #ddd6fe);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.45),
+    0 0 0 4px rgba(0, 0, 0, 0.12),
+    0 0 0 6px var(--type-1, #6366f1);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.32s ease;
+  will-change: transform;
+}
+.swipe-card.from-center { transform: scale(0.92); opacity: 0; }
+.swipe-card.from-right  { transform: translateX(110%) rotate(14deg); opacity: 0; }
+.swipe-card.from-left   { transform: translateX(-110%) rotate(-14deg); opacity: 0; }
+.swipe-card.landed {
+  transform: translateX(0) rotate(0);
+  opacity: 1;
+  animation: cardFloat 5s ease-in-out 0.4s infinite;
+}
+.swipe-card.dragging { animation: none !important; transition: none; cursor: grabbing; }
+.swipe-card.exiting  { transition: transform 0.34s ease, opacity 0.34s ease; pointer-events: none; }
+.swipe-card.bounce-left  { animation: swipeBounceLeft  0.28s ease; }
+.swipe-card.bounce-right { animation: swipeBounceRight 0.28s ease; }
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0) rotate(-0.6deg); }
+  50%      { transform: translateY(-10px) rotate(0.6deg); }
+}
+@keyframes swipeBounceLeft  { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-22px) rotate(-3deg); } }
+@keyframes swipeBounceRight { 0%, 100% { transform: translateX(0); } 50% { transform: translateX( 22px) rotate( 3deg); } }
+
+.swipe-card.legendary {
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.45),
+    0 0 0 4px rgba(0, 0, 0, 0.12),
+    0 0 0 6px #f59e0b,
+    0 0 80px rgba(245, 158, 11, 0.7);
+}
+.swipe-card.mythical {
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.45),
+    0 0 0 4px rgba(0, 0, 0, 0.12),
+    0 0 0 6px #c084fc,
+    0 0 80px rgba(192, 132, 252, 0.7);
+}
+
+.swipe-card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 22px 18px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.swipe-card-flag {
+  align-self: center;
+  background: linear-gradient(135deg, #f59e0b, #fde047);
+  color: #1f2937;
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 2px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.5);
+}
+.swipe-card-flag.mythical {
+  background: linear-gradient(135deg, #c084fc, #f0abfc);
+  box-shadow: 0 3px 8px rgba(192, 132, 252, 0.5);
+}
+.swipe-card-art {
+  width: 100%;
+  height: 200px;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0)) ,
+    radial-gradient(circle at center, var(--type-1, #6366f1) 0%, transparent 70%);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  pointer-events: none;
+}
+.swipe-card-art img {
+  width: 168px;
+  height: 168px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+.swipe-card-id {
+  font-family: "Press Start 2P", "Inter", monospace;
+  font-size: 11px;
+  color: #6b7280;
+  letter-spacing: 1.5px;
+}
+.swipe-card-name {
+  margin: 4px 0 8px;
+  font-size: 28px;
+  font-weight: 900;
+  color: #1e1b4b;
+  text-transform: capitalize;
+  letter-spacing: -0.5px;
+}
+.swipe-card-types {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.swipe-type-pill {
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.swipe-card-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.swipe-card-quickstats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+.swipe-card-quickstats > div {
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 10px;
+  padding: 8px 4px;
+  text-align: center;
+}
+.swipe-card-quickstats strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  color: #1e1b4b;
+}
+.swipe-card-quickstats span {
+  font-size: 10px;
+  color: #6b7280;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.swipe-card-stats { width: 100%; margin-bottom: 10px; }
+.swipe-stat {
+  display: grid;
+  grid-template-columns: 36px 36px 1fr;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+.swipe-stat-label { color: #6b7280; font-weight: 700; }
+.swipe-stat-val   { color: #1f2937; font-weight: 800; text-align: right; }
+.swipe-stat-bar   { background: #e5e7eb; border-radius: 999px; height: 6px; overflow: hidden; }
+.swipe-stat-fill  { background: linear-gradient(90deg, var(--type-1, #6366f1), #818cf8); height: 100%; border-radius: 999px; }
+.swipe-card-flavor {
+  font-size: 12px;
+  color: #4b5563;
+  font-style: italic;
+  text-align: center;
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+/* Tighten on small phones. */
+@media (max-height: 720px) {
+  .swipe-card-art { height: 160px; }
+  .swipe-card-art img { width: 132px; height: 132px; }
+  .swipe-card-name { font-size: 24px; }
+  .swipe-card-quickstats strong { font-size: 18px; }
+}
+@media (max-height: 600px) {
+  .swipe-card-art { height: 120px; }
+  .swipe-card-art img { width: 100px; height: 100px; }
+  .swipe-card-flavor { display: none; }
+}
+
+/* Launcher button in the Explore header. */
+.explore-swipe-launch {
+  background: linear-gradient(135deg, #6366f1, #4338ca);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #3730a3;
+  flex-shrink: 0;
+}
+.explore-swipe-launch:hover { transform: translateY(-1px); }
+.explore-swipe-launch:active { transform: translateY(1px); box-shadow: 0 1px 0 #3730a3; }
