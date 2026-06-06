@@ -31,6 +31,7 @@ const analytics = require("./server-modules/analytics");
 const siteGate = require("./server-modules/site-gate");
 const guestMigrate = require("./server-modules/guest-migrate");
 const mathMode = require("./server-modules/math-mode");
+const landingPages = require("./server-modules/landing-pages");
 const deckShare = require("./server-modules/deck-share");
 const friendChallenge = require("./server-modules/friend-challenge");
 const mastery = require("./server-modules/mastery");
@@ -291,6 +292,11 @@ app.get("/api/pokedex/all", async (_req, res) => {
   res.set("Cache-Control", "public, max-age=600");
   res.json({ count: rows.length, rows });
 });
+
+// Per-Pokémon landing pages with OG/Twitter preview meta. Public (no auth) so
+// shared links work for anyone, signed-in or not. Lives next to the other
+// public Pokédex routes since it shares the same data source.
+landingPages.mount(app, ensurePokedex);
 
 app.get("/api/pokedex/search", async (req, res) => {
   await ensurePokedex();

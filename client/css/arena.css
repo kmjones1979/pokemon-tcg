@@ -4521,3 +4521,105 @@ html { overscroll-behavior: none; }
 }
 .explore-swipe-launch:hover { transform: translateY(-1px); }
 .explore-swipe-launch:active { transform: translateY(1px); box-shadow: 0 1px 0 #3730a3; }
+
+/* ============================================================
+   Share button + fallback share sheet for Swipe Mode
+   ============================================================ */
+.swipe-share {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  border: none;
+  background: linear-gradient(135deg, #6366f1, #4338ca);
+  color: white;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #3730a3, 0 4px 12px rgba(99, 102, 241, 0.4);
+  z-index: 2;
+  letter-spacing: 0.3px;
+}
+.swipe-share:hover  { transform: translateY(-1px); }
+.swipe-share:active { transform: translateY(1px); box-shadow: 0 1px 0 #3730a3; }
+
+/* Fallback popover when Web Share API isn't available. */
+.share-sheet {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(6px);
+  z-index: 1060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: shareSheetIn 0.18s ease-out;
+}
+@keyframes shareSheetIn { from { opacity: 0; } to { opacity: 1; } }
+.share-sheet-card {
+  background: white;
+  border-radius: 18px;
+  padding: 22px 20px 16px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  animation: shareSheetCardIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes shareSheetCardIn {
+  from { transform: scale(0.94) translateY(20px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+.share-sheet-title {
+  font-weight: 800;
+  font-size: 18px;
+  color: #1e1b4b;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.share-sheet-url {
+  font-size: 12px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  text-align: center;
+  word-break: break-all;
+  font-family: ui-monospace, "Courier New", monospace;
+}
+.share-sheet-opt {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: #fff;
+  border: 2px solid #d1d5db;
+  border-radius: 12px;
+  padding: 12px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  color: #1f2937;
+  cursor: pointer;
+  margin-bottom: 8px;
+  text-decoration: none;
+  box-shadow: 0 2px 0 #d1d5db;
+}
+.share-sheet-opt:hover { transform: translateY(-1px); }
+.share-sheet-opt:active { transform: translateY(1px); box-shadow: 0 1px 0 #d1d5db; }
+.share-sheet-opt.share-x {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+  box-shadow: 0 2px 0 #333;
+}
+.share-sheet-opt.share-cancel {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #6b7280;
+  margin-top: 4px;
+}
+.share-sheet-opt.share-cancel:hover { background: #f3f4f6; transform: none; }

@@ -212,6 +212,7 @@ function openSwipeMode(rows, startIdx = 0) {
   _swipeRoot.innerHTML = `
     <button class="swipe-close" aria-label="Close Swipe Mode">✕</button>
     <div class="swipe-counter" id="swipe-counter"></div>
+    <button class="swipe-share" id="swipe-share" aria-label="Share this Pokémon">↗ Share</button>
     <div class="swipe-stage" id="swipe-stage"></div>
     <div class="swipe-hint">
       <span class="swipe-arrow">←</span>
@@ -323,8 +324,65 @@ function openSwipeMode(rows, startIdx = 0) {
   window.addEventListener("keydown", _swipeKeyHandler);
 
   _swipeRoot.querySelector(".swipe-close").addEventListener("click", closeSwipeMode);
+  _swipeRoot.querySelector("#swipe-share").addEventListener("click", () => {
+    const row = state.rows[state.idx];
+    if (row) shareCard(row);
+  });
 
   paint("in");
+}
+
+// Open the native share sheet if available (iOS / Android Web Share API),
+// otherwise pop up a small fallback popover with Copy Link + X intent.
+async function shareCard(row) {
+  const name = (row.name || "Pokémon").replace(/\b\w/g, (c) => c.toUpperCase());
+  const id3 = String(row.id).padStart(3, "0");
+  const url = `${location.origin}/p/${row.id}`;
+  const text = `Check out ${name} #${id3} on Pokémon TCG!`;
+  const title = `${name} #${id3} — Pokémon TCG`;
+  // Web Share API is the one good thing — iOS/Android show the native
+  // sheet with Messages, Mail, AirDrop, X, WhatsApp, etc. Falls back to
+  // our own popover when unsupported (most desktop browsers).
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return; // User canceled the sheet — that's fine.
+      // Otherwise fall through to popover.
+    }
+  }
+  showShareFallback({ url, text, title, name });
+}
+
+function showShareFallback({ url, text, title, name }) {
+  document.querySelector(".share-sheet")?.remove();
+  const sheet = document.createElement("div");
+  sheet.className = "share-sheet";
+  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+  sheet.innerHTML = `
+    <div class="share-sheet-card">
+      <div class="share-sheet-title">Share ${escapeHtml(name)}</div>
+      <div class="share-sheet-url">${escapeHtml(url)}</div>
+      <button class="share-sheet-opt share-copy">📋 Copy Link</button>
+      <a class="share-sheet-opt share-x" href="${escapeAttr(tweetUrl)}" target="_blank" rel="noopener">𝕏 Share on X</a>
+      <button class="share-sheet-opt share-cancel">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+  const close = () => sheet.remove();
+  sheet.addEventListener("click", (e) => { if (e.target === sheet) close(); });
+  sheet.querySelector(".share-cancel").addEventListener("click", close);
+  sheet.querySelector(".share-copy").addEventListener("click", async () => {
+    const btn = sheet.querySelector(".share-copy");
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = "✓ Link Copied!";
+      setTimeout(close, 900);
+    } catch {
+      btn.textContent = "Copy failed — long-press the link above";
+    }
+  });
 }
 
 function closeSwipeMode() {
