@@ -315,7 +315,20 @@ app.get("/api/pokedex/search", async (req, res) => {
   res.json({ results: matches });
 });
 
-// Public leaderboard — top players by wins. No auth required (read-only).
+// Public leaderboard — ranks players by match wins, with win-rate
+// breaking ties. No auth required (read-only).
+//
+// Why this order: wins is the most legible "I'm winning" stat, and
+// players have a strong intuition that a 0-win player should NOT
+// outrank a 1-win player. Previously we sorted by trainer_level first,
+// which let high-XP losers (XP accrues from solo/story play too,
+// independent of multiplayer wins) sit at the top of the table.
+//
+// Tiebreakers:
+//   1. wins desc            — primary signal
+//   2. win_pct desc         — 5W/0L > 5W/5L
+//   3. matches_played asc   — fewer losses for the same wins → higher
+//   4. trainer_level desc   — final tiebreaker, rewards long-term play
 app.get("/api/leaderboard", async (req, res) => {
   if (!authSupabase) return res.json({ rows: [], me: null });
   const limit = Math.min(50, Math.max(5, Number(req.query.limit) || 25));
@@ -323,12 +336,13 @@ app.get("/api/leaderboard", async (req, res) => {
     .from("user_stats")
     .select("user_id, display_name, matches_played, wins, losses, win_pct, cards_owned, trainer_xp, trainer_level")
     .gt("matches_played", 0)
-    .order("trainer_level", { ascending: false })
     .order("wins", { ascending: false })
     .order("win_pct", { ascending: false })
+    .order("matches_played", { ascending: true })
+    .order("trainer_level", { ascending: false })
     .limit(limit);
   if (error) return res.status(500).json({ error: error.message });
-  let me = null;
+  let me = null, myRank = null;
   if (req.user) {
     const { data: mine } = await authSupabase
       .from("user_stats")
@@ -336,8 +350,24 @@ app.get("/api/leaderboard", async (req, res) => {
       .eq("user_id", req.user.id)
       .maybeSingle();
     me = mine || null;
+    // Compute global rank — count players strictly ahead of me on our
+    // compound key. Covers (wins, win_pct) lexicographically; remaining
+    // ties land in the same rank bucket which is acceptable for display.
+    // Only meaningful if the player has actually played a match.
+    if (me && (me.matches_played || 0) > 0) {
+      const orExpr = [
+        `wins.gt.${Number(me.wins) || 0}`,
+        `and(wins.eq.${Number(me.wins) || 0},win_pct.gt.${Number(me.win_pct) || 0})`,
+      ].join(",");
+      const { count } = await authSupabase
+        .from("user_stats")
+        .select("user_id", { count: "exact", head: true })
+        .gt("matches_played", 0)
+        .or(orExpr);
+      myRank = (count || 0) + 1;
+    }
   }
-  res.json({ rows: data || [], me });
+  res.json({ rows: data || [], me, myRank });
 });
 
 app.get("/api/deck", async (req, res) => {

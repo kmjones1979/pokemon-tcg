@@ -17,8 +17,8 @@ export async function open({ onClose } = {}) {
   try {
     const res = await fetch("/api/leaderboard?limit=25");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { rows, me } = await res.json();
-    render(overlay, rows, me);
+    const { rows, me, myRank } = await res.json();
+    render(overlay, rows, me, myRank);
   } catch (err) {
     overlay.innerHTML = `
       <div class="lb-error">
@@ -35,9 +35,13 @@ export function close() {
   _onClose?.();
 }
 
-function render(overlay, rows, me) {
-  const myRank = me ? rows.findIndex((r) => r.user_id === me.user_id) + 1 : 0;
-  const meInTopList = myRank > 0;
+function render(overlay, rows, me, serverRank) {
+  // Prefer the server-side global rank (accurate even when the user is
+  // outside the visible top-N slice). Fall back to in-table position
+  // for back-compat with older deploys that don't send myRank.
+  const inTableRank = me ? rows.findIndex((r) => r.user_id === me.user_id) + 1 : 0;
+  const myRank = serverRank || (inTableRank > 0 ? inTableRank : 0);
+  const meInTopList = inTableRank > 0;
 
   overlay.innerHTML = `
     <div class="lb-card">
@@ -48,7 +52,7 @@ function render(overlay, rows, me) {
       ${me ? `
         <div class="lb-mystats">
           <div class="lb-mystat"><span>You</span><strong>${escape(me.display_name)}</strong></div>
-          <div class="lb-mystat"><span>Rank</span><strong>${meInTopList ? `#${myRank}` : "—"}</strong></div>
+          <div class="lb-mystat"><span>Rank</span><strong>${myRank ? `#${myRank}` : "—"}</strong></div>
           <div class="lb-mystat"><span>W / L</span><strong>${me.wins} / ${me.losses}</strong></div>
           <div class="lb-mystat"><span>Win %</span><strong>${me.win_pct ?? 0}%</strong></div>
           <div class="lb-mystat"><span>Cards</span><strong>${me.cards_owned ?? 0}</strong></div>
