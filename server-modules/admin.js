@@ -15,6 +15,7 @@
 //
 // Routes:
 //   POST /me/admin/airdrop         body { recipientUserId, pokemonId, quantity?=1 }
+//   GET  /me/admin/users/search    ?q=name|uuid   → { users: [...] }
 //   POST /me/admin/codes/create    body { note? } → { code }
 //   GET  /me/admin/codes                          → { codes: [...] }
 //   POST /me/admin/promote         body { userId }
@@ -192,6 +193,34 @@ function mount(app, supabase, getPokedex) {
       quantityAdded: quantity,
       newTotal: newQty,
     });
+  });
+
+  // GET /me/admin/users/search — fuzzy lookup by display_name (ilike)
+  // or exact UUID match. Powers the airdrop recipient picker so admins
+  // don't have to copy/paste UUIDs.
+  app.get("/me/admin/users/search", requireAdmin(), async (req, res) => {
+    if (!supabase) return res.status(503).json({ error: "DB unavailable." });
+    const q = String(req.query.q || "").trim();
+    if (!q) return res.json({ users: [] });
+    // Looks like a UUID? Try exact match first.
+    const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+    try {
+      if (uuidLike) {
+        const { data } = await supabase.from("users").select("id, display_name").eq("id", q).maybeSingle();
+        return res.json({ users: data ? [data] : [] });
+      }
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, display_name")
+        .ilike("display_name", `%${q}%`)
+        .order("display_name", { ascending: true })
+        .limit(20);
+      if (error) throw error;
+      res.json({ users: data || [] });
+    } catch (err) {
+      console.error("[admin] user search threw:", err);
+      res.status(500).json({ error: `Search failed: ${err.message || "unknown"}` });
+    }
   });
 
   // ===== Admin panel page (served HTML) =============================
@@ -484,6 +513,19 @@ function renderAdminPage({ adminOk, userId }) {
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #06b6d4; color: #0a0f1c; padding: 10px 18px; border-radius: 10px; font-weight: 700; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
   .err { color: #fca5a5; font-size: 13px; }
   .empty { opacity: 0.5; font-style: italic; padding: 12px 0; }
+  .picker { position: relative; }
+  .picker-results { position: absolute; top: 100%; left: 0; right: 0; max-height: 240px; overflow-y: auto; background: #1a2140; border: 1px solid #2a3658; border-radius: 8px; margin-top: 4px; z-index: 10; display: none; }
+  .picker-results.open { display: block; }
+  .picker-row { padding: 8px 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .picker-row:hover, .picker-row.focused { background: rgba(96, 165, 250, 0.15); }
+  .picker-row img { width: 32px; height: 32px; image-rendering: pixelated; }
+  .picker-row .pokeid { opacity: 0.5; font-size: 11px; margin-left: auto; }
+  .selected-chip { background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; font-size: 13px; margin-top: 6px; }
+  .selected-chip img { width: 36px; height: 36px; image-rendering: pixelated; }
+  .selected-chip .clear { margin-left: auto; background: transparent; color: #fca5a5; border: none; padding: 2px 8px; font-weight: 700; cursor: pointer; font-size: 16px; }
+  .qty-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  .qty-row label { font-size: 13px; opacity: 0.85; }
+  .qty-row input[type=number] { background: rgba(255,255,255,0.07); color: inherit; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; padding: 8px 12px; font-size: 14px; width: 80px; }
 </style>
 </head>
 <body>
@@ -495,6 +537,34 @@ function renderAdminPage({ adminOk, userId }) {
       : `Not signed in. <a href="/" style="color:#60a5fa">Go home to sign in</a>.`}</div>
 
 ${adminOk ? `
+<section>
+  <h2>Airdrop a Card</h2>
+  <p class="muted" style="margin-top:-4px;">Grant a specific Pokémon to a specific user. Idempotent — re-runs add to the recipient's current quantity (capped at 999).</p>
+  <div style="margin-bottom: 12px;">
+    <label style="font-size:13px; opacity:0.85;">Recipient (search by name or paste UUID)</label>
+    <div class="picker">
+      <input type="text" id="airdrop-user-input" placeholder="Type a display name or paste a UUID…" autocomplete="off">
+      <div id="airdrop-user-results" class="picker-results"></div>
+    </div>
+    <div id="airdrop-user-selected"></div>
+  </div>
+  <div style="margin-bottom: 12px;">
+    <label style="font-size:13px; opacity:0.85;">Pokémon (search by name or Pokédex #)</label>
+    <div class="picker">
+      <input type="text" id="airdrop-poke-input" placeholder="e.g. ‘pikachu’ or ‘25’…" autocomplete="off">
+      <div id="airdrop-poke-results" class="picker-results"></div>
+    </div>
+    <div id="airdrop-poke-selected"></div>
+  </div>
+  <div class="qty-row">
+    <label for="airdrop-qty">Quantity:</label>
+    <input type="number" id="airdrop-qty" value="1" min="1" max="99">
+    <button id="airdrop-send">🎁 Send Airdrop</button>
+  </div>
+  <div id="airdrop-error" class="err" style="margin-top: 8px;"></div>
+  <div id="airdrop-success" style="margin-top: 8px; color: #6ee7b7; font-size: 13px;"></div>
+</section>
+
 <section>
   <h2>Redemption Codes</h2>
   <div class="row">
@@ -550,6 +620,157 @@ function relTime(iso) {
   if (d < 7)        return d + " day" + (d === 1 ? "" : "s") + " ago";
   return iso.slice(0, 10);
 }
+// ===== Airdrop picker =====
+// Two pickers (user, pokemon) share the same shape: typing into the input
+// debounces a search, the results dropdown shows clickable rows, picking
+// a row commits the selection and hides the dropdown. Selection persists
+// in a local state object the Send button reads.
+const airdropState = { user: null, pokemon: null };
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+function renderUserSelected() {
+  const el = $("#airdrop-user-selected");
+  const u = airdropState.user;
+  if (!u) { el.innerHTML = ""; return; }
+  el.innerHTML = '<div class="selected-chip">'
+    + '<strong>' + escape(u.display_name || '(no name)') + '</strong>'
+    + '<code class="muted" style="font-size:11px;">' + escape(u.id.slice(0, 8)) + '…</code>'
+    + '<button class="clear" title="Clear">×</button></div>';
+  el.querySelector('.clear').addEventListener('click', () => {
+    airdropState.user = null;
+    renderUserSelected();
+    $("#airdrop-user-input").value = "";
+    $("#airdrop-user-input").focus();
+  });
+}
+
+function renderPokeSelected() {
+  const el = $("#airdrop-poke-selected");
+  const p = airdropState.pokemon;
+  if (!p) { el.innerHTML = ""; return; }
+  el.innerHTML = '<div class="selected-chip">'
+    + (p.sprite_front ? '<img src="' + escape(p.sprite_front) + '" alt="">' : '')
+    + '<strong>' + escape(p.name) + '</strong>'
+    + '<code class="muted" style="font-size:11px;">#' + p.id + '</code>'
+    + '<button class="clear" title="Clear">×</button></div>';
+  el.querySelector('.clear').addEventListener('click', () => {
+    airdropState.pokemon = null;
+    renderPokeSelected();
+    $("#airdrop-poke-input").value = "";
+    $("#airdrop-poke-input").focus();
+  });
+}
+
+const searchUsers = debounce(async (q) => {
+  const box = $("#airdrop-user-results");
+  if (!q.trim()) { box.classList.remove('open'); box.innerHTML = ''; return; }
+  try {
+    const r = await fetch('/me/admin/users/search?q=' + encodeURIComponent(q));
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    const { users } = await r.json();
+    if (!users.length) {
+      box.innerHTML = '<div class="picker-row" style="cursor:default; opacity:0.6;">No matches.</div>';
+      box.classList.add('open');
+      return;
+    }
+    box.innerHTML = users.map((u) => '<div class="picker-row" data-id="' + escape(u.id) + '" data-name="' + escape(u.display_name || '') + '">'
+      + '<strong>' + escape(u.display_name || '(no name)') + '</strong>'
+      + '<code class="pokeid">' + escape(u.id.slice(0, 8)) + '…</code></div>').join('');
+    box.classList.add('open');
+    box.querySelectorAll('.picker-row[data-id]').forEach((row) => {
+      row.addEventListener('click', () => {
+        airdropState.user = { id: row.getAttribute('data-id'), display_name: row.getAttribute('data-name') };
+        renderUserSelected();
+        box.classList.remove('open');
+        $("#airdrop-user-input").value = "";
+      });
+    });
+  } catch (err) {
+    box.innerHTML = '<div class="picker-row" style="cursor:default; color:#fca5a5;">' + escape(err.message) + '</div>';
+    box.classList.add('open');
+  }
+}, 200);
+
+const searchPokemon = debounce(async (q) => {
+  const box = $("#airdrop-poke-results");
+  if (!q.trim()) { box.classList.remove('open'); box.innerHTML = ''; return; }
+  try {
+    const r = await fetch('/api/pokedex/search?q=' + encodeURIComponent(q));
+    if (!r.ok) throw new Error(r.statusText);
+    const { results } = await r.json();
+    if (!results.length) {
+      box.innerHTML = '<div class="picker-row" style="cursor:default; opacity:0.6;">No matches.</div>';
+      box.classList.add('open');
+      return;
+    }
+    box.innerHTML = results.slice(0, 30).map((p) => '<div class="picker-row" data-id="' + p.id + '" data-name="' + escape(p.name) + '" data-sprite="' + escape(p.sprite_front || '') + '">'
+      + (p.sprite_front ? '<img src="' + escape(p.sprite_front) + '" alt="">' : '')
+      + '<strong>' + escape(p.name) + '</strong>'
+      + '<span class="pokeid">#' + p.id + '</span></div>').join('');
+    box.classList.add('open');
+    box.querySelectorAll('.picker-row[data-id]').forEach((row) => {
+      row.addEventListener('click', () => {
+        airdropState.pokemon = {
+          id: Number(row.getAttribute('data-id')),
+          name: row.getAttribute('data-name'),
+          sprite_front: row.getAttribute('data-sprite') || null,
+        };
+        renderPokeSelected();
+        box.classList.remove('open');
+        $("#airdrop-poke-input").value = "";
+      });
+    });
+  } catch (err) {
+    box.innerHTML = '<div class="picker-row" style="cursor:default; color:#fca5a5;">' + escape(err.message) + '</div>';
+    box.classList.add('open');
+  }
+}, 200);
+
+$("#airdrop-user-input").addEventListener('input', (e) => searchUsers(e.target.value));
+$("#airdrop-poke-input").addEventListener('input', (e) => searchPokemon(e.target.value));
+
+// Click-outside closes dropdowns.
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#airdrop-user-results') && e.target.id !== 'airdrop-user-input') {
+    $("#airdrop-user-results").classList.remove('open');
+  }
+  if (!e.target.closest('#airdrop-poke-results') && e.target.id !== 'airdrop-poke-input') {
+    $("#airdrop-poke-results").classList.remove('open');
+  }
+});
+
+$("#airdrop-send").addEventListener('click', async () => {
+  const err = $("#airdrop-error"), ok = $("#airdrop-success");
+  err.textContent = ''; ok.textContent = '';
+  if (!airdropState.user) { err.textContent = 'Pick a recipient first.'; return; }
+  if (!airdropState.pokemon) { err.textContent = 'Pick a Pokémon first.'; return; }
+  const quantity = Math.max(1, Math.min(99, Number($("#airdrop-qty").value) || 1));
+  const btn = $("#airdrop-send"); const original = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const r = await fetch('/me/admin/airdrop', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        recipientUserId: airdropState.user.id,
+        pokemonId: airdropState.pokemon.id,
+        quantity,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    ok.textContent = '✓ Sent ' + quantity + '× ' + data.pokemon.name + ' to ' + (data.recipient.display_name || data.recipient.id.slice(0, 8) + '…') + '. Their new total: ' + data.newTotal + '.';
+    toast('Airdropped ' + quantity + '× ' + data.pokemon.name);
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = original;
+  }
+});
+
 async function refreshCodes() {
   $("#codes-error").textContent = "";
   try {

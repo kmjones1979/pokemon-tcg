@@ -18,6 +18,7 @@ function makeStubSupabase({
   pokemon   = { id: 25, name: "Pikachu" },
   existing  = null,             // null = no current owned_cards row
   upsertError = null,
+  userList  = [],               // returned for users-table list queries (search)
 } = {}) {
   const upserts = [];
   return {
@@ -30,6 +31,10 @@ function makeStubSupabase({
           return this;
         },
         eq() { return this; },
+        ilike() { return this; },
+        order() { return this; },
+        limit() { return this; },
+        in() { return this; },
         upsert(row) {
           if (table === "owned_cards") {
             upserts.push(row);
@@ -43,7 +48,14 @@ function makeStubSupabase({
           if (table === "owned_cards") return Promise.resolve({ data: existing, error: null });
           return Promise.resolve({ data: null, error: null });
         },
-        then(resolve) { return Promise.resolve({ data: [], error: null }).then(resolve); },
+        then(resolve) {
+          // List queries — used by /me/admin/users/search to enumerate
+          // by display_name. Returns whatever userList was configured.
+          if (table === "users") {
+            return Promise.resolve({ data: userList, error: null }).then(resolve);
+          }
+          return Promise.resolve({ data: [], error: null }).then(resolve);
+        },
       };
       return builder;
     },
@@ -322,6 +334,55 @@ test("GET /admin returns the panel HTML for admin users", async () => {
   assert.equal(r.status, 200);
   // res.json is null because the response is HTML, not JSON.
   // Verify via a separate raw fetch.
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+// =====================================================================
+// User search (powers the airdrop recipient picker)
+// =====================================================================
+
+test("GET /me/admin/users/search requires admin (403 for non-admin)", async () => {
+  process.env.ADMIN_USER_IDS = "admin-1";
+  const app = bootApp(makeStubSupabase(), { user: { id: "rando" } });
+  const r = await request(app, "GET", "/me/admin/users/search?q=leon");
+  assert.equal(r.status, 403);
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+test("GET /me/admin/users/search returns the matching user for a UUID query", async () => {
+  process.env.ADMIN_USER_IDS = "admin-1";
+  const uuid = "11111111-2222-3333-4444-555555555555";
+  const sb = makeStubSupabase({ recipient: { id: uuid, display_name: "Leon-ug0" } });
+  const app = bootApp(sb, { user: { id: "admin-1" } });
+  const r = await request(app, "GET", "/me/admin/users/search?q=" + uuid);
+  assert.equal(r.status, 200);
+  assert.equal(r.json.users.length, 1);
+  assert.equal(r.json.users[0].display_name, "Leon-ug0");
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+test("GET /me/admin/users/search returns the list for a name query", async () => {
+  process.env.ADMIN_USER_IDS = "admin-1";
+  const sb = makeStubSupabase({
+    userList: [
+      { id: "u1", display_name: "Leon-ug0" },
+      { id: "u2", display_name: "Leon-xyz" },
+    ],
+  });
+  const app = bootApp(sb, { user: { id: "admin-1" } });
+  const r = await request(app, "GET", "/me/admin/users/search?q=leon");
+  assert.equal(r.status, 200);
+  assert.equal(r.json.users.length, 2);
+  assert.equal(r.json.users[0].display_name, "Leon-ug0");
+  process.env.ADMIN_USER_IDS = _origAdminIds || "";
+});
+
+test("GET /me/admin/users/search returns empty array for empty q", async () => {
+  process.env.ADMIN_USER_IDS = "admin-1";
+  const app = bootApp(makeStubSupabase(), { user: { id: "admin-1" } });
+  const r = await request(app, "GET", "/me/admin/users/search?q=");
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.users, []);
   process.env.ADMIN_USER_IDS = _origAdminIds || "";
 });
 
