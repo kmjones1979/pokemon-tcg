@@ -38,6 +38,7 @@ import * as deckBuilder from "./deck-builder.js";
 import * as mp from "./multiplayer.js";
 import * as rewards from "./rewards.js";
 import * as leaderboard from "./leaderboard.js";
+import * as avatars from "./avatars.js";
 import * as achievements from "./achievements.js";
 import * as pokedex from "./pokedex.js";
 import * as story from "./story.js";
@@ -191,6 +192,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch {
     currentUser = null;
   }
+  // Prefetch the avatar roster so renderAccountPanel can paint the
+  // sprite on first frame. Non-blocking — if it fails the panel just
+  // hides the <img>; the picker still works when opened.
+  if (currentUser) {
+    avatars.prefetch().then(() => updateAvatarGlobal()).catch(() => {});
+    // Keep window.__avatarSprite in sync whenever the user picks a new
+    // avatar — surfaces (math header, battle player slot) read this
+    // global instead of importing avatars.js directly.
+    avatars.onSelect(() => updateAvatarGlobal());
+  }
   // Wire story + daily-boss hooks — both hand off to the regular arena.
   story.setHooks({ startBossFight });
   daily.setHooks({ startBossFight: startDailyBossFight });
@@ -292,7 +303,7 @@ function renderMenu() {
   `);
 
   menu.innerHTML = `
-    ${renderAccountPanel()}
+    <div id="account-panel-host">${renderAccountPanel()}</div>
     <div class="menu-stage">
       <h1 class="game-title">Pokémon TCG</h1>
       <div class="menu-tagline">Build a 30-card deck. Wield Legendary signature moves. Out-strategize your rival.</div>
@@ -470,9 +481,14 @@ function renderMenu() {
       $("#arena").classList.remove("hidden");
       document.body.classList.add("in-arena");
       startBGM();
+      // Prefer the player's chosen trainer avatar when signed in — keeps
+      // their identity consistent into the battle. Falls back to the
+      // mascot Pokémon for guests / pre-prefetch.
+      const selfAvatarSprite = window.__avatarSprite || null;
+      const selfAvatarName   = window.__avatarName   || null;
       await playVsCinematic({
-        playerName: TRAINERS[chosen].name,
-        playerSprite: trainerMascotUrl(chosen),
+        playerName: selfAvatarName || (currentUser?.display_name) || TRAINERS[chosen].name,
+        playerSprite: selfAvatarSprite || trainerMascotUrl(chosen),
         playerColor: TYPE_COLORS[TRAINERS[chosen].portrait] || "#888",
         aiName: TRAINERS[aiTrainer].name,
         aiSprite: trainerMascotUrl(aiTrainer),
@@ -1863,6 +1879,21 @@ function escape(s) {
     .replace(/>/g, "&gt;");
 }
 
+// Side-channel for non-ESM modules (math-mode.js, the battle stage)
+// that want the player's current avatar sprite without importing
+// avatars.js. Set after avatars.prefetch() resolves and on every
+// successful avatar selection.
+function updateAvatarGlobal() {
+  const a = avatars.getRosterByKey(avatars.getSelected());
+  window.__avatarSprite = a?.sprite || null;
+  window.__avatarName   = a?.name   || null;
+  // Live-update any visible mini avatars / battle player slot.
+  document.querySelectorAll("[data-avatar-self]").forEach((img) => {
+    if (a?.sprite) { img.src = a.sprite; img.alt = a.name || ""; img.style.display = ""; }
+    else img.style.display = "none";
+  });
+}
+
 // --- Interaction -----------------------------------------------------------
 function onHandCardClick(handIndex) {
   if (state.youAre === "spectator") return;
@@ -2506,8 +2537,16 @@ async function loadPlayerDeck() {
 // --- Account panel ---------------------------------------------------------
 function renderAccountPanel() {
   if (currentUser) {
+    const sel = avatars.getRosterByKey(avatars.getSelected());
     return `
       <div class="account-panel signed-in">
+        <div class="account-avatar-wrap">
+          <img class="account-avatar" id="account-avatar-img"
+               src="${escape(sel?.sprite || "")}"
+               alt="${escape(sel?.name || "Trainer")}"
+               style="${sel ? "" : "display:none"}">
+          <button class="account-avatar-change" id="account-avatar-change-btn">Change avatar</button>
+        </div>
         <div class="account-id">
           <span class="account-greeting">Signed in as</span>
           <strong>${escape(currentUser.display_name)}</strong>
@@ -2564,6 +2603,14 @@ function wireAccountPanel() {
   });
   const $pdx = $("#account-pokedex-btn");
   if ($pdx) $pdx.addEventListener("click", () => pokedex.open());
+  const $av = $("#account-avatar-change-btn");
+  if ($av) $av.addEventListener("click", () => {
+    avatars.open({ onClose: () => {
+      // Re-render the panel so the new selection's sprite swaps in.
+      const $panel = document.getElementById("account-panel-host");
+      if ($panel) { $panel.innerHTML = renderAccountPanel(); wireAccountPanel(); }
+    }});
+  });
 }
 
 function onRegister() {

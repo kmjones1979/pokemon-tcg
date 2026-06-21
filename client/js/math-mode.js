@@ -275,10 +275,12 @@ function renderQuiz(quiz) {
     const total = quiz.questions.length;
     const pct = Math.round((state.idx / total) * 100);
     const streakBadge = STREAK_HYPE[state.streak] || "";
+    const avatarSprite = window.__avatarSprite || null;
     el.innerHTML = `
       <div class="math-quiz">
         <div class="math-quiz-top">
           <button class="math-quit" id="math-quit-btn">←</button>
+          ${avatarSprite ? `<img class="avatar-mini math-avatar" src="${escape(avatarSprite)}" alt="">` : ""}
           <div class="math-progress-track">
             <div class="math-progress-fill" style="width: ${pct}%"></div>
           </div>

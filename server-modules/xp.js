@@ -96,7 +96,7 @@ function mount(app, supabase) {
 
     const { data: cur } = await supabase
       .from("users")
-      .select("trainer_xp, match_win_streak, match_win_streak_best")
+      .select("trainer_xp, match_win_streak, match_win_streak_best, unlocked_avatars")
       .eq("id", req.user.id)
       .maybeSingle();
     const before = cur?.trainer_xp || 0;
@@ -119,14 +119,24 @@ function mount(app, supabase) {
     const after = before + gained + streakBonus;
     const prevLevel = levelFromXp(before);
     const newLevel = levelFromXp(after);
-    await supabase
-      .from("users")
-      .update({
-        trainer_xp: after,
-        match_win_streak: newStreak,
-        match_win_streak_best: bestStreak,
-      })
-      .eq("id", req.user.id);
+
+    // Avatar unlocks — find any avatar tiers the player just crossed.
+    // Returned in the response so the client can show a celebration
+    // toast; persisted into unlocked_avatars on the user row.
+    const { newlyUnlocked, ROSTER: AVATAR_ROSTER } = require("./avatars");
+    const newAvatars = newlyUnlocked(prevLevel, newLevel);
+    const existingUnlocked = Array.isArray(cur?.unlocked_avatars) ? cur.unlocked_avatars : [];
+    const nextUnlocked = newAvatars.length
+      ? [...new Set([...existingUnlocked, ...newAvatars])]
+      : existingUnlocked;
+
+    const updatePayload = {
+      trainer_xp: after,
+      match_win_streak: newStreak,
+      match_win_streak_best: bestStreak,
+    };
+    if (newAvatars.length) updatePayload.unlocked_avatars = nextUnlocked;
+    await supabase.from("users").update(updatePayload).eq("id", req.user.id);
 
     res.json({
       gained: gained + streakBonus,
@@ -137,6 +147,10 @@ function mount(app, supabase) {
       bestStreak,
       streakBonus,
       streakMilestone,
+      newAvatars: newAvatars.map((key) => {
+        const a = AVATAR_ROSTER.find((r) => r.key === key);
+        return a ? { key: a.key, name: a.name, sprite: a.sprite, levelRequired: a.levelRequired } : { key };
+      }),
     });
   });
 }

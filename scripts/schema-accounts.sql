@@ -114,6 +114,13 @@ alter table users add column if not exists champion_wins text[] default '{}';
 -- last 14 days by the app layer to keep the row small.
 alter table users add column if not exists quest_progress jsonb default '{}'::jsonb;
 
+-- Trainer avatar (added 2026-06-22). Pixel-sprite character that
+-- represents the player across the leaderboard, profile, battle
+-- screen, and Math Mode header. New avatars unlock every 10 trainer
+-- levels — see server-modules/avatars.js for the roster.
+alter table users add column if not exists selected_avatar text default 'red';
+alter table users add column if not exists unlocked_avatars text[] default '{red,leaf}';
+
 -- Player-to-player trading (Wave 25). One row per OPEN offer; closed
 -- offers stay around as history but with status != 'open'. Atomic
 -- accept-and-swap is gated by a SELECT FOR UPDATE in the route handler.

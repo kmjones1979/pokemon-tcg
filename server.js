@@ -36,6 +36,7 @@ const deckShare = require("./server-modules/deck-share");
 const friendChallenge = require("./server-modules/friend-challenge");
 const mastery = require("./server-modules/mastery");
 const winstreak = require("./server-modules/winstreak");
+const avatars = require("./server-modules/avatars");
 
 const app = express();
 // Vercel + most PaaS hosts proxy requests. Trust the proxy headers so
@@ -214,6 +215,7 @@ if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
   friendChallenge.mount(app, authSupabase);
   mastery.mount(app, authSupabase);
   winstreak.mount(app, authSupabase, ensurePokedex);
+  avatars.mount(app, authSupabase);
 
   // Match history for the signed-in user.
   app.get("/me/matches", async (req, res) => {
@@ -342,6 +344,33 @@ app.get("/api/leaderboard", async (req, res) => {
     .order("trainer_level", { ascending: false })
     .limit(limit);
   if (error) return res.status(500).json({ error: error.message });
+
+  // Enrich rows with selected_avatar from the users table — user_stats
+  // is a view that doesn't carry the avatar column. One batched lookup
+  // for all visible user_ids; cheap relative to the leaderboard query.
+  const rows = data || [];
+  if (rows.length) {
+    try {
+      const ids = rows.map((r) => r.user_id);
+      const { data: avatarRows } = await authSupabase
+        .from("users")
+        .select("id, selected_avatar")
+        .in("id", ids);
+      const avatarByUser = new Map((avatarRows || []).map((r) => [r.id, r.selected_avatar]));
+      const { getAvatar } = require("./server-modules/avatars");
+      for (const r of rows) {
+        const key = avatarByUser.get(r.user_id) || "red";
+        const a = getAvatar(key) || getAvatar("red");
+        r.selected_avatar = key;
+        r.avatar_sprite = a?.sprite || null;
+        r.avatar_name   = a?.name   || null;
+      }
+    } catch (err) {
+      console.warn("[leaderboard] avatar enrich failed:", err.message);
+      for (const r of rows) r.selected_avatar = "red";
+    }
+  }
+
   let me = null, myRank = null;
   if (req.user) {
     const { data: mine } = await authSupabase

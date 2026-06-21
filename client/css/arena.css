@@ -4623,3 +4623,123 @@ html { overscroll-behavior: none; }
   margin-top: 4px;
 }
 .share-sheet-opt.share-cancel:hover { background: #f3f4f6; transform: none; }
+
+/* ===== Trainer Avatar picker ============================================ */
+.avatar-overlay {
+  position: fixed; inset: 0;
+  background: rgba(8, 9, 18, 0.86);
+  z-index: 2400;
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+  padding: 16px;
+  overflow-y: auto;
+}
+.avatar-overlay.hidden { display: none; }
+.avatar-card {
+  width: 92vw;
+  max-width: 760px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #181b35 0%, #0c0d1a 100%);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 18px 22px;
+  color: var(--ink);
+}
+.avatar-loading, .avatar-error { padding: 24px; text-align: center; color: var(--muted); }
+.avatar-close-btn {
+  display: block; margin: 14px auto 0; padding: 6px 14px;
+  background: var(--bg-mid); color: var(--ink);
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; cursor: pointer;
+}
+.avatar-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+}
+.avatar-title {
+  font-family: "Press Start 2P", monospace; font-size: 14px;
+  background: linear-gradient(90deg, #f7d02c, #ee8130, #f95587);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.avatar-x {
+  background: transparent; color: var(--muted);
+  border: 1px solid rgba(255,255,255,0.12);
+  width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px;
+}
+.avatar-sub {
+  font-size: 13px; color: var(--muted); margin-bottom: 14px;
+}
+.avatar-grid { display: flex; flex-direction: column; gap: 14px; }
+.avatar-tier {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.avatar-tier.is-locked-tier { opacity: 0.55; }
+.avatar-tier-label {
+  font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px; font-weight: 700;
+}
+.avatar-tier-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.avatar-cell {
+  background: rgba(255,255,255,0.05);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 10px 8px 8px;
+  text-align: center;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: transform 0.1s, border-color 0.1s, background 0.1s;
+}
+.avatar-cell:hover.is-unlocked { transform: translateY(-2px); background: rgba(255,255,255,0.09); }
+.avatar-cell.is-selected { border-color: #f7d02c; background: rgba(247, 208, 44, 0.1); }
+.avatar-cell.is-locked { cursor: not-allowed; filter: grayscale(0.85) brightness(0.6); }
+.avatar-img {
+  width: 72px; height: 72px;
+  image-rendering: pixelated;
+  display: block; margin: 0 auto;
+}
+.avatar-cell-name {
+  font-size: 13px; font-weight: 700; margin-top: 4px;
+}
+.avatar-cell-tag {
+  font-size: 11px; color: var(--muted); margin-top: 2px;
+}
+.avatar-cell-tag.is-on { color: #f7d02c; font-weight: 700; }
+
+/* Small avatar badge for use in leaderboard rows / battle / math header. */
+.avatar-mini {
+  width: 32px; height: 32px;
+  image-rendering: pixelated;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  vertical-align: middle;
+  object-fit: contain;
+}
+
+/* Account drawer avatar: bigger circle with a "Change" button below. */
+.account-avatar-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px; margin: 10px 0;
+}
+.account-avatar {
+  width: 96px; height: 96px;
+  image-rendering: pixelated;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+  border: 2px solid rgba(255,255,255,0.12);
+  padding: 6px;
+  object-fit: contain;
+}
+.account-avatar-change {
+  background: rgba(255,255,255,0.06);
+  color: var(--ink);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.account-avatar-change:hover { background: rgba(255,255,255,0.1); }

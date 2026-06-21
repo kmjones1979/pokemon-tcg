@@ -1,6 +1,8 @@
 // Leaderboard overlay. Top players by wins, with the current user's row
 // highlighted (if signed in) and their rank shown.
 
+import * as avatars from "./avatars.js";
+
 let _onClose = null;
 
 export async function open({ onClose } = {}) {
@@ -75,7 +77,10 @@ function render(overlay, rows, me, serverRank) {
           : rows.map((r, i) => `
               <div class="lb-row ${me && r.user_id === me.user_id ? "is-me" : ""}">
                 <span class="lb-rank">#${i + 1}</span>
-                <span class="lb-name">${escape(r.display_name)}</span>
+                <span class="lb-name">
+                  ${r.avatar_sprite ? `<img class="avatar-mini" src="${escape(r.avatar_sprite)}" alt="${escape(r.avatar_name || "")}" loading="lazy"> ` : ""}
+                  ${escape(r.display_name)}
+                </span>
                 <span class="lb-cell"><span class="lb-level-chip">L${r.trainer_level || 1}</span></span>
                 <span class="lb-cell">${r.wins}</span>
                 <span class="lb-cell">${r.losses}</span>
