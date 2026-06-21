@@ -323,17 +323,19 @@ function renderMenu() {
       ` : ""}
       <div id="daily-streak-banner"></div>
       <div id="daily-quests-panel"></div>
-      <div class="active-trainer-banner" id="active-trainer-banner" style="--accent:${TYPE_COLORS[activeTrainer.portrait] || '#888'}">
-        <div class="active-trainer-portrait" style="background:linear-gradient(160deg, ${TYPE_COLORS[activeTrainer.portrait] || '#888'}, #0c0d1a)">
-          ${trainerMascotUrl(activeTrainer.id) ? `<img src="${trainerMascotUrl(activeTrainer.id)}" alt="${escape(activeTrainer.name)}">` : ""}
-        </div>
-        <div class="active-trainer-info">
-          <div class="active-trainer-label">Playing as</div>
-          <div class="active-trainer-name">${escape(activeTrainer.name)}</div>
-          <div class="active-trainer-bio">${escape(activeTrainer.bio)}</div>
-        </div>
+      <div class="active-trainer-stage" id="active-trainer-banner">
+        <div class="active-trainer-label">Playing as</div>
+        ${avatars.renderTrainerCard({
+          key: activeTrainer.id,
+          name: activeTrainer.name,
+          levelRequired: activeTrainer.levelRequired,
+          portrait: activeTrainer.portrait,
+          bio: activeTrainer.bio,
+          sprite: `https://play.pokemonshowdown.com/sprites/trainers/${activeTrainer.sprite}.png`,
+          game: "",
+        }, { selected: true, locked: false, clickable: false })}
         <button class="active-trainer-change" id="active-trainer-change-btn"
-                ${currentUser ? "" : "disabled title='Sign in to switch trainers'"}>Change</button>
+                ${currentUser ? "" : "disabled title='Sign in to switch trainers'"}>Change Trainer</button>
       </div>
       <div class="section-label">Solo vs. AI difficulty</div>
       <div class="difficulty-grid">${difficultyEls.join("")}</div>

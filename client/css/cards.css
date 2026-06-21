@@ -703,3 +703,132 @@ body.dragging-attack .trainer-block.ai {
          filter: brightness(1.8) drop-shadow(0 0 18px #fbbf24); }
   100% { transform: scale(1);    filter: brightness(1) drop-shadow(0 0 0 transparent); }
 }
+
+/* ===== Trainer cards =====================================================
+ * Same .card base as Pokémon cards — they get the holographic sheen, the
+ * hover lift, and the type-tinted gradient for free. These rules tune
+ * the layout for trainer-specific content: no HP bar, level pill
+ * instead of energy cost, ability bio in the footer instead of attack.
+ */
+.card.card-trainer {
+  width: 150px;
+  aspect-ratio: 5 / 7;
+  text-align: left;
+  font-family: "Inter", system-ui, sans-serif;
+  /* Buttons need an explicit reset; the .card class is normally a div. */
+  border: none;
+  padding: 4px;
+  appearance: none;
+}
+.card.card-trainer:disabled,
+.card.card-trainer.is-locked {
+  cursor: not-allowed;
+  filter: grayscale(0.85) brightness(0.55);
+}
+.card.card-trainer.is-locked:hover {
+  transform: none;
+  filter: grayscale(0.85) brightness(0.55);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+}
+.card.card-trainer.is-selected {
+  box-shadow:
+    0 0 0 3px #f7d02c,
+    0 0 24px var(--type-1, #888),
+    0 12px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Level requirement pill (top-left, replaces .cost-gem's energy number). */
+.card-trainer .trainer-level-gem {
+  background: linear-gradient(160deg, #1a2140, #0a0f1c);
+  color: #f7d02c;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  min-width: 0;
+}
+
+/* Sprite area — slightly more compressed than Pokémon cards so the
+ * ability bio has room without pushing the card taller. */
+.card-trainer .card-art-trainer {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 45%, rgba(255,255,255,0.10), transparent 70%);
+  overflow: hidden;
+}
+.card-trainer .card-art-trainer img {
+  width: 88px;
+  height: 88px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+}
+
+/* Footer holds name + ability bio. Use column layout so the bio wraps
+ * cleanly under the name instead of competing for the same row that
+ * the attack number lives on in Pokémon cards. */
+.card-trainer .card-footer-trainer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px 8px;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.5));
+}
+.card-trainer .card-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+.card-trainer .card-ability-bio {
+  font-size: 10px;
+  line-height: 1.3;
+  color: rgba(255,255,255,0.82);
+  min-height: 26px;
+}
+
+/* "Selected" pill — sits across the bottom of the card, gold-on-dark. */
+.card-trainer .card-trainer-selected-pill {
+  position: absolute;
+  bottom: 6px; left: 6px; right: 6px;
+  background: linear-gradient(135deg, #f7d02c, #e0a800);
+  color: #0a0f1c;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 3px 0;
+  border-radius: 6px;
+  text-transform: uppercase;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Lock overlay — only shown when .card-trainer.is-locked. */
+.card-trainer .card-trainer-lock {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 9, 18, 0.45);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 4;
+  pointer-events: none;
+}
+.card-trainer .card-trainer-lock .lock-icon { font-size: 28px; }
+.card-trainer .card-trainer-lock .lock-label {
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+  color: #f8d030;
+  margin-top: 4px;
+}
+
+/* The picker grid — center the row, wrap to multiple columns on bigger
+ * screens. Phones get 2-up, tablets 3, desktops 4-5. */
+.trainer-card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+@media (min-width: 700px) {
+  .card.card-trainer { width: 160px; }
+}

@@ -1,8 +1,9 @@
 // Trainer-avatar picker overlay.
 //
 // Opens from the account drawer's "Change avatar" button. Shows the
-// full roster as a grid; unlocked avatars are tappable, locked ones
-// display their level requirement so the player can see what's next.
+// full roster as a grid of trainer cards styled to match the in-game
+// Pokémon cards (same .card class — holographic sheen, type-tinted
+// gradient, hover lift). Locked tiers grey out with a lock badge.
 //
 // Public surface:
 //   open({ onClose })       — show the picker
@@ -12,6 +13,21 @@
 //                             battle screen, math header) so they can
 //                             resolve sprite/name without an extra fetch
 //   prefetch()              — kick off the cache fill without rendering
+//   renderTrainerCard(t)    — DOM helper: produces a TCG-style card for
+//                             one trainer. Exported so the main menu's
+//                             active-trainer banner can reuse the same
+//                             visual treatment.
+
+import { TYPE_COLORS } from "./type-chart.js";
+
+// Tiny glyph map for the type badge — kept inline so the picker has
+// no extra import surface. Mirrors the one in cards.js.
+const TYPE_GLYPH = {
+  normal: "★", fire: "🔥", water: "💧", electric: "⚡", grass: "🌿",
+  ice: "❄", fighting: "✊", poison: "☠", ground: "⛰", flying: "🕊",
+  psychic: "🌀", bug: "🐛", rock: "🪨", ghost: "👻", dragon: "🐉",
+  dark: "🌒", steel: "⚙", fairy: "✨",
+};
 
 let _onClose = null;
 let _cache = null;   // { selected, unlocked, level, roster }
@@ -97,6 +113,47 @@ export function close() {
   _onClose = null;
 }
 
+// Produce a TCG-style trainer card. Reuses the .card / .card-inner /
+// .card-art / .card-footer markup from cards.js so we inherit the
+// holographic sheen, hover lift, and type-tinted gradient for free.
+//
+// opts:
+//   selected — show the "✓ Selected" footer pill
+//   locked   — render dimmed with a lock overlay (also disables hover)
+//   clickable — wrap in a <button> so it's keyboard/click-focusable
+export function renderTrainerCard(t, { selected = false, locked = false, clickable = false } = {}) {
+  const type = t.portrait || "normal";
+  const color = TYPE_COLORS[type] || "#888";
+  const tag = clickable ? "button" : "div";
+  const html = `
+    <${tag} class="card card-trainer type-${escape(type)} ${selected ? "is-selected" : ""} ${locked ? "is-locked" : ""}"
+            style="--type-1:${color}; --type-2:${color}"
+            data-key="${escape(t.key)}"
+            ${clickable && locked ? "disabled" : ""}
+            ${clickable ? `title="${escape(t.name)} — ${escape(t.game || "")}"` : ""}>
+      <div class="card-inner">
+        <div class="card-sheen"></div>
+        <header class="card-header">
+          <div class="cost-gem trainer-level-gem" title="Unlocks at trainer level ${t.levelRequired}">L${t.levelRequired}</div>
+          <div class="card-types">
+            <span class="type-badge" style="background:${color}" title="${escape(type)}">${TYPE_GLYPH[type] || "•"}</span>
+          </div>
+        </header>
+        <div class="card-art card-art-trainer">
+          <img src="${escape(t.sprite)}" alt="${escape(t.name)}" loading="lazy" draggable="false">
+        </div>
+        <footer class="card-footer card-footer-trainer">
+          <div class="card-name">${escape(t.name)}</div>
+          ${t.bio ? `<div class="card-ability-bio">${escape(t.bio)}</div>` : ""}
+        </footer>
+        ${selected ? `<div class="card-trainer-selected-pill">✓ Selected</div>` : ""}
+        ${locked  ? `<div class="card-trainer-lock"><div class="lock-icon">🔒</div><div class="lock-label">L${t.levelRequired}</div></div>` : ""}
+      </div>
+    </${tag}>
+  `;
+  return html;
+}
+
 function render(overlay) {
   const { selected, level, roster } = _cache;
   // Group roster by levelRequired so tiers render as labeled sections.
@@ -121,20 +178,12 @@ function render(overlay) {
           return `
             <div class="avatar-tier ${anyUnlocked ? "" : "is-locked-tier"}">
               <div class="avatar-tier-label">Level ${tier}${tier === 1 ? " · Starter" : ""}</div>
-              <div class="avatar-tier-row">
-                ${all.map((a) => `
-                  <button class="avatar-cell ${a.unlocked ? "is-unlocked" : "is-locked"} ${selected === a.key ? "is-selected" : ""}"
-                          data-key="${escape(a.key)}"
-                          ${a.unlocked ? "" : "disabled"}
-                          title="${escape(a.name)} — ${escape(a.game)}">
-                    <img class="avatar-img" src="${escape(a.sprite)}" alt="${escape(a.name)}" loading="lazy">
-                    <div class="avatar-cell-name">${escape(a.name)}</div>
-                    ${a.bio ? `<div class="avatar-cell-bio">${escape(a.bio)}</div>` : ""}
-                    ${a.unlocked
-                      ? (selected === a.key ? `<div class="avatar-cell-tag is-on">✓ Selected</div>` : `<div class="avatar-cell-tag">Tap to pick</div>`)
-                      : `<div class="avatar-cell-tag">🔒 L${a.levelRequired}</div>`}
-                  </button>
-                `).join("")}
+              <div class="avatar-tier-row trainer-card-row">
+                ${all.map((a) => renderTrainerCard(a, {
+                  selected: selected === a.key,
+                  locked: !a.unlocked,
+                  clickable: true,
+                })).join("")}
               </div>
             </div>
           `;
@@ -144,19 +193,26 @@ function render(overlay) {
   `;
 
   overlay.querySelector(".avatar-x")?.addEventListener("click", close);
-  overlay.querySelectorAll(".avatar-cell.is-unlocked").forEach((btn) => {
+  overlay.querySelectorAll(".card-trainer:not(.is-locked)").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const key = btn.getAttribute("data-key");
       if (key === _cache.selected) return;
       // Optimistic UI — flip selected immediately, roll back on error.
       const prev = _cache.selected;
       _cache.selected = key;
-      overlay.querySelectorAll(".avatar-cell").forEach((c) => {
-        c.classList.toggle("is-selected", c.getAttribute("data-key") === key);
-        const tag = c.querySelector(".avatar-cell-tag");
-        if (!c.classList.contains("is-locked") && tag) {
-          tag.textContent = c.getAttribute("data-key") === key ? "✓ Selected" : "Tap to pick";
-          tag.classList.toggle("is-on", c.getAttribute("data-key") === key);
+      overlay.querySelectorAll(".card-trainer").forEach((c) => {
+        const isSel = c.getAttribute("data-key") === key;
+        c.classList.toggle("is-selected", isSel);
+        // Add or remove the "✓ Selected" pill to match new state.
+        const inner = c.querySelector(".card-inner");
+        const existingPill = inner?.querySelector(".card-trainer-selected-pill");
+        if (isSel && !existingPill && !c.classList.contains("is-locked")) {
+          const pill = document.createElement("div");
+          pill.className = "card-trainer-selected-pill";
+          pill.textContent = "✓ Selected";
+          inner?.appendChild(pill);
+        } else if (!isSel && existingPill) {
+          existingPill.remove();
         }
       });
       try {

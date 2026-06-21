@@ -4747,49 +4747,42 @@ html { overscroll-behavior: none; }
 }
 .account-avatar-change:hover { background: rgba(255,255,255,0.1); }
 
-/* ===== Active-trainer banner (replaces the per-match trainer grid) ===== */
-.active-trainer-banner {
-  display: flex; align-items: center; gap: 14px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-left: 4px solid var(--accent, #888);
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin: 12px 0 10px;
+/* ===== Active-trainer stage (TCG-style card display on main menu) =====
+ * Shows the player's current trainer as a single Pokémon-card-style
+ * tile, centered, with a "Change Trainer" button below that opens
+ * the avatar picker. Same visual language as the picker grid.
+ */
+.active-trainer-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 16px;
 }
-.active-trainer-portrait {
-  width: 64px; height: 64px;
-  border-radius: 12px;
-  flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  overflow: hidden;
+.active-trainer-stage .active-trainer-label {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
 }
-.active-trainer-portrait img {
-  width: 56px; height: 56px;
-  image-rendering: pixelated;
-  object-fit: contain;
-}
-.active-trainer-info { flex: 1; min-width: 0; }
-.active-trainer-label {
-  font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
-  color: var(--muted); font-weight: 700;
-}
-.active-trainer-name {
-  font-size: 18px; font-weight: 800; color: var(--ink); margin: 2px 0;
-}
-.active-trainer-bio {
-  font-size: 12px; color: var(--muted); line-height: 1.3;
+/* The card inside the stage isn't clickable — it's just a display —
+ * so suppress hover lift. The "Change Trainer" button is the
+ * affordance. */
+.active-trainer-stage .card.card-trainer { cursor: default; }
+.active-trainer-stage .card.card-trainer:hover {
+  transform: none;
+  filter: none;
 }
 .active-trainer-change {
   background: rgba(255,255,255,0.08);
   color: var(--ink);
   border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 8px;
-  padding: 7px 14px;
+  border-radius: 10px;
+  padding: 8px 18px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  flex-shrink: 0;
 }
 .active-trainer-change:hover { background: rgba(255,255,255,0.14); }
 .active-trainer-change:disabled { opacity: 0.5; cursor: not-allowed; }
