@@ -4746,3 +4746,50 @@ html { overscroll-behavior: none; }
   cursor: pointer;
 }
 .account-avatar-change:hover { background: rgba(255,255,255,0.1); }
+
+/* ===== Active-trainer banner (replaces the per-match trainer grid) ===== */
+.active-trainer-banner {
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-left: 4px solid var(--accent, #888);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 12px 0 10px;
+}
+.active-trainer-portrait {
+  width: 64px; height: 64px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.active-trainer-portrait img {
+  width: 56px; height: 56px;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+.active-trainer-info { flex: 1; min-width: 0; }
+.active-trainer-label {
+  font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+}
+.active-trainer-name {
+  font-size: 18px; font-weight: 800; color: var(--ink); margin: 2px 0;
+}
+.active-trainer-bio {
+  font-size: 12px; color: var(--muted); line-height: 1.3;
+}
+.active-trainer-change {
+  background: rgba(255,255,255,0.08);
+  color: var(--ink);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.active-trainer-change:hover { background: rgba(255,255,255,0.14); }
+.active-trainer-change:disabled { opacity: 0.5; cursor: not-allowed; }

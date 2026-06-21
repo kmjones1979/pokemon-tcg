@@ -196,7 +196,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   // sprite on first frame. Non-blocking — if it fails the panel just
   // hides the <img>; the picker still works when opened.
   if (currentUser) {
-    avatars.prefetch().then(() => updateAvatarGlobal()).catch(() => {});
+    avatars.prefetch().then(() => {
+      updateAvatarGlobal();
+      // If the menu painted before the cache populated, re-render so
+      // the active-trainer banner upgrades from the L1 fallback to
+      // the real selection. Cheap — DOM is small.
+      if (document.getElementById("active-trainer-banner")) renderMenu();
+    }).catch(() => {});
     // Keep window.__avatarSprite in sync whenever the user picks a new
     // avatar — surfaces (math header, battle player slot) read this
     // global instead of importing avatars.js directly.
@@ -277,27 +283,17 @@ function renderMenu() {
   menu.classList.remove("hidden");
   document.body.classList.remove("in-arena");
 
-  // Show only the trainers this player has unlocked. The 6 Gen-1 gym
-  // leaders + Red & Leaf are L1 (available to everyone); new pairs
-  // unlock every 10 trainer levels and join the grid once earned.
-  // Falls back to the L1 set when the avatars cache isn't ready yet.
-  const unlockedSet = new Set(
-    (avatars.getCache()?.unlocked) || Object.values(TRAINERS).filter((t) => t.levelRequired === 1).map((t) => t.id),
-  );
-  const trainerEls = Object.values(TRAINERS)
-    .filter((t) => unlockedSet.has(t.id))
-    .map((t) => {
-      const c = TYPE_COLORS[t.portrait] || "#888";
-      const art = trainerMascotUrl(t.id);
-      return `
-      <button class="trainer-card" data-trainer="${t.id}" style="--accent:${c}">
-        <div class="trainer-portrait" style="background:linear-gradient(160deg, ${c}, #0c0d1a)">
-          ${art ? `<img src="${art}" alt="${escape(t.name)}" loading="lazy">` : ""}
-        </div>
-        <div class="trainer-name">${t.name}</div>
-        <div class="trainer-bio">${t.bio}</div>
-      </button>`;
-    });
+  // The trainer you battle as comes from your selected avatar — set
+  // it from the account drawer's "Change avatar" picker, not here.
+  // The picker is the single source of truth so we don't have two
+  // overlapping pickers showing different worlds. Default to the
+  // first L1 trainer (Brock) for guests / before the avatars cache
+  // is populated.
+  const selectedKey = avatars.getSelected()
+    || currentUser?.trainer_ability
+    || Object.keys(TRAINERS).find((k) => TRAINERS[k].levelRequired === 1);
+  const activeTrainer = TRAINERS[selectedKey] || Object.values(TRAINERS)[0];
+  chosenTrainer = activeTrainer.id;
 
   const difficulties = [
     { id: "easy",   label: "Easy",   bio: "AI plays the cheapest card, sometimes passes, attacks randomly." },
@@ -327,16 +323,27 @@ function renderMenu() {
       ` : ""}
       <div id="daily-streak-banner"></div>
       <div id="daily-quests-panel"></div>
-      <div class="trainer-grid">${trainerEls.join("")}</div>
+      <div class="active-trainer-banner" id="active-trainer-banner" style="--accent:${TYPE_COLORS[activeTrainer.portrait] || '#888'}">
+        <div class="active-trainer-portrait" style="background:linear-gradient(160deg, ${TYPE_COLORS[activeTrainer.portrait] || '#888'}, #0c0d1a)">
+          ${trainerMascotUrl(activeTrainer.id) ? `<img src="${trainerMascotUrl(activeTrainer.id)}" alt="${escape(activeTrainer.name)}">` : ""}
+        </div>
+        <div class="active-trainer-info">
+          <div class="active-trainer-label">Playing as</div>
+          <div class="active-trainer-name">${escape(activeTrainer.name)}</div>
+          <div class="active-trainer-bio">${escape(activeTrainer.bio)}</div>
+        </div>
+        <button class="active-trainer-change" id="active-trainer-change-btn"
+                ${currentUser ? "" : "disabled title='Sign in to switch trainers'"}>Change</button>
+      </div>
       <div class="section-label">Solo vs. AI difficulty</div>
       <div class="difficulty-grid">${difficultyEls.join("")}</div>
       <div class="menu-foot">
-        <button class="start-btn" id="start-btn" disabled>Choose a trainer to begin</button>
+        <button class="start-btn" id="start-btn">Battle as ${escape(activeTrainer.name)} ▸</button>
         <div class="play-modes">
-          <button class="mode-btn" id="mode-mp-match" disabled>Find online match</button>
-          <button class="mode-btn" id="mode-mp-friend" disabled>Play vs friend (code)</button>
-          <button class="mode-btn" id="mode-champion" disabled>Fight a Champion</button>
-          <button class="mode-btn story-launch" id="mode-story" disabled title="${currentUser ? "Pick a trainer to begin Story Mode" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
+          <button class="mode-btn" id="mode-mp-match">Find online match</button>
+          <button class="mode-btn" id="mode-mp-friend">Play vs friend (code)</button>
+          <button class="mode-btn" id="mode-champion">Fight a Champion</button>
+          <button class="mode-btn story-launch" id="mode-story" ${currentUser ? "" : "disabled"} title="${currentUser ? "Begin a Story Mode chapter" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
           <button class="mode-btn" id="mode-trade" ${currentUser ? "" : "disabled"} title="${currentUser ? "Trade cards with other trainers" : "Sign in to trade"}">🔄 Trade Cards</button>
           <button class="mode-btn puzzle-launch" id="mode-puzzle" title="Today's chess-style card puzzle">🧩 Daily Puzzle</button>
           <button class="mode-btn" id="mode-reading" title="Read along with Pokémon friends">📚 Story Time</button>
@@ -352,50 +359,26 @@ function renderMenu() {
   `;
   wireAccountPanel();
 
-  let chosen = chosenTrainer;
-  if (chosen) {
-    $$(".trainer-card", menu).forEach((el) => {
-      if (el.dataset.trainer === chosen) el.classList.add("selected");
-    });
-    const btn = $("#start-btn");
-    btn.disabled = false;
-    btn.textContent = `Battle as ${TRAINERS[chosen].name} ▸`;
-    $("#mode-mp-match").disabled = false;
-    $("#mode-mp-friend").disabled = false;
-    $("#mode-champion").disabled = false;
-    if (currentUser) $("#mode-story").disabled = false;
-  }
-  $$(".trainer-card", menu).forEach((el) => {
-    el.addEventListener("click", () => {
-      $$(".trainer-card", menu).forEach((b) => b.classList.remove("selected"));
-      el.classList.add("selected");
-      chosen = el.dataset.trainer;
-      chosenTrainer = chosen;
-      // The trainer you battle as IS your avatar — keep them in sync.
-      // Fire-and-forget; on auth failures the picker still works and
-      // the next sign-in will resync.
-      if (currentUser) avatars.selectSilently(chosen);
-      const btn = $("#start-btn");
-      btn.disabled = false;
-      btn.textContent = `Battle as ${TRAINERS[chosen].name} ▸`;
-      $("#mode-mp-match").disabled = false;
-      $("#mode-mp-friend").disabled = false;
-      $("#mode-champion").disabled = false;
-      if (currentUser) $("#mode-story").disabled = false;
+  const chosen = chosenTrainer;  // set above from avatars.getSelected()
 
-      // QR auto-join: if we landed here via ?code=XXXXX, jump straight to
-      // the friend-join flow now that a trainer is picked.
-      if (window.__incomingRoomCode) {
-        const code = window.__incomingRoomCode;
-        delete window.__incomingRoomCode;
-        // history clean-up so a refresh doesn't re-trigger.
-        history.replaceState({}, "", location.pathname);
-        startMultiplayer({ mode: "friend" }).then(() => {
-          document.body.dispatchEvent(new CustomEvent("mpFriendJoin", { detail: { code } }));
-        });
-      }
-    });
+  // "Change" on the active-trainer banner opens the avatar picker.
+  // After it closes we re-render the menu so the banner reflects the
+  // new pick. The picker handles persistence + locked-tier display.
+  $("#active-trainer-change-btn")?.addEventListener("click", () => {
+    avatars.open({ onClose: () => renderMenu() });
   });
+
+  // QR auto-join: if we landed here via ?code=XXXXX, jump straight to
+  // the friend-join flow as soon as the menu paints — the trainer is
+  // already implicitly chosen via the avatar system.
+  if (window.__incomingRoomCode) {
+    const code = window.__incomingRoomCode;
+    delete window.__incomingRoomCode;
+    history.replaceState({}, "", location.pathname);
+    startMultiplayer({ mode: "friend" }).then(() => {
+      document.body.dispatchEvent(new CustomEvent("mpFriendJoin", { detail: { code } }));
+    });
+  }
 
   $$(".diff-card", menu).forEach((el) => {
     el.addEventListener("click", () => {
