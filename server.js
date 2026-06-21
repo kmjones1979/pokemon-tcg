@@ -345,6 +345,15 @@ app.get("/api/leaderboard", async (req, res) => {
     .limit(limit);
   if (error) return res.status(500).json({ error: error.message });
 
+  // The user_stats view computes trainer_level with a stale formula
+  // (e.g. capped at L10) that doesn't match server-modules/xp.js's
+  // curve. Recompute from trainer_xp here so the displayed level is
+  // always consistent with what /me/xp returns.
+  const { levelFromXp } = require("./server-modules/xp");
+  for (const r of data || []) {
+    r.trainer_level = levelFromXp(r.trainer_xp || 0);
+  }
+
   // Enrich rows with selected_avatar from the users table — user_stats
   // is a view that doesn't carry the avatar column. One batched lookup
   // for all visible user_ids; cheap relative to the leaderboard query.
@@ -379,6 +388,9 @@ app.get("/api/leaderboard", async (req, res) => {
       .eq("user_id", req.user.id)
       .maybeSingle();
     me = mine || null;
+    // Same correction as the row loop above — keep `me.trainer_level`
+    // consistent with the xp.js curve, not whatever the view returns.
+    if (me) me.trainer_level = levelFromXp(me.trainer_xp || 0);
     // Compute global rank — count players strictly ahead of me on our
     // compound key. Covers (wins, win_pct) lexicographically; remaining
     // ties land in the same rank bucket which is acceptable for display.

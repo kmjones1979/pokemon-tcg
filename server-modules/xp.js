@@ -94,14 +94,34 @@ function mount(app, supabase) {
     gained += Math.max(0, Math.min(20, Number(kos) || 0)) * 20;
     gained += Math.max(0, Math.min(20, Number(crits) || 0)) * 10;
 
+    // Primary read — trainer_xp + streak MUST succeed. If we add a
+    // new optional column to this select and the column hasn't been
+    // migrated yet, the whole query errors, we read before=0, and
+    // the subsequent update wipes the player's XP. So keep this
+    // tight and pull anything optional in a separate try/catch.
     const { data: cur } = await supabase
       .from("users")
-      .select("trainer_xp, match_win_streak, match_win_streak_best, unlocked_avatars")
+      .select("trainer_xp, match_win_streak, match_win_streak_best")
       .eq("id", req.user.id)
       .maybeSingle();
     const before = cur?.trainer_xp || 0;
     let newStreak = cur?.match_win_streak || 0;
     let bestStreak = cur?.match_win_streak_best || 0;
+
+    // Optional read — unlocked_avatars may not exist yet on prod if
+    // the migration hasn't been applied. Tolerate absence and treat
+    // it as an empty set; the level-up hook will fill it in.
+    let existingUnlocked = [];
+    try {
+      const { data: avRow } = await supabase
+        .from("users")
+        .select("unlocked_avatars")
+        .eq("id", req.user.id)
+        .maybeSingle();
+      if (Array.isArray(avRow?.unlocked_avatars)) existingUnlocked = avRow.unlocked_avatars;
+    } catch (err) {
+      console.warn("[xp] unlocked_avatars read skipped:", err.message);
+    }
     if (won) {
       newStreak += 1;
       if (newStreak > bestStreak) bestStreak = newStreak;
@@ -125,7 +145,6 @@ function mount(app, supabase) {
     // toast; persisted into unlocked_avatars on the user row.
     const { newlyUnlocked, ROSTER: AVATAR_ROSTER } = require("./avatars");
     const newAvatars = newlyUnlocked(prevLevel, newLevel);
-    const existingUnlocked = Array.isArray(cur?.unlocked_avatars) ? cur.unlocked_avatars : [];
     const nextUnlocked = newAvatars.length
       ? [...new Set([...existingUnlocked, ...newAvatars])]
       : existingUnlocked;
@@ -135,8 +154,24 @@ function mount(app, supabase) {
       match_win_streak: newStreak,
       match_win_streak_best: bestStreak,
     };
-    if (newAvatars.length) updatePayload.unlocked_avatars = nextUnlocked;
-    await supabase.from("users").update(updatePayload).eq("id", req.user.id);
+    // Only attempt to write unlocked_avatars if we successfully read
+    // it (column exists) AND there's something new. Otherwise an
+    // update against a non-existent column would error.
+    if (newAvatars.length && Array.isArray(existingUnlocked)) {
+      updatePayload.unlocked_avatars = nextUnlocked;
+    }
+    try {
+      await supabase.from("users").update(updatePayload).eq("id", req.user.id);
+    } catch (err) {
+      // If the unlocked_avatars write fails (column missing), retry
+      // without it so trainer_xp / streak still persist.
+      if (updatePayload.unlocked_avatars) {
+        const { unlocked_avatars: _, ...safePayload } = updatePayload;
+        await supabase.from("users").update(safePayload).eq("id", req.user.id);
+      } else {
+        throw err;
+      }
+    }
 
     res.json({
       gained: gained + streakBonus,
