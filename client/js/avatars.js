@@ -22,8 +22,30 @@ export function getSelected() {
   return _cache?.selected || null;
 }
 
+export function getCache() {
+  return _cache;
+}
+
 export function getRosterByKey(key) {
   return _rosterByKey.get(key) || null;
+}
+
+// Silent persistence (no UI). Called from the menu trainer grid so
+// that picking a trainer to "Battle as" also updates the player's
+// persisted avatar. Resolves with the new key, or null on failure.
+export async function selectSilently(key) {
+  if (!key || _cache?.selected === key) return key;
+  try {
+    const res = await fetch("/me/avatars/select", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    if (!res.ok) return null;
+    if (_cache) _cache.selected = key;
+    _selectListeners.forEach((fn) => { try { fn(key); } catch {} });
+    return key;
+  } catch { return null; }
 }
 
 export function onSelect(fn) {
@@ -107,6 +129,7 @@ function render(overlay) {
                           title="${escape(a.name)} — ${escape(a.game)}">
                     <img class="avatar-img" src="${escape(a.sprite)}" alt="${escape(a.name)}" loading="lazy">
                     <div class="avatar-cell-name">${escape(a.name)}</div>
+                    ${a.bio ? `<div class="avatar-cell-bio">${escape(a.bio)}</div>` : ""}
                     ${a.unlocked
                       ? (selected === a.key ? `<div class="avatar-cell-tag is-on">✓ Selected</div>` : `<div class="avatar-cell-tag">Tap to pick</div>`)
                       : `<div class="avatar-cell-tag">🔒 L${a.levelRequired}</div>`}

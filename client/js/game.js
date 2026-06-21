@@ -53,13 +53,54 @@ const nextInstanceId = () => `i${++_instanceCounter}`;
 // Portraits come from Pokémon Showdown's open trainer sprite collection
 // (https://play.pokemonshowdown.com/sprites/trainers). Used under fair-use
 // for this non-commercial fan project.
+// Unified trainer roster — both the cosmetic avatar AND the per-match
+// ability come from this single source. The 6 Gen-1 gym leaders are
+// available from day one; the 20 game protagonists unlock every 10
+// trainer levels. Sprites are slugs under Showdown's CDN
+// (https://play.pokemonshowdown.com/sprites/trainers/<slug>.png).
+//
+// Each protagonist's ability was chosen so no two trainers share the
+// exact same (type, pattern) combination — keeps the roster mix
+// strategically meaningful instead of cosmetic-only. See
+// abilityModifiers() / trainerAbilityCostMod() for the impl per key.
 export const TRAINERS = {
-  brock:   { id: "brock",   name: "Brock",     bio: "+1 Defense to Rock/Ground",        portrait: "rock",     sprite: "brock" },
-  misty:   { id: "misty",   name: "Misty",     bio: "Water cards cost 1 less (min 1)",  portrait: "water",    sprite: "misty" },
-  pikachu: { id: "pikachu", name: "Lt. Surge", bio: "+1 Attack to Electric Pokémon",    portrait: "electric", sprite: "ltsurge" },
-  erika:   { id: "erika",   name: "Erika",     bio: "+1 HP to all Grass Pokémon",       portrait: "grass",    sprite: "erika" },
-  sabrina: { id: "sabrina", name: "Sabrina",   bio: "Psychic specials cost 1 less",     portrait: "psychic",  sprite: "sabrina" },
-  lance:   { id: "lance",   name: "Lance",     bio: "+1 Attack to Dragon Pokémon",      portrait: "dragon",   sprite: "lance" },
+  // L1 — Gen 1 gym leaders (the original lineup; everyone gets these).
+  brock:    { id: "brock",    name: "Brock",     bio: "+1 Defense to Rock/Ground",        portrait: "rock",     sprite: "brock",      levelRequired: 1 },
+  misty:    { id: "misty",    name: "Misty",     bio: "Water cards cost 1 less (min 1)",  portrait: "water",    sprite: "misty",      levelRequired: 1 },
+  pikachu:  { id: "pikachu",  name: "Lt. Surge", bio: "+1 Attack to Electric Pokémon",    portrait: "electric", sprite: "ltsurge",    levelRequired: 1 },
+  erika:    { id: "erika",    name: "Erika",     bio: "+1 HP to all Grass Pokémon",       portrait: "grass",    sprite: "erika",      levelRequired: 1 },
+  sabrina:  { id: "sabrina",  name: "Sabrina",   bio: "Psychic specials cost 1 less",     portrait: "psychic",  sprite: "sabrina",    levelRequired: 1 },
+  lance:    { id: "lance",    name: "Lance",     bio: "+1 Attack to Dragon Pokémon",      portrait: "dragon",   sprite: "lance",      levelRequired: 1 },
+  // L1 — Gen 1 protagonist pair (also unlocked from day one).
+  red:      { id: "red",      name: "Red",       bio: "+1 Attack to Fire Pokémon",        portrait: "fire",     sprite: "red",        levelRequired: 1 },
+  leaf:     { id: "leaf",     name: "Leaf",      bio: "Grass cards cost 1 less (min 1)",  portrait: "grass",    sprite: "leaf-gen3",  levelRequired: 1 },
+  // L10 — Johto.
+  ethan:    { id: "ethan",    name: "Ethan",     bio: "+1 HP to Fire Pokémon",            portrait: "fire",     sprite: "ethan",      levelRequired: 10 },
+  lyra:     { id: "lyra",     name: "Lyra",      bio: "+1 Attack to Normal Pokémon",      portrait: "normal",   sprite: "lyra",       levelRequired: 10 },
+  // L20 — Hoenn.
+  brendan:  { id: "brendan",  name: "Brendan",   bio: "+1 Attack to Water Pokémon",       portrait: "water",    sprite: "brendan",    levelRequired: 20 },
+  may:      { id: "may",      name: "May",       bio: "Fire cards cost 1 less (min 1)",   portrait: "fire",     sprite: "may",        levelRequired: 20 },
+  // L30 — Sinnoh.
+  lucas:    { id: "lucas",    name: "Lucas",     bio: "+1 Attack to Ice Pokémon",         portrait: "ice",      sprite: "lucas",      levelRequired: 30 },
+  dawn:     { id: "dawn",     name: "Dawn",      bio: "+1 Defense to Steel Pokémon",      portrait: "steel",    sprite: "dawn",       levelRequired: 30 },
+  // L40 — Unova.
+  hilbert:  { id: "hilbert",  name: "Hilbert",   bio: "+1 Attack to Fighting Pokémon",    portrait: "fighting", sprite: "hilbert",    levelRequired: 40 },
+  hilda:    { id: "hilda",    name: "Hilda",     bio: "+1 HP to Dark Pokémon",            portrait: "dark",     sprite: "hilda",      levelRequired: 40 },
+  // L50 — Unova 2.
+  nate:     { id: "nate",     name: "Nate",      bio: "+1 Attack to Flying Pokémon",      portrait: "flying",   sprite: "nate",       levelRequired: 50 },
+  rosa:     { id: "rosa",     name: "Rosa",      bio: "Fairy cards cost 1 less (min 1)",  portrait: "fairy",    sprite: "rosa",       levelRequired: 50 },
+  // L60 — Kalos.
+  calem:    { id: "calem",    name: "Calem",     bio: "+1 Attack to Fairy Pokémon",       portrait: "fairy",    sprite: "calem",      levelRequired: 60 },
+  serena:   { id: "serena",   name: "Serena",    bio: "+1 HP to Ice Pokémon",             portrait: "ice",      sprite: "serena",     levelRequired: 60 },
+  // L70 — Alola.
+  elio:     { id: "elio",     name: "Elio",      bio: "+1 Attack to Ground Pokémon",      portrait: "ground",   sprite: "elio",       levelRequired: 70 },
+  selene:   { id: "selene",   name: "Selene",    bio: "+1 Defense to Water Pokémon",      portrait: "water",    sprite: "selene",     levelRequired: 70 },
+  // L80 — Galar.
+  victor:   { id: "victor",   name: "Victor",    bio: "+1 HP to Fighting Pokémon",        portrait: "fighting", sprite: "victor",     levelRequired: 80 },
+  gloria:   { id: "gloria",   name: "Gloria",    bio: "+1 Attack to Ghost Pokémon",       portrait: "ghost",    sprite: "gloria",     levelRequired: 80 },
+  // L90 — Hisui (endgame).
+  rei:      { id: "rei",      name: "Rei",       bio: "+1 Attack to Bug Pokémon",         portrait: "bug",      sprite: "rei",        levelRequired: 90 },
+  akari:    { id: "akari",    name: "Akari",     bio: "+1 Attack to Dark Pokémon",        portrait: "dark",     sprite: "akari",      levelRequired: 90 },
 };
 
 // Pokémon Showdown CDN — humans, transparent PNG, ~96×96.
@@ -165,22 +206,46 @@ function comboBonusFor(playerState, card) {
 // Trainer ability effects applied at lookup time (no state mutation needed).
 function abilityModifiers(playerState, card) {
   const a = playerState.ability;
-  let costMod = 0;
-  let attackBonus = 0;
-  let defenseBonus = 0;
-  let hpBonus = 0;
-  if (a === "misty" && card.types?.includes("water")) costMod -= 1;
-  if (a === "pikachu" && card.types?.includes("electric")) attackBonus += 1;
-  // Brock — boosted: now also adds +1 max HP to Rock/Ground for parity with
-  // Erika / Lance.
-  if (a === "brock" && (card.types?.includes("rock") || card.types?.includes("ground"))) {
+  const t = card.types || [];
+  let costMod = 0, attackBonus = 0, defenseBonus = 0, hpBonus = 0;
+
+  // === Gen 1 gym leaders (the original six) =========================
+  if (a === "misty"   && t.includes("water"))    costMod -= 1;
+  if (a === "pikachu" && t.includes("electric")) attackBonus += 1;
+  // Brock — also adds +1 max HP to Rock/Ground for parity with Erika/Lance.
+  if (a === "brock"   && (t.includes("rock") || t.includes("ground"))) {
     defenseBonus += 1;
     hpBonus += 1;
   }
-  if (a === "erika" && card.types?.includes("grass")) hpBonus += 1;
-  if (a === "lance" && card.types?.includes("dragon")) attackBonus += 1;
+  if (a === "erika" && t.includes("grass"))  hpBonus += 1;
+  if (a === "lance" && t.includes("dragon")) attackBonus += 1;
   // Sabrina's discount is applied per-ability (Psychic specials only), see
   // specialAbilityCost() below.
+
+  // === Protagonist roster (level-gated unlocks) =====================
+  // Each (trainer, type, pattern) tuple is unique so no two trainers
+  // produce identical buffs. Keep this table in sync with TRAINERS.
+  if (a === "red"     && t.includes("fire"))     attackBonus += 1;
+  if (a === "leaf"    && t.includes("grass"))    costMod -= 1;
+  if (a === "ethan"   && t.includes("fire"))     hpBonus += 1;
+  if (a === "lyra"    && t.includes("normal"))   attackBonus += 1;
+  if (a === "brendan" && t.includes("water"))    attackBonus += 1;
+  if (a === "may"     && t.includes("fire"))     costMod -= 1;
+  if (a === "lucas"   && t.includes("ice"))      attackBonus += 1;
+  if (a === "dawn"    && t.includes("steel"))    defenseBonus += 1;
+  if (a === "hilbert" && t.includes("fighting")) attackBonus += 1;
+  if (a === "hilda"   && t.includes("dark"))     hpBonus += 1;
+  if (a === "nate"    && t.includes("flying"))   attackBonus += 1;
+  if (a === "rosa"    && t.includes("fairy"))    costMod -= 1;
+  if (a === "calem"   && t.includes("fairy"))    attackBonus += 1;
+  if (a === "serena"  && t.includes("ice"))      hpBonus += 1;
+  if (a === "elio"    && t.includes("ground"))   attackBonus += 1;
+  if (a === "selene"  && t.includes("water"))    defenseBonus += 1;
+  if (a === "victor"  && t.includes("fighting")) hpBonus += 1;
+  if (a === "gloria"  && t.includes("ghost"))    attackBonus += 1;
+  if (a === "rei"     && t.includes("bug"))      attackBonus += 1;
+  if (a === "akari"   && t.includes("dark"))     attackBonus += 1;
+
   return { costMod, attackBonus, defenseBonus, hpBonus };
 }
 

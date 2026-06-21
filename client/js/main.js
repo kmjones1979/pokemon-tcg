@@ -277,10 +277,19 @@ function renderMenu() {
   menu.classList.remove("hidden");
   document.body.classList.remove("in-arena");
 
-  const trainerEls = Object.values(TRAINERS).map((t) => {
-    const c = TYPE_COLORS[t.portrait] || "#888";
-    const art = trainerMascotUrl(t.id);
-    return `
+  // Show only the trainers this player has unlocked. The 6 Gen-1 gym
+  // leaders + Red & Leaf are L1 (available to everyone); new pairs
+  // unlock every 10 trainer levels and join the grid once earned.
+  // Falls back to the L1 set when the avatars cache isn't ready yet.
+  const unlockedSet = new Set(
+    (avatars.getCache()?.unlocked) || Object.values(TRAINERS).filter((t) => t.levelRequired === 1).map((t) => t.id),
+  );
+  const trainerEls = Object.values(TRAINERS)
+    .filter((t) => unlockedSet.has(t.id))
+    .map((t) => {
+      const c = TYPE_COLORS[t.portrait] || "#888";
+      const art = trainerMascotUrl(t.id);
+      return `
       <button class="trainer-card" data-trainer="${t.id}" style="--accent:${c}">
         <div class="trainer-portrait" style="background:linear-gradient(160deg, ${c}, #0c0d1a)">
           ${art ? `<img src="${art}" alt="${escape(t.name)}" loading="lazy">` : ""}
@@ -288,7 +297,7 @@ function renderMenu() {
         <div class="trainer-name">${t.name}</div>
         <div class="trainer-bio">${t.bio}</div>
       </button>`;
-  });
+    });
 
   const difficulties = [
     { id: "easy",   label: "Easy",   bio: "AI plays the cheapest card, sometimes passes, attacks randomly." },
@@ -362,6 +371,10 @@ function renderMenu() {
       el.classList.add("selected");
       chosen = el.dataset.trainer;
       chosenTrainer = chosen;
+      // The trainer you battle as IS your avatar — keep them in sync.
+      // Fire-and-forget; on auth failures the picker still works and
+      // the next sign-in will resync.
+      if (currentUser) avatars.selectSilently(chosen);
       const btn = $("#start-btn");
       btn.disabled = false;
       btn.textContent = `Battle as ${TRAINERS[chosen].name} ▸`;

@@ -20,48 +20,52 @@
 
 const SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/trainers";
 
-// 10 tiers × 2 trainers = 20 avatars. Chronological release order;
-// every 10 levels brings a new region's protagonist pair. Gen 9
-// (Florian/Juliana) is intentionally omitted — Showdown hasn't added
-// their sprites yet. When they appear we can append an L95 bonus tier
-// without disturbing existing user selections.
+// Unified roster — mirrors client/js/game.js's TRAINERS table. The 6
+// Gen-1 gym leaders are available from day one along with the L1
+// protagonist pair (Red & Leaf); the other 18 protagonists unlock
+// every 10 trainer levels. The `bio` field is the gameplay-ability
+// description — kept here so the picker UI can show it without a
+// second source-of-truth fetch.
 //
-// Naming note: Showdown serves the most-recent canonical depiction at
-// /trainers/<name>.png. Where multiple gens share a name (Red appears
-// in RBY, FRLG, SM, etc.) the bare slug points at the latest design;
-// "<name>-gen3" etc. selects an earlier sprite. The Leaf design we
-// want for the L1 starter pair lives at leaf-gen3.
+// Keep in lockstep with client/js/game.js TRAINERS. The
+// test/avatars-trainers-sync.test.js test asserts they match.
 const ROSTER = [
-  // L1 — starters. Iconic Gen 1, available from day one.
-  { key: "red",     name: "Red",     levelRequired: 1,  game: "FireRed / LeafGreen",       gen: 1, sprite: `${SPRITE_BASE}/red.png` },
-  { key: "leaf",    name: "Leaf",    levelRequired: 1,  game: "FireRed / LeafGreen",       gen: 1, sprite: `${SPRITE_BASE}/leaf-gen3.png` },
+  // L1 — Gen 1 gym leaders + protagonist pair.
+  { key: "brock",   name: "Brock",     levelRequired: 1,  game: "Red / Blue / Yellow",        gen: 1, bio: "+1 Defense to Rock/Ground",       sprite: `${SPRITE_BASE}/brock.png` },
+  { key: "misty",   name: "Misty",     levelRequired: 1,  game: "Red / Blue / Yellow",        gen: 1, bio: "Water cards cost 1 less (min 1)", sprite: `${SPRITE_BASE}/misty.png` },
+  { key: "pikachu", name: "Lt. Surge", levelRequired: 1,  game: "Red / Blue / Yellow",        gen: 1, bio: "+1 Attack to Electric Pokémon",   sprite: `${SPRITE_BASE}/ltsurge.png` },
+  { key: "erika",   name: "Erika",     levelRequired: 1,  game: "Red / Blue / Yellow",        gen: 1, bio: "+1 HP to all Grass Pokémon",      sprite: `${SPRITE_BASE}/erika.png` },
+  { key: "sabrina", name: "Sabrina",   levelRequired: 1,  game: "Red / Blue / Yellow",        gen: 1, bio: "Psychic specials cost 1 less",    sprite: `${SPRITE_BASE}/sabrina.png` },
+  { key: "lance",   name: "Lance",     levelRequired: 1,  game: "Red / Blue / Yellow",        gen: 1, bio: "+1 Attack to Dragon Pokémon",     sprite: `${SPRITE_BASE}/lance.png` },
+  { key: "red",     name: "Red",       levelRequired: 1,  game: "FireRed / LeafGreen",        gen: 1, bio: "+1 Attack to Fire Pokémon",       sprite: `${SPRITE_BASE}/red.png` },
+  { key: "leaf",    name: "Leaf",      levelRequired: 1,  game: "FireRed / LeafGreen",        gen: 1, bio: "Grass cards cost 1 less (min 1)", sprite: `${SPRITE_BASE}/leaf-gen3.png` },
   // L10 — Johto
-  { key: "ethan",   name: "Ethan",   levelRequired: 10, game: "HeartGold / SoulSilver",    gen: 2, sprite: `${SPRITE_BASE}/ethan.png` },
-  { key: "lyra",    name: "Lyra",    levelRequired: 10, game: "HeartGold / SoulSilver",    gen: 2, sprite: `${SPRITE_BASE}/lyra.png` },
+  { key: "ethan",   name: "Ethan",     levelRequired: 10, game: "HeartGold / SoulSilver",     gen: 2, bio: "+1 HP to Fire Pokémon",           sprite: `${SPRITE_BASE}/ethan.png` },
+  { key: "lyra",    name: "Lyra",      levelRequired: 10, game: "HeartGold / SoulSilver",     gen: 2, bio: "+1 Attack to Normal Pokémon",     sprite: `${SPRITE_BASE}/lyra.png` },
   // L20 — Hoenn
-  { key: "brendan", name: "Brendan", levelRequired: 20, game: "Ruby / Sapphire / Emerald", gen: 3, sprite: `${SPRITE_BASE}/brendan.png` },
-  { key: "may",     name: "May",     levelRequired: 20, game: "Ruby / Sapphire / Emerald", gen: 3, sprite: `${SPRITE_BASE}/may.png` },
+  { key: "brendan", name: "Brendan",   levelRequired: 20, game: "Ruby / Sapphire / Emerald",  gen: 3, bio: "+1 Attack to Water Pokémon",      sprite: `${SPRITE_BASE}/brendan.png` },
+  { key: "may",     name: "May",       levelRequired: 20, game: "Ruby / Sapphire / Emerald",  gen: 3, bio: "Fire cards cost 1 less (min 1)",  sprite: `${SPRITE_BASE}/may.png` },
   // L30 — Sinnoh
-  { key: "lucas",   name: "Lucas",   levelRequired: 30, game: "Diamond / Pearl",           gen: 4, sprite: `${SPRITE_BASE}/lucas.png` },
-  { key: "dawn",    name: "Dawn",    levelRequired: 30, game: "Diamond / Pearl",           gen: 4, sprite: `${SPRITE_BASE}/dawn.png` },
+  { key: "lucas",   name: "Lucas",     levelRequired: 30, game: "Diamond / Pearl",            gen: 4, bio: "+1 Attack to Ice Pokémon",        sprite: `${SPRITE_BASE}/lucas.png` },
+  { key: "dawn",    name: "Dawn",      levelRequired: 30, game: "Diamond / Pearl",            gen: 4, bio: "+1 Defense to Steel Pokémon",     sprite: `${SPRITE_BASE}/dawn.png` },
   // L40 — Unova
-  { key: "hilbert", name: "Hilbert", levelRequired: 40, game: "Black / White",             gen: 5, sprite: `${SPRITE_BASE}/hilbert.png` },
-  { key: "hilda",   name: "Hilda",   levelRequired: 40, game: "Black / White",             gen: 5, sprite: `${SPRITE_BASE}/hilda.png` },
+  { key: "hilbert", name: "Hilbert",   levelRequired: 40, game: "Black / White",              gen: 5, bio: "+1 Attack to Fighting Pokémon",   sprite: `${SPRITE_BASE}/hilbert.png` },
+  { key: "hilda",   name: "Hilda",     levelRequired: 40, game: "Black / White",              gen: 5, bio: "+1 HP to Dark Pokémon",           sprite: `${SPRITE_BASE}/hilda.png` },
   // L50 — Unova 2
-  { key: "nate",    name: "Nate",    levelRequired: 50, game: "Black 2 / White 2",         gen: 5, sprite: `${SPRITE_BASE}/nate.png` },
-  { key: "rosa",    name: "Rosa",    levelRequired: 50, game: "Black 2 / White 2",         gen: 5, sprite: `${SPRITE_BASE}/rosa.png` },
+  { key: "nate",    name: "Nate",      levelRequired: 50, game: "Black 2 / White 2",          gen: 5, bio: "+1 Attack to Flying Pokémon",     sprite: `${SPRITE_BASE}/nate.png` },
+  { key: "rosa",    name: "Rosa",      levelRequired: 50, game: "Black 2 / White 2",          gen: 5, bio: "Fairy cards cost 1 less (min 1)", sprite: `${SPRITE_BASE}/rosa.png` },
   // L60 — Kalos
-  { key: "calem",   name: "Calem",   levelRequired: 60, game: "X / Y",                     gen: 6, sprite: `${SPRITE_BASE}/calem.png` },
-  { key: "serena",  name: "Serena",  levelRequired: 60, game: "X / Y",                     gen: 6, sprite: `${SPRITE_BASE}/serena.png` },
+  { key: "calem",   name: "Calem",     levelRequired: 60, game: "X / Y",                      gen: 6, bio: "+1 Attack to Fairy Pokémon",      sprite: `${SPRITE_BASE}/calem.png` },
+  { key: "serena",  name: "Serena",    levelRequired: 60, game: "X / Y",                      gen: 6, bio: "+1 HP to Ice Pokémon",            sprite: `${SPRITE_BASE}/serena.png` },
   // L70 — Alola
-  { key: "elio",    name: "Elio",    levelRequired: 70, game: "Sun / Moon",                gen: 7, sprite: `${SPRITE_BASE}/elio.png` },
-  { key: "selene",  name: "Selene",  levelRequired: 70, game: "Sun / Moon",                gen: 7, sprite: `${SPRITE_BASE}/selene.png` },
+  { key: "elio",    name: "Elio",      levelRequired: 70, game: "Sun / Moon",                 gen: 7, bio: "+1 Attack to Ground Pokémon",     sprite: `${SPRITE_BASE}/elio.png` },
+  { key: "selene",  name: "Selene",    levelRequired: 70, game: "Sun / Moon",                 gen: 7, bio: "+1 Defense to Water Pokémon",     sprite: `${SPRITE_BASE}/selene.png` },
   // L80 — Galar
-  { key: "victor",  name: "Victor",  levelRequired: 80, game: "Sword / Shield",            gen: 8, sprite: `${SPRITE_BASE}/victor.png` },
-  { key: "gloria",  name: "Gloria",  levelRequired: 80, game: "Sword / Shield",            gen: 8, sprite: `${SPRITE_BASE}/gloria.png` },
-  // L90 — Hisui (top tier — endgame grind reward)
-  { key: "rei",     name: "Rei",     levelRequired: 90, game: "Legends: Arceus",           gen: 8, sprite: `${SPRITE_BASE}/rei.png` },
-  { key: "akari",   name: "Akari",   levelRequired: 90, game: "Legends: Arceus",           gen: 8, sprite: `${SPRITE_BASE}/akari.png` },
+  { key: "victor",  name: "Victor",    levelRequired: 80, game: "Sword / Shield",             gen: 8, bio: "+1 HP to Fighting Pokémon",       sprite: `${SPRITE_BASE}/victor.png` },
+  { key: "gloria",  name: "Gloria",    levelRequired: 80, game: "Sword / Shield",             gen: 8, bio: "+1 Attack to Ghost Pokémon",      sprite: `${SPRITE_BASE}/gloria.png` },
+  // L90 — Hisui (endgame).
+  { key: "rei",     name: "Rei",       levelRequired: 90, game: "Legends: Arceus",            gen: 8, bio: "+1 Attack to Bug Pokémon",        sprite: `${SPRITE_BASE}/rei.png` },
+  { key: "akari",   name: "Akari",     levelRequired: 90, game: "Legends: Arceus",            gen: 8, bio: "+1 Attack to Dark Pokémon",       sprite: `${SPRITE_BASE}/akari.png` },
 ];
 
 const KEY_INDEX = new Map(ROSTER.map((a) => [a.key, a]));
