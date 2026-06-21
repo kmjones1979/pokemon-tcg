@@ -4,10 +4,11 @@
 // account drawer, battle screen, and Math Mode header. The starter pair
 // is available from L1; new pairs unlock every 10 trainer levels.
 //
-// Sprite source: pokencyclopedia.info hot-link. Small pixel sprites,
-// consistent with the rest of the app's PokéAPI-driven visuals.
-// If that source ever breaks, we can mirror to Supabase Storage and
-// rewrite the `sprite` field without changing the route shape.
+// Sprite source: play.pokemonshowdown.com hot-link. Showdown has been
+// a stable community CDN for 15+ years and actively hosts trainer
+// sprites at /sprites/trainers/<slug>.png. If that source ever breaks,
+// we can mirror to Supabase Storage and rewrite the `sprite` field
+// without changing the route shape.
 //
 // Routes (mounted from server.js inside the auth block):
 //   GET  /me/avatars            → { selected, unlocked: [...], roster: [...] }
@@ -17,45 +18,50 @@
 //   selected_avatar    text         (defaults to 'red')
 //   unlocked_avatars   text[]       (avatar keys the user has unlocked)
 
-const SPRITE_BASE = "https://www.pokencyclopedia.info/sprites/trainers";
+const SPRITE_BASE = "https://play.pokemonshowdown.com/sprites/trainers";
 
-// 11 tiers × 2 trainers = 22 avatars. Chronological release order;
-// every 10 levels brings a new region's protagonist pair, plus a
-// late-game bonus tier at L95 for Legends Arceus.
+// 10 tiers × 2 trainers = 20 avatars. Chronological release order;
+// every 10 levels brings a new region's protagonist pair. Gen 9
+// (Florian/Juliana) is intentionally omitted — Showdown hasn't added
+// their sprites yet. When they appear we can append an L95 bonus tier
+// without disturbing existing user selections.
+//
+// Naming note: Showdown serves the most-recent canonical depiction at
+// /trainers/<name>.png. Where multiple gens share a name (Red appears
+// in RBY, FRLG, SM, etc.) the bare slug points at the latest design;
+// "<name>-gen3" etc. selects an earlier sprite. The Leaf design we
+// want for the L1 starter pair lives at leaf-gen3.
 const ROSTER = [
-  // L1 — starters. Iconic Gen 1, available to everyone from day one.
-  { key: "red",     name: "Red",     levelRequired: 1,  game: "FireRed / LeafGreen",       gen: 1, sprite: `${SPRITE_BASE}/firered_leafgreen/t_red.png` },
-  { key: "leaf",    name: "Leaf",    levelRequired: 1,  game: "FireRed / LeafGreen",       gen: 1, sprite: `${SPRITE_BASE}/firered_leafgreen/t_leaf.png` },
+  // L1 — starters. Iconic Gen 1, available from day one.
+  { key: "red",     name: "Red",     levelRequired: 1,  game: "FireRed / LeafGreen",       gen: 1, sprite: `${SPRITE_BASE}/red.png` },
+  { key: "leaf",    name: "Leaf",    levelRequired: 1,  game: "FireRed / LeafGreen",       gen: 1, sprite: `${SPRITE_BASE}/leaf-gen3.png` },
   // L10 — Johto
-  { key: "ethan",   name: "Ethan",   levelRequired: 10, game: "HeartGold / SoulSilver",    gen: 2, sprite: `${SPRITE_BASE}/heartgold_soulsilver/t_ethan.png` },
-  { key: "lyra",    name: "Lyra",    levelRequired: 10, game: "HeartGold / SoulSilver",    gen: 2, sprite: `${SPRITE_BASE}/heartgold_soulsilver/t_lyra.png` },
+  { key: "ethan",   name: "Ethan",   levelRequired: 10, game: "HeartGold / SoulSilver",    gen: 2, sprite: `${SPRITE_BASE}/ethan.png` },
+  { key: "lyra",    name: "Lyra",    levelRequired: 10, game: "HeartGold / SoulSilver",    gen: 2, sprite: `${SPRITE_BASE}/lyra.png` },
   // L20 — Hoenn
-  { key: "brendan", name: "Brendan", levelRequired: 20, game: "Emerald",                   gen: 3, sprite: `${SPRITE_BASE}/emerald/t_brendan.png` },
-  { key: "may",     name: "May",     levelRequired: 20, game: "Emerald",                   gen: 3, sprite: `${SPRITE_BASE}/emerald/t_may.png` },
+  { key: "brendan", name: "Brendan", levelRequired: 20, game: "Ruby / Sapphire / Emerald", gen: 3, sprite: `${SPRITE_BASE}/brendan.png` },
+  { key: "may",     name: "May",     levelRequired: 20, game: "Ruby / Sapphire / Emerald", gen: 3, sprite: `${SPRITE_BASE}/may.png` },
   // L30 — Sinnoh
-  { key: "lucas",   name: "Lucas",   levelRequired: 30, game: "Diamond / Pearl",           gen: 4, sprite: `${SPRITE_BASE}/diamond_pearl/t_lucas.png` },
-  { key: "dawn",    name: "Dawn",    levelRequired: 30, game: "Diamond / Pearl",           gen: 4, sprite: `${SPRITE_BASE}/diamond_pearl/t_dawn.png` },
+  { key: "lucas",   name: "Lucas",   levelRequired: 30, game: "Diamond / Pearl",           gen: 4, sprite: `${SPRITE_BASE}/lucas.png` },
+  { key: "dawn",    name: "Dawn",    levelRequired: 30, game: "Diamond / Pearl",           gen: 4, sprite: `${SPRITE_BASE}/dawn.png` },
   // L40 — Unova
-  { key: "hilbert", name: "Hilbert", levelRequired: 40, game: "Black / White",             gen: 5, sprite: `${SPRITE_BASE}/black_white/t_hilbert.png` },
-  { key: "hilda",   name: "Hilda",   levelRequired: 40, game: "Black / White",             gen: 5, sprite: `${SPRITE_BASE}/black_white/t_hilda.png` },
+  { key: "hilbert", name: "Hilbert", levelRequired: 40, game: "Black / White",             gen: 5, sprite: `${SPRITE_BASE}/hilbert.png` },
+  { key: "hilda",   name: "Hilda",   levelRequired: 40, game: "Black / White",             gen: 5, sprite: `${SPRITE_BASE}/hilda.png` },
   // L50 — Unova 2
-  { key: "nate",    name: "Nate",    levelRequired: 50, game: "Black 2 / White 2",         gen: 5, sprite: `${SPRITE_BASE}/black2_white2/t_nate.png` },
-  { key: "rosa",    name: "Rosa",    levelRequired: 50, game: "Black 2 / White 2",         gen: 5, sprite: `${SPRITE_BASE}/black2_white2/t_rosa.png` },
+  { key: "nate",    name: "Nate",    levelRequired: 50, game: "Black 2 / White 2",         gen: 5, sprite: `${SPRITE_BASE}/nate.png` },
+  { key: "rosa",    name: "Rosa",    levelRequired: 50, game: "Black 2 / White 2",         gen: 5, sprite: `${SPRITE_BASE}/rosa.png` },
   // L60 — Kalos
-  { key: "calem",   name: "Calem",   levelRequired: 60, game: "X / Y",                     gen: 6, sprite: `${SPRITE_BASE}/x_y/t_calem.png` },
-  { key: "serena",  name: "Serena",  levelRequired: 60, game: "X / Y",                     gen: 6, sprite: `${SPRITE_BASE}/x_y/t_serena.png` },
+  { key: "calem",   name: "Calem",   levelRequired: 60, game: "X / Y",                     gen: 6, sprite: `${SPRITE_BASE}/calem.png` },
+  { key: "serena",  name: "Serena",  levelRequired: 60, game: "X / Y",                     gen: 6, sprite: `${SPRITE_BASE}/serena.png` },
   // L70 — Alola
-  { key: "elio",    name: "Elio",    levelRequired: 70, game: "Sun / Moon",                gen: 7, sprite: `${SPRITE_BASE}/sun_moon/t_elio.png` },
-  { key: "selene",  name: "Selene",  levelRequired: 70, game: "Sun / Moon",                gen: 7, sprite: `${SPRITE_BASE}/sun_moon/t_selene.png` },
+  { key: "elio",    name: "Elio",    levelRequired: 70, game: "Sun / Moon",                gen: 7, sprite: `${SPRITE_BASE}/elio.png` },
+  { key: "selene",  name: "Selene",  levelRequired: 70, game: "Sun / Moon",                gen: 7, sprite: `${SPRITE_BASE}/selene.png` },
   // L80 — Galar
-  { key: "victor",  name: "Victor",  levelRequired: 80, game: "Sword / Shield",            gen: 8, sprite: `${SPRITE_BASE}/sword_shield/t_victor.png` },
-  { key: "gloria",  name: "Gloria",  levelRequired: 80, game: "Sword / Shield",            gen: 8, sprite: `${SPRITE_BASE}/sword_shield/t_gloria.png` },
-  // L90 — Paldea
-  { key: "florian", name: "Florian", levelRequired: 90, game: "Scarlet / Violet",          gen: 9, sprite: `${SPRITE_BASE}/scarlet_violet/t_florian.png` },
-  { key: "juliana", name: "Juliana", levelRequired: 90, game: "Scarlet / Violet",          gen: 9, sprite: `${SPRITE_BASE}/scarlet_violet/t_juliana.png` },
-  // L95 — Hisui (bonus tier — only the truly grinded reach this)
-  { key: "rei",     name: "Rei",     levelRequired: 95, game: "Legends: Arceus",           gen: 8, sprite: `${SPRITE_BASE}/legends_arceus/t_rei.png` },
-  { key: "akari",   name: "Akari",   levelRequired: 95, game: "Legends: Arceus",           gen: 8, sprite: `${SPRITE_BASE}/legends_arceus/t_akari.png` },
+  { key: "victor",  name: "Victor",  levelRequired: 80, game: "Sword / Shield",            gen: 8, sprite: `${SPRITE_BASE}/victor.png` },
+  { key: "gloria",  name: "Gloria",  levelRequired: 80, game: "Sword / Shield",            gen: 8, sprite: `${SPRITE_BASE}/gloria.png` },
+  // L90 — Hisui (top tier — endgame grind reward)
+  { key: "rei",     name: "Rei",     levelRequired: 90, game: "Legends: Arceus",           gen: 8, sprite: `${SPRITE_BASE}/rei.png` },
+  { key: "akari",   name: "Akari",   levelRequired: 90, game: "Legends: Arceus",           gen: 8, sprite: `${SPRITE_BASE}/akari.png` },
 ];
 
 const KEY_INDEX = new Map(ROSTER.map((a) => [a.key, a]));
