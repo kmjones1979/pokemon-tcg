@@ -342,19 +342,39 @@ function renderMenu() {
       <div class="menu-foot">
         <button class="start-btn" id="start-btn">Battle as ${escape(activeTrainer.name)} ▸</button>
         <div class="play-modes">
-          <button class="mode-btn" id="mode-mp-match">Find online match</button>
-          <button class="mode-btn" id="mode-mp-friend">Play vs friend (code)</button>
-          <button class="mode-btn" id="mode-champion">Fight a Champion</button>
-          <button class="mode-btn story-launch" id="mode-story" ${currentUser ? "" : "disabled"} title="${currentUser ? "Begin a Story Mode chapter" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
-          <button class="mode-btn" id="mode-trade" ${currentUser ? "" : "disabled"} title="${currentUser ? "Trade cards with other trainers" : "Sign in to trade"}">🔄 Trade Cards</button>
-          <button class="mode-btn puzzle-launch" id="mode-puzzle" title="Today's chess-style card puzzle">🧩 Daily Puzzle</button>
-          <button class="mode-btn" id="mode-reading" title="Read along with Pokémon friends">📚 Story Time</button>
-          <button class="mode-btn" id="mode-explore" title="Browse every Pokémon in the Pokédex">🔍 Explore</button>
-          <button class="mode-btn" id="mode-redeem" title="Got a code? Redeem it for a random Pokémon">🎁 Redeem Code</button>
-          <button class="mode-btn" id="mode-math" ${currentUser ? "" : "disabled"} title="${currentUser ? "Solve math quizzes and earn Pokémon cards" : "Sign in to play Math Mode"}">🧮 Math Mode</button>
-          ${currentUser?.is_admin ? `<button class="mode-btn" id="mode-admin" title="Generate codes, manage admins">🛠 Admin Panel</button>` : ""}
-          <button class="mode-btn" id="mode-settings" title="Game settings">⚙ Settings</button>
-          <button class="mode-btn" id="how-to-play-btn">How to play</button>
+          <div class="mode-group">
+            <div class="mode-group-label">Battle</div>
+            <div class="mode-group-btns">
+              <button class="mode-btn" id="mode-mp-match" title="Get matched against another trainer online">🌐 Find online match</button>
+              <button class="mode-btn" id="mode-mp-friend" title="Share a code and play a friend">👥 Play vs friend</button>
+              <button class="mode-btn" id="mode-champion" title="Take on a Champion boss">👑 Fight a Champion</button>
+              <button class="mode-btn story-launch" id="mode-story" ${currentUser ? "" : "disabled"} title="${currentUser ? "Begin a Story Mode chapter" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
+            </div>
+          </div>
+          <div class="mode-group">
+            <div class="mode-group-label">Collect &amp; Trade</div>
+            <div class="mode-group-btns">
+              <button class="mode-btn" id="mode-trade" ${currentUser ? "" : "disabled"} title="${currentUser ? "Trade cards and gift them to other trainers" : "Sign in to trade &amp; gift"}">🔄 Trade &amp; Gift</button>
+              <button class="mode-btn" id="mode-explore" title="Browse every Pokémon in the Pokédex">🔍 Explore</button>
+              <button class="mode-btn" id="mode-redeem" title="Got a code? Redeem it for a random Pokémon">🎁 Redeem Code</button>
+            </div>
+          </div>
+          <div class="mode-group">
+            <div class="mode-group-label">Daily &amp; Learn</div>
+            <div class="mode-group-btns">
+              <button class="mode-btn puzzle-launch" id="mode-puzzle" title="Today's chess-style card puzzle">🧩 Daily Puzzle</button>
+              <button class="mode-btn" id="mode-reading" title="Read along with Pokémon friends">📚 Story Time</button>
+              <button class="mode-btn" id="mode-math" ${currentUser ? "" : "disabled"} title="${currentUser ? "Solve math quizzes and earn Pokémon cards" : "Sign in to play Math Mode"}">🧮 Math Mode</button>
+            </div>
+          </div>
+          <div class="mode-group">
+            <div class="mode-group-label">More</div>
+            <div class="mode-group-btns">
+              ${currentUser?.is_admin ? `<button class="mode-btn" id="mode-admin" title="Generate codes, manage admins">🛠 Admin Panel</button>` : ""}
+              <button class="mode-btn" id="mode-settings" title="Game settings">⚙ Settings</button>
+              <button class="mode-btn" id="how-to-play-btn">❔ How to play</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -542,6 +562,7 @@ function renderMenu() {
   // "sign in to play" CTA).  Lazy-rendered so it doesn't block first paint.
   daily.renderDailyCard($("#daily-card-slot"), { currentUser }).catch(() => {});
   if (currentUser) loadAndRenderChallenges();
+  if (currentUser) loadAndRenderGiftBadge();
 
   // First-time helper: nudge new visitors who haven't started a game yet.
   if (!localStorage.getItem("pokemon-tcg-seen-howto")) {
@@ -555,6 +576,26 @@ function renderMenu() {
 
 // "People played your shared deck" inbox — surfaces every time the
 // home screen renders, so the loop closes from share → battle →
+// Unseen-gift badge on the "Trade & Gift" menu button. Best-effort — a
+// failed fetch just leaves the button un-badged.
+async function loadAndRenderGiftBadge() {
+  const btn = $("#mode-trade");
+  if (!btn) return;
+  try {
+    const r = await fetch("/me/gifts");
+    if (!r.ok) return;
+    const { unseen } = await r.json();
+    btn.querySelector(".mode-badge")?.remove();
+    if (unseen > 0) {
+      const badge = document.createElement("span");
+      badge.className = "mode-badge";
+      badge.textContent = unseen > 99 ? "99+" : String(unseen);
+      badge.title = `${unseen} new gift${unseen === 1 ? "" : "s"} waiting`;
+      btn.appendChild(badge);
+    }
+  } catch {}
+}
+
 // notification on the original sharer's next visit.
 async function loadAndRenderChallenges() {
   const panel = $("#challenges-inbox");

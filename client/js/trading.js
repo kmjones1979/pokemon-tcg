@@ -4,9 +4,10 @@ import { TYPE_COLORS } from "./type-chart.js";
 import { flashVerdict } from "./animations.js";
 
 let _stage = null;
-let _tab = "market"; // market | mine | create | history
+let _tab = "market"; // market | create | gift | mine | history
 let _collection = []; // cached on first open
 let _pokedex = [];
+let _giftUnseen = 0;  // unseen received-gift count, for the tab badge
 
 function escape(s) {
   return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[c]);
@@ -35,6 +36,7 @@ export async function openTradeMarket({ currentUser } = {}) {
   await Promise.all([
     loadCollection(),
     loadPokedexCache(),
+    loadGiftBadge(),
   ]);
   await renderTab();
 }
@@ -46,6 +48,13 @@ async function loadCollection() {
       const data = await r.json();
       _collection = data.cards || data.collection || [];
     }
+  } catch {}
+}
+
+async function loadGiftBadge() {
+  try {
+    const r = await fetch("/me/gifts");
+    if (r.ok) { const d = await r.json(); _giftUnseen = d.unseen || 0; }
   } catch {}
 }
 
@@ -68,6 +77,7 @@ async function renderTab() {
       <nav class="trade-tabs">
         <button class="trade-tab ${_tab === "market" ? "active" : ""}" data-tab="market">Market</button>
         <button class="trade-tab ${_tab === "create" ? "active" : ""}" data-tab="create">Create Offer</button>
+        <button class="trade-tab ${_tab === "gift" ? "active" : ""}" data-tab="gift">🎁 Gift a Card${_giftUnseen ? `<span class="trade-badge">${_giftUnseen}</span>` : ""}</button>
         <button class="trade-tab ${_tab === "mine" ? "active" : ""}" data-tab="mine">My Offers</button>
         <button class="trade-tab ${_tab === "history" ? "active" : ""}" data-tab="history">History</button>
       </nav>
@@ -81,6 +91,7 @@ async function renderTab() {
   const body = _stage.querySelector("#trade-body");
   if (_tab === "market") await renderMarket(body);
   else if (_tab === "create") await renderCreate(body);
+  else if (_tab === "gift") await renderGift(body);
   else if (_tab === "mine") await renderMine(body);
   else if (_tab === "history") await renderHistory(body);
 }
@@ -263,6 +274,179 @@ function pickTile(c, kind) {
       <div class="tile-name-sm">${escape(c.name)}</div>
       ${kind === "offered" ? `<div class="tile-qty">×${qty}</div>` : ""}
     </button>`;
+}
+
+async function renderGift(body) {
+  // Opening the tab clears the unseen badge.
+  if (_giftUnseen) {
+    _giftUnseen = 0;
+    fetch("/me/gifts/seen", { method: "POST" }).catch(() => {});
+    _stage.querySelector('.trade-tab[data-tab="gift"] .trade-badge')?.remove();
+  }
+
+  const canSend = _collection.length > 0;
+  const sorted = [..._collection].sort((a, b) => (b.quantity || 0) - (a.quantity || 0));
+
+  body.innerHTML = `
+    <div class="trade-create gift-pane">
+      ${canSend ? `
+      <div class="trade-step">
+        <div class="trade-step-num">1</div>
+        <div class="trade-step-content">
+          <div class="trade-step-title">Card to gift (from your collection)</div>
+          <div class="trade-pick-grid" id="gift-pick">
+            ${sorted.map((c) => pickTile(c, "offered")).join("")}
+          </div>
+        </div>
+      </div>
+      <div class="trade-step">
+        <div class="trade-step-num">2</div>
+        <div class="trade-step-content">
+          <div class="trade-step-title">Trainer to gift it to</div>
+          <input type="search" class="trade-want-search gift-user-search" placeholder="Search a trainer by name…" autocomplete="off" />
+          <div class="gift-user-results" id="gift-users"></div>
+          <div class="gift-extra">
+            <label class="gift-qty-row">Copies
+              <input type="number" id="gift-qty" min="1" value="1" class="gift-qty-input" />
+            </label>
+            <input type="text" id="gift-message" class="gift-message-input" maxlength="200" placeholder="Add a note (optional)…" />
+          </div>
+        </div>
+      </div>
+      <div class="trade-submit-row">
+        <div class="trade-summary" id="gift-summary">Pick a card and a trainer above.</div>
+        <button class="primary" id="gift-submit" disabled>Send gift 🎁</button>
+      </div>
+      ` : `<div class="trade-empty">You don't own any cards to gift yet. Win matches to earn cards.</div>`}
+      <div class="gift-log" id="gift-log"><div class="trade-loading">Loading gifts…</div></div>
+    </div>`;
+
+  if (canSend) wireGiftForm(body);
+  renderGiftLog(body.querySelector("#gift-log"));
+}
+
+function wireGiftForm(body) {
+  let chosenCard = null;
+  let chosenUser = null;
+
+  const qtyInput = body.querySelector("#gift-qty");
+  const msgInput = body.querySelector("#gift-message");
+  const submit = body.querySelector("#gift-submit");
+  const summary = body.querySelector("#gift-summary");
+
+  const refresh = () => {
+    if (chosenCard && chosenUser) {
+      const max = chosenCard.quantity || 1;
+      let n = Math.max(1, Math.min(max, Math.floor(Number(qtyInput.value) || 1)));
+      qtyInput.value = n;
+      qtyInput.max = max;
+      submit.disabled = false;
+      summary.innerHTML = `Gift <strong>${n}× ${escape(chosenCard.name)}</strong> to <strong>${escape(chosenUser.display_name)}</strong>`;
+    } else {
+      submit.disabled = true;
+      summary.textContent = "Pick a card and a trainer above.";
+    }
+  };
+
+  body.querySelectorAll("#gift-pick [data-pick]").forEach((tile) => {
+    tile.addEventListener("click", () => {
+      body.querySelectorAll("#gift-pick [data-pick]").forEach((t) => t.classList.remove("selected"));
+      tile.classList.add("selected");
+      chosenCard = _collection.find((c) => c.id === Number(tile.dataset.pick));
+      refresh();
+    });
+  });
+
+  const userInput = body.querySelector(".gift-user-search");
+  const userResults = body.querySelector("#gift-users");
+  let _timer = null;
+  async function searchUsers() {
+    const q = userInput.value.trim();
+    if (q.length < 2) { userResults.innerHTML = ""; return; }
+    try {
+      const r = await fetch(`/me/users/search?q=${encodeURIComponent(q)}`);
+      const { users } = await r.json();
+      if (!users?.length) { userResults.innerHTML = `<div class="trade-hint">No trainers found.</div>`; return; }
+      userResults.innerHTML = users.map((u) =>
+        `<button class="gift-user-pill" data-uid="${escape(u.id)}" data-name="${escape(u.display_name)}">${escape(u.display_name)}</button>`).join("");
+      userResults.querySelectorAll("[data-uid]").forEach((pill) => {
+        pill.addEventListener("click", () => {
+          userResults.querySelectorAll("[data-uid]").forEach((p) => p.classList.remove("selected"));
+          pill.classList.add("selected");
+          chosenUser = { id: pill.dataset.uid, display_name: pill.dataset.name };
+          refresh();
+        });
+      });
+    } catch { userResults.innerHTML = `<div class="trade-hint">Search error.</div>`; }
+  }
+  userInput.addEventListener("input", () => { clearTimeout(_timer); _timer = setTimeout(searchUsers, 240); });
+  qtyInput.addEventListener("input", refresh);
+
+  submit.addEventListener("click", async () => {
+    if (!chosenCard || !chosenUser) return;
+    const qty = Math.max(1, Math.min(chosenCard.quantity || 1, Math.floor(Number(qtyInput.value) || 1)));
+    if (!confirm(`Gift ${qty}× ${chosenCard.name} to ${chosenUser.display_name}? This can't be undone.`)) return;
+    submit.disabled = true;
+    try {
+      const r = await fetch("/me/gifts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          recipientUserId: chosenUser.id,
+          pokemonId: chosenCard.id,
+          quantity: qty,
+          message: msgInput.value.trim(),
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) { flashVerdict(data.error || "Couldn't send gift.", "weak"); submit.disabled = false; return; }
+      flashVerdict(`Gift sent to ${data.recipientName || chosenUser.display_name}! 🎁`, "super");
+      await loadCollection();
+      renderTab();
+    } catch (err) {
+      flashVerdict(`Network error: ${err.message}`, "weak");
+      submit.disabled = false;
+    }
+  });
+}
+
+async function renderGiftLog(el) {
+  if (!el) return;
+  try {
+    const r = await fetch("/me/gifts");
+    const { received, sent } = await r.json();
+    if (!received.length && !sent.length) {
+      el.innerHTML = `<div class="gift-log-empty">No gifts yet. Send one above to brighten a trainer's day.</div>`;
+      return;
+    }
+    el.innerHTML = `
+      <div class="gift-log-cols">
+        <div class="gift-log-col">
+          <div class="gift-log-head">Received (${received.length})</div>
+          ${received.length ? received.map((g) => giftLogRow(g, "in")).join("") : `<div class="gift-log-empty">Nothing yet.</div>`}
+        </div>
+        <div class="gift-log-col">
+          <div class="gift-log-head">Sent (${sent.length})</div>
+          ${sent.length ? sent.map((g) => giftLogRow(g, "out")).join("") : `<div class="gift-log-empty">Nothing yet.</div>`}
+        </div>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div class="trade-error">${escape(err.message)}</div>`;
+  }
+}
+
+function giftLogRow(g, dir) {
+  const who = dir === "in" ? `from ${escape(g.senderName)}` : `to ${escape(g.recipientName)}`;
+  const color = TYPE_COLORS[g.card?.types?.[0]] || "#888";
+  const rare = g.card?.is_mythical ? "mythical" : g.card?.is_legendary ? "legendary" : "";
+  return `
+    <div class="gift-row ${dir === "in" && !g.seen ? "fresh" : ""}" style="--type:${color}" ${rare ? `data-rare="${rare}"` : ""}>
+      <div class="gift-row-art">${g.card?.sprite_front ? `<img src="${g.card.sprite_front}" alt="" loading="lazy">` : "🎁"}</div>
+      <div class="gift-row-body">
+        <div class="gift-row-title">${dir === "in" ? "▾" : "▴"} ${g.quantity}× ${escape(g.card?.name || "card")} <span class="gift-row-who">${who}</span></div>
+        ${g.message ? `<div class="gift-row-msg">“${escape(g.message)}”</div>` : ""}
+      </div>
+    </div>`;
 }
 
 async function renderMine(body) {
