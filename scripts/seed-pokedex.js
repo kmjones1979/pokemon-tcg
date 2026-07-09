@@ -7,6 +7,13 @@
 //   2. Paste scripts/schema.sql into Supabase SQL Editor → Run
 //   3. Copy .env.example → .env and fill SUPABASE_URL + SUPABASE_SERVICE_KEY
 //   4. yarn && node scripts/seed-pokedex.js
+//
+// NOTE: this seeds sprite_front/sprite_back as raw.githubusercontent.com URLs,
+// which rate-limit hot-linking (HTTP 429) and render as broken card images.
+// After seeding (or re-seeding new Pokémon), run:
+//     node scripts/mirror-sprites.js --confirm
+// to self-host the art on Supabase Storage and rewrite the columns. It's
+// idempotent — it only mirrors rows still pointing at GitHub.
 
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
