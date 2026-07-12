@@ -516,6 +516,26 @@ body.dragging-attack .trainer-block.ai {
   text-shadow: 0 0 4px #ff90c8, 0 0 8px #ff90c8;
   border-color: rgba(255, 144, 200, 0.6);
 }
+.card-rarity.mega {
+  color: #e6d3ff;
+  text-shadow: 0 0 4px #c678f6, 0 0 8px #8b3fd4;
+  border-color: rgba(198, 120, 246, 0.7);
+}
+
+/* Mega cards: animated video art + a prestige purple/gold frame. */
+.card-mega-vid {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
+}
+.card-art.mega-art {
+  background: radial-gradient(circle at 50% 40%, rgba(198, 120, 246, 0.3), rgba(0, 0, 0, 0.65));
+}
+.card.card-mega {
+  border-color: rgba(198, 120, 246, 0.8);
+  box-shadow: 0 0 16px rgba(198, 120, 246, 0.45), inset 0 0 12px rgba(198, 120, 246, 0.18);
+}
 
 .card-status {
   position: absolute;

@@ -153,7 +153,11 @@ function loadPokedex() {
       if (data.length < PAGE) break;
       from += PAGE;
     }
-    pokedex = all.map(toCard);
+    // Megas are obtainable ONLY by mega-evolving, never from random drops or
+    // AI decks, so keep them out of the gameplay pool. Players still play
+    // their own Megas — those load via deck hydration, which queries by id.
+    const { isMegaId } = require("./shared/mega-evolutions");
+    pokedex = all.filter((r) => !isMegaId(r.id)).map(toCard);
     // Bake the evolution-target card data onto each card so the engine
     // can transform a Pokémon mid-match without needing a separate
     // pokedex lookup. The chain table is static (shared/evolution-

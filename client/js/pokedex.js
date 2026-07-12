@@ -7,6 +7,7 @@
 import { filterPokedexEntries } from "./search-utils.js";
 
 let _allRows = [];   // unfiltered rows from /me/pokedex
+let _megas = [];     // Mega showcase rows from /me/pokedex
 let _query = "";     // current search string
 let _evolveOnly = false; // when true, grid shows only "ready to evolve" species
 let _nameById = new Map(); // id → name, for resolving evolution targets
@@ -37,8 +38,9 @@ async function refresh(overlay, { showLoading = false } = {}) {
   try {
     const r = await fetch("/me/pokedex");
     if (!r.ok) throw new Error(r.statusText);
-    const { total, owned, rows } = await r.json();
+    const { total, owned, rows, megas } = await r.json();
     _nameById = new Map(rows.map((row) => [row.id, row.name]));
+    _megas = megas || [];
     render(overlay, rows, owned, total);
   } catch (err) {
     overlay.innerHTML = `<div class="pdx-err">Couldn't load: ${err.message || "unknown"}</div>`;
@@ -91,9 +93,11 @@ function render(overlay, rows, owned, total) {
           </div>
         `).join("")}
       </div>
+      ${renderMegaShowcase()}
       <div class="pdx-grid"></div>
     </div>
   `;
+  bindMegaShowcase(overlay);
   const searchEl = overlay.querySelector(".pdx-search");
   const countEl  = overlay.querySelector(".pdx-search-count");
   const evoBtn   = overlay.querySelector(".pdx-evolve-filter");
@@ -119,6 +123,75 @@ function render(overlay, rows, owned, total) {
   overlay.querySelector(".pdx-x").addEventListener("click", close);
 }
 
+// --- Mega Evolution showcase -----------------------------------------------
+// A collapsible strip above the grid. Owned Megas play their looping HD video;
+// craftable ones show a "Mega Evolve" button; locked ones show progress toward
+// the 3-copy requirement on the base form.
+function renderMegaShowcase() {
+  if (!_megas.length) return "";
+  const readyN = _megas.filter((m) => m.canEvolveNow).length;
+  const tiles = _megas.map((m) => {
+    const baseName = _nameById.get(m.baseId) || `#${m.baseId}`;
+    const media = m.owned && m.videoUrl
+      ? `<video class="pdx-mega-vid" autoplay loop muted playsinline poster="${m.sprite}"><source src="${m.videoUrl}" type="video/mp4"></video>`
+      : `<img class="pdx-mega-img${m.owned ? "" : " locked"}" src="${m.sprite}" loading="lazy" alt="${escape(m.name)}">`;
+    let action;
+    if (m.canEvolveNow) {
+      action = `<button class="pdx-mega-btn" data-base="${m.baseId}">⚡ Mega Evolve</button>`;
+    } else if (m.owned) {
+      action = `<div class="pdx-mega-have">Owned ×${m.quantity}</div>`;
+    } else {
+      action = `<div class="pdx-mega-progress">${m.baseOwned}/${m.minCopies} ${escape(baseName)}</div>`;
+    }
+    return `
+      <div class="pdx-mega-tile${m.owned ? " owned" : ""}${m.canEvolveNow ? " ready" : ""}">
+        <div class="pdx-mega-media">
+          ${media}
+          ${m.owned ? `<span class="pdx-mega-badge">MEGA${m.quantity > 1 ? ` ×${m.quantity}` : ""}</span>` : ""}
+        </div>
+        <div class="pdx-mega-name">${escape(m.name)}</div>
+        ${action}
+      </div>`;
+  }).join("");
+  return `
+    <details class="pdx-mega-section" ${readyN ? "open" : ""}>
+      <summary class="pdx-mega-summary">⚡ Mega Evolutions${readyN ? ` <span class="pdx-mega-ready-badge">${readyN} ready</span>` : ""}</summary>
+      <div class="pdx-mega-strip">${tiles}</div>
+    </details>`;
+}
+
+function bindMegaShowcase(overlay) {
+  overlay.querySelectorAll(".pdx-mega-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const baseId = Number(btn.dataset.base);
+      const m = _megas.find((x) => x.baseId === baseId);
+      if (m) megaEvolve(overlay, m);
+    });
+  });
+}
+
+// Mega Evolve: own MEGA_MIN_COPIES of the base, consume MEGA_CONSUMES.
+async function megaEvolve(overlay, mega) {
+  const baseName = _nameById.get(mega.baseId) || `#${mega.baseId}`;
+  if (!confirm(`Mega Evolve ${baseName} into ${mega.name}?\n\nThis uses ${mega.consumes} of your ${mega.minCopies} ${baseName} copies and grants 1 ${mega.name}.`)) {
+    return;
+  }
+  try {
+    const r = await fetch("/me/mega-evolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pokemonId: mega.baseId }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.ok) throw new Error(data.error || r.statusText || "Mega Evolution failed");
+    await refresh(overlay);
+    toast(overlay, `🌟 ${baseName} Mega Evolved into ${data.to?.name || mega.name}!`);
+  } catch (err) {
+    toast(overlay, `Couldn't Mega Evolve: ${err.message || "unknown"}`, true);
+  }
+}
+
 function paintGrid(overlay, rows, { evolveView = false } = {}) {
   const grid = overlay.querySelector(".pdx-grid");
   if (!grid) return;
@@ -138,7 +211,9 @@ function paintGrid(overlay, rows, { evolveView = false } = {}) {
     const evoName = r.evolvesToId ? (_nameById.get(r.evolvesToId) || `#${r.evolvesToId}`) : "";
     // Copies this evolution actually consumes (1 for a basic, 2 for a stage 1).
     const cost = r.evolveCost || 1;
-    cell.className = `pdx-cell ${ownedClass} ${rarity}${canEvolve ? " can-evolve" : ""}`;
+    // Mega-evolvable when this stage-2 has a Mega and we own its threshold.
+    const canMega = !!r.megaId && r.quantity >= (r.megaMinCopies || Infinity);
+    cell.className = `pdx-cell ${ownedClass} ${rarity}${canEvolve ? " can-evolve" : ""}${canMega ? " can-mega" : ""}`;
     cell.title = r.quantity > 0
       ? `#${r.id} ${r.name} ×${r.quantity}${r.shinyLevel ? ` ★${r.shinyLevel}` : ""}`
       : `#${r.id} ???`;
@@ -149,11 +224,19 @@ function paintGrid(overlay, rows, { evolveView = false } = {}) {
       ${r.quantity > 1 ? `<div class="pdx-qty">×${r.quantity}</div>` : ""}
       ${r.shinyLevel > 0 ? `<div class="pdx-shiny">★${r.shinyLevel}</div>` : ""}
       ${canEvolve ? `<button class="pdx-evolve" title="Evolve into ${escape(evoName)} (uses ${cost} ${cost === 1 ? "copy" : "copies"})">▲ Evolve</button>` : ""}
+      ${canMega ? `<button class="pdx-mega-evolve" title="Mega Evolve (uses 2 copies)">⚡ Mega</button>` : ""}
     `;
     if (canEvolve) {
       cell.querySelector(".pdx-evolve").addEventListener("click", (e) => {
         e.stopPropagation();
         evolveCard(overlay, r.id, r.name, evoName, cost);
+      });
+    }
+    if (canMega) {
+      cell.querySelector(".pdx-mega-evolve").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const m = _megas.find((x) => x.baseId === r.id);
+        if (m) megaEvolve(overlay, m);
       });
     }
     grid.appendChild(cell);

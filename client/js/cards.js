@@ -2,6 +2,10 @@
 
 import { TYPE_COLORS } from "./type-chart.js";
 import { isGuardian } from "./passives.js";
+// CommonJS shared registry — same interop pattern game.js uses for
+// evolution-chains.js (esbuild resolves .default at bundle time).
+import * as _megaMod from "../../shared/mega-evolutions.js";
+const _mega = _megaMod.default ?? _megaMod;
 
 function isGuardianCard(card) { return isGuardian(card); }
 
@@ -51,6 +55,15 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
   const hp = instance ? instance.currentHp : card.cardHp;
   const maxHp = instance?.maxHp ?? card.cardHp;
 
+  // Mega cards: play their looping HD video in the art slot (falls back to the
+  // poster sprite until the video is generated). Also flags the frame + ribbon.
+  const isMega = !!_mega.isMegaId?.(card.id);
+  const megaVid = isMega ? _mega.megaVideoUrl?.(card.id) : null;
+  if (isMega) el.classList.add("card-mega");
+  const artInner = megaVid
+    ? `<video class="card-mega-vid" autoplay loop muted playsinline poster="${card.sprite_front || ""}"><source src="${megaVid}" type="video/mp4"></video>`
+    : `<img loading="lazy" src="${card.sprite_front || ""}" alt="${card.name}" draggable="false">`;
+
   el.innerHTML = `
     <div class="card-inner">
       <div class="card-sheen"></div>
@@ -64,8 +77,8 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
           ).join("")}
         </div>
       </header>
-      <div class="card-art">
-        <img loading="lazy" src="${card.sprite_front || ""}" alt="${card.name}" draggable="false">
+      <div class="card-art${isMega ? " mega-art" : ""}">
+        ${artInner}
       </div>
       <footer class="card-footer">
         <div class="card-name">${escape(card.name)}</div>
@@ -81,7 +94,7 @@ export function renderCard(card, { compact = false, instance = null } = {}) {
       ${!instance && card.shinyLevel ? `
         <div class="card-level shiny-badge" title="Shiny L${card.shinyLevel} (+${card.shinyLevel} HP, +${card.shinyLevel} ATK)">★${card.shinyLevel}</div>
       ` : ""}
-      ${card.is_legendary ? `<div class="card-rarity">★ LEGENDARY ★</div>` : card.is_mythical ? `<div class="card-rarity mythical">✦ MYTHICAL ✦</div>` : ""}
+      ${isMega ? `<div class="card-rarity mega">✦ MEGA ✦</div>` : card.is_legendary ? `<div class="card-rarity">★ LEGENDARY ★</div>` : card.is_mythical ? `<div class="card-rarity mythical">✦ MYTHICAL ✦</div>` : ""}
       ${card._masteryLevel ? `<div class="card-mastery" title="Card Mastery L${card._masteryLevel}${card._masteryLevel >= 3 ? " · +1 ATK active" : ""}">${"★".repeat(card._masteryLevel)}</div>` : ""}
     </div>
     ${isGuardianCard(card) ? `

@@ -78,8 +78,9 @@ try { _handLifted = localStorage.getItem("pokemon-tcg-hand-lifted") === "1"; } c
 // the turn stay manual). Persisted so it survives reloads. `_autoAttackRunning`
 // guards against re-entrancy; `_autoArmed` fires the loop exactly once per turn
 // — it re-arms whenever control leaves the player (see render()).
+// Always starts OFF — auto-attack is an opt-in you re-enable per session; we
+// deliberately don't persist it "on" so a match never begins auto-playing.
 let autoAttackEnabled = false;
-try { autoAttackEnabled = localStorage.getItem("pokemon-tcg-auto-attack") === "1"; } catch {}
 let _autoAttackRunning = false;
 let _autoArmed = true;
 // Touch devices get a "tap-to-peek, tap-again-to-play" affordance so users
@@ -1530,7 +1531,6 @@ function performAttackFromDrag(fromSlot, target) {
 // doesn't drain itself while the toggle is left on.
 function toggleAutoAttack() {
   autoAttackEnabled = !autoAttackEnabled;
-  try { localStorage.setItem("pokemon-tcg-auto-attack", autoAttackEnabled ? "1" : "0"); } catch {}
   flashVerdict(autoAttackEnabled ? "⚔️ Auto-attack ON" : "Auto-attack OFF", autoAttackEnabled ? "super" : "weak");
   // Turning it on should act on the current turn too, so re-arm the loop.
   if (autoAttackEnabled) _autoArmed = true;

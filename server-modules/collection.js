@@ -10,6 +10,9 @@
 
 const { toCard } = require("../shared/deck-builder");
 const { evolutionFor, evolvingToIds } = require("../shared/evolution-chains");
+const {
+  MEGA_MIN_COPIES, MEGA_CONSUMES, megaForBase, isMegaId, megaDef, megaVideoUrl,
+} = require("../shared/mega-evolutions");
 
 // Set of species that are themselves an evolution target — i.e. something
 // evolves INTO them. Used to tell a "stage 1" (mid-chain) apart from a basic.
@@ -228,11 +231,15 @@ function mount(app, supabase) {
       .eq("user_id", req.user.id);
     if (e2) return res.status(500).json({ error: e2.message });
     const owned = new Map((mine || []).map((r) => [r.pokemon_id, r]));
-    const total = all.length;
+    // Megas are excluded from the species grid + completion count (they're a
+    // prestige tier, not one of the base dex species) and surfaced separately.
+    const species = all.filter((p) => !isMegaId(p.id));
+    const total = species.length;
     let ownedCount = 0;
-    const rows = all.map((p) => {
+    const rows = species.map((p) => {
       const o = owned.get(p.id);
       if (o) ownedCount++;
+      const megaId = megaForBase(p.id);
       return {
         id: p.id,
         name: p.name,
@@ -252,9 +259,120 @@ function mount(app, supabase) {
         // Both null when the species can't evolve.
         evolveCost: evolutionFor(p.id) ? copiesConsumed(p.id) : null,
         evolveMinCopies: evolutionFor(p.id) ? minCopiesToEvolve(p.id) : null,
+        // Mega Evolution: a stage-2 with a Mega form can mega-evolve once the
+        // player owns MEGA_MIN_COPIES. megaId is the resulting card's dex id.
+        megaId: megaId || null,
+        megaMinCopies: megaId ? MEGA_MIN_COPIES : null,
       };
     });
-    res.json({ total, owned: ownedCount, rows });
+    // The Mega showcase: every defined Mega, flagged with whether the player
+    // owns it and whether they can craft it right now. Includes the video URL
+    // so the client can play the looping animation for owned Megas.
+    const megaRows = all.filter((p) => isMegaId(p.id));
+    const megas = megaRows.map((p) => {
+      const def = megaDef(p.id) || {};
+      const o = owned.get(p.id);
+      const base = owned.get(def.baseId);
+      return {
+        id: p.id,
+        baseId: def.baseId,
+        name: p.name,
+        sprite: p.sprite_front,
+        videoUrl: megaVideoUrl(p.id),
+        types: p.types,
+        quantity: o?.quantity || 0,
+        owned: !!o && o.quantity > 0,
+        // Can the player mega-evolve into this right now?
+        canEvolveNow: (base?.quantity || 0) >= MEGA_MIN_COPIES,
+        baseOwned: base?.quantity || 0,
+        minCopies: MEGA_MIN_COPIES,
+        consumes: MEGA_CONSUMES,
+      };
+    });
+    res.json({ total, owned: ownedCount, rows, megas });
+  });
+
+  // POST /me/mega-evolve — Mega Evolve a stage-2 into its Mega form. Requires
+  // owning MEGA_MIN_COPIES of the base; consumes MEGA_CONSUMES of them and
+  // grants one Mega card. Fail-safe deduct-then-grant with rollback, mirroring
+  // /me/evolve.
+  app.post("/me/mega-evolve", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const baseId = Number(req.body?.pokemonId);
+    if (!Number.isInteger(baseId) || baseId < 1) {
+      return res.status(400).json({ error: "bad id" });
+    }
+    const megaId = megaForBase(baseId);
+    if (!megaId) {
+      return res.status(400).json({ error: "This Pokémon has no Mega Evolution." });
+    }
+
+    const { data: baseRow, error: readErr } = await supabase
+      .from("owned_cards")
+      .select("quantity")
+      .eq("user_id", req.user.id)
+      .eq("pokemon_id", baseId)
+      .maybeSingle();
+    if (readErr) return res.status(500).json({ error: readErr.message });
+    if (!baseRow || baseRow.quantity < MEGA_MIN_COPIES) {
+      return res.status(400).json({ error: `Need ${MEGA_MIN_COPIES} copies to Mega Evolve.` });
+    }
+
+    const { data: names, error: nameErr } = await supabase
+      .from("pokemon")
+      .select("id, name")
+      .in("id", [baseId, megaId]);
+    if (nameErr) return res.status(500).json({ error: nameErr.message });
+    const nameById = new Map((names || []).map((n) => [n.id, n.name]));
+    if (!nameById.has(megaId)) {
+      return res.status(500).json({ error: "Mega card is not seeded — run scripts/seed-megas.js." });
+    }
+
+    const newBaseQty = baseRow.quantity - MEGA_CONSUMES;
+
+    const { error: deductErr } = await supabase
+      .from("owned_cards")
+      .update({ quantity: newBaseQty })
+      .eq("user_id", req.user.id)
+      .eq("pokemon_id", baseId);
+    if (deductErr) return res.status(500).json({ error: deductErr.message });
+
+    const { data: megaRow, error: megaReadErr } = await supabase
+      .from("owned_cards")
+      .select("quantity")
+      .eq("user_id", req.user.id)
+      .eq("pokemon_id", megaId)
+      .maybeSingle();
+    if (megaReadErr) {
+      await rollbackDeduct(supabase, req.user.id, baseId, baseRow.quantity);
+      return res.status(500).json({ error: megaReadErr.message });
+    }
+    const newMegaQty = (megaRow?.quantity || 0) + 1;
+    const { error: grantErr } = await supabase
+      .from("owned_cards")
+      .upsert(
+        {
+          user_id: req.user.id,
+          pokemon_id: megaId,
+          quantity: newMegaQty,
+          acquired_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,pokemon_id" },
+      );
+    if (grantErr) {
+      await rollbackDeduct(supabase, req.user.id, baseId, baseRow.quantity);
+      return res.status(500).json({ error: grantErr.message });
+    }
+
+    res.json({
+      ok: true,
+      from: { id: baseId, name: nameById.get(baseId) || `#${baseId}`, quantity: newBaseQty },
+      to: {
+        id: megaId, name: nameById.get(megaId), quantity: newMegaQty,
+        videoUrl: megaVideoUrl(megaId),
+      },
+      consumed: MEGA_CONSUMES,
+    });
   });
 
   // POST /me/evolve — evolve one copy of `pokemonId` into its next form. Both
