@@ -11,15 +11,12 @@ let _query = "";     // current search string
 let _evolveOnly = false; // when true, grid shows only "ready to evolve" species
 let _nameById = new Map(); // id → name, for resolving evolution targets
 
-// Copies you must own before a species can be evolved. Must match the
-// server's EVOLVE_MIN_COPIES in server-modules/collection.js. The number
-// actually consumed is stage-dependent and comes from each row's evolveCost.
-const EVOLVE_MIN_COPIES = 3;
-
-// A species is ready to evolve when you own enough duplicates AND it has a
-// next form. Single source of truth for the button + the filter view.
+// A species is ready to evolve when it has a next form AND you own at least
+// its (stage-dependent) minimum: 2 for a basic, 3 for a stage 1. The server
+// stamps evolveMinCopies per row. Single source of truth for the button +
+// the filter view.
 function isReadyToEvolve(r) {
-  return !!r.evolvesToId && r.quantity >= EVOLVE_MIN_COPIES;
+  return !!r.evolvesToId && r.quantity >= (r.evolveMinCopies || Infinity);
 }
 
 export async function open() {
@@ -128,7 +125,7 @@ function paintGrid(overlay, rows, { evolveView = false } = {}) {
   grid.innerHTML = "";
   if (rows.length === 0) {
     grid.innerHTML = `<div class="pdx-empty">${evolveView
-      ? `Nothing ready to evolve yet — collect ${EVOLVE_MIN_COPIES} copies of a Pokémon that has a next form.`
+      ? "Nothing ready to evolve yet — collect duplicates of a Pokémon that has a next form (2 for a basic, 3 for a stage 1)."
       : "No Pokémon match that search."}</div>`;
     return;
   }

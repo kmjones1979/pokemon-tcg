@@ -11,9 +11,6 @@
 const { toCard } = require("../shared/deck-builder");
 const { evolutionFor, evolvingToIds } = require("../shared/evolution-chains");
 
-// You must own this many copies of a species before it can be evolved.
-const EVOLVE_MIN_COPIES = 3;
-
 // Set of species that are themselves an evolution target — i.e. something
 // evolves INTO them. Used to tell a "stage 1" (mid-chain) apart from a basic.
 const EVOLUTION_TARGETS = new Set(evolvingToIds());
@@ -23,6 +20,13 @@ const EVOLUTION_TARGETS = new Set(evolvingToIds());
 // target of an earlier evolution.) The owner keeps the remainder.
 function copiesConsumed(pokemonId) {
   return EVOLUTION_TARGETS.has(pokemonId) ? 2 : 1;
+}
+
+// Copies you must OWN before a species can be evolved: one more than it
+// consumes, so an evolution always leaves you with at least one copy.
+// Basic → stage 1 needs 2; stage 1 → stage 2 needs 3.
+function minCopiesToEvolve(pokemonId) {
+  return copiesConsumed(pokemonId) + 1;
 }
 
 const DECK_SIZE = 30;
@@ -241,20 +245,22 @@ function mount(app, supabase) {
         shinyLevel: o?.shiny_level || 0,
         // Next form in the evolution chain (null for final forms / species
         // with no curated chain). Powers the Pokédex "Evolve" action, which
-        // is offered when the player owns EVOLVE_MIN_COPIES+ copies.
+        // is offered once the player owns evolveMinCopies+ copies.
         evolvesToId: evolutionFor(p.id) || null,
         // Copies an evolution of THIS species consumes (1 for a basic, 2 for
-        // a stage 1). null when the species can't evolve.
+        // a stage 1) and the minimum you must own to evolve (consumed + 1).
+        // Both null when the species can't evolve.
         evolveCost: evolutionFor(p.id) ? copiesConsumed(p.id) : null,
+        evolveMinCopies: evolutionFor(p.id) ? minCopiesToEvolve(p.id) : null,
       };
     });
     res.json({ total, owned: ownedCount, rows });
   });
 
-  // POST /me/evolve — evolve one copy of `pokemonId` into its next form. You
-  // must own EVOLVE_MIN_COPIES to be eligible, but the evolution only consumes
-  // a stage-dependent number of copies: 1 for a basic → stage 1, 2 for a
-  // stage 1 → stage 2 (see copiesConsumed). The remainder is kept. Chain data
+  // POST /me/evolve — evolve one copy of `pokemonId` into its next form. Both
+  // the eligibility gate and the copies consumed are stage-dependent: a basic
+  // needs 2 owned and consumes 1; a stage 1 needs 3 owned and consumes 2 (see
+  // minCopiesToEvolve / copiesConsumed). The remainder is kept. Chain data
   // lives in shared/evolution-chains.js.
   app.post("/me/evolve", async (req, res) => {
     if (!requireAuth(req, res)) return;
@@ -267,6 +273,7 @@ function mount(app, supabase) {
       return res.status(400).json({ error: "This Pokémon has no further evolution." });
     }
     const consumed = copiesConsumed(pokemonId);
+    const minCopies = minCopiesToEvolve(pokemonId);
 
     // How many of the base species do we hold?
     const { data: baseRow, error: readErr } = await supabase
@@ -276,8 +283,8 @@ function mount(app, supabase) {
       .eq("pokemon_id", pokemonId)
       .maybeSingle();
     if (readErr) return res.status(500).json({ error: readErr.message });
-    if (!baseRow || baseRow.quantity < EVOLVE_MIN_COPIES) {
-      return res.status(400).json({ error: `Need ${EVOLVE_MIN_COPIES} copies to evolve.` });
+    if (!baseRow || baseRow.quantity < minCopies) {
+      return res.status(400).json({ error: `Need ${minCopies} copies to evolve.` });
     }
 
     // Resolve display names for a friendly response + client toast.
