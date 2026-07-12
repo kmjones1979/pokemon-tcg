@@ -144,7 +144,7 @@ function renderMegaShowcase() {
       action = `<div class="pdx-mega-progress">${m.baseOwned}/${m.minCopies} ${escape(baseName)}</div>`;
     }
     return `
-      <div class="pdx-mega-tile${m.owned ? " owned" : ""}${m.canEvolveNow ? " ready" : ""}">
+      <div class="pdx-mega-tile${m.owned ? " owned" : ""}${m.canEvolveNow ? " ready" : ""}" data-base="${m.baseId}" title="View ${escape(m.name)}">
         <div class="pdx-mega-media">
           ${media}
           ${m.owned ? `<span class="pdx-mega-badge">MEGA${m.quantity > 1 ? ` ×${m.quantity}` : ""}</span>` : ""}
@@ -161,22 +161,96 @@ function renderMegaShowcase() {
 }
 
 function bindMegaShowcase(overlay) {
-  overlay.querySelectorAll(".pdx-mega-btn").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+  // The whole tile is clickable so even locked Megas open the modal to show
+  // progress; the inner button just bubbles up to the same handler.
+  overlay.querySelectorAll(".pdx-mega-tile, .pdx-mega-btn").forEach((el) => {
+    el.addEventListener("click", (e) => {
       e.stopPropagation();
-      const baseId = Number(btn.dataset.base);
-      const m = _megas.find((x) => x.baseId === baseId);
-      if (m) megaEvolve(overlay, m);
+      const host = el.closest("[data-base]") || el;
+      const baseId = Number(host.dataset.base);
+      const m = megaForBase(baseId);
+      if (m) openMegaModal(overlay, m);
     });
   });
 }
 
-// Mega Evolve: own MEGA_MIN_COPIES of the base, consume MEGA_CONSUMES.
-async function megaEvolve(overlay, mega) {
+// Resolve a Mega descriptor for a base id from the showcase data, with a
+// fallback built from the grid row so the modal opens even if _megas is empty.
+function megaForBase(baseId) {
+  const m = _megas.find((x) => x.baseId === baseId);
+  if (m) return m;
+  const row = _allRows.find((r) => r.id === baseId);
+  if (!row || !row.megaId) return null;
+  const min = row.megaMinCopies || 3;
+  return {
+    id: row.megaId,
+    baseId,
+    name: _nameById.get(row.megaId) || "Mega",
+    sprite: null,
+    videoUrl: null,
+    types: [],
+    quantity: 0,
+    owned: false,
+    canEvolveNow: row.quantity >= min,
+    baseOwned: row.quantity,
+    minCopies: min,
+    consumes: 2,
+  };
+}
+
+// --- Mega Evolution modal --------------------------------------------------
+// A real popup (replaces the native confirm, which some mobile/PWA contexts
+// silently suppress). Shows the Mega, a progress bar toward the requirement,
+// and the evolve action — enabled only when ready.
+function closeMegaModal() {
+  document.querySelector(".mega-modal-backdrop")?.remove();
+  document.removeEventListener("keydown", _megaModalKey, true);
+}
+function _megaModalKey(e) { if (e.key === "Escape") closeMegaModal(); }
+
+function openMegaModal(overlay, mega) {
+  closeMegaModal();
   const baseName = _nameById.get(mega.baseId) || `#${mega.baseId}`;
-  if (!confirm(`Mega Evolve ${baseName} into ${mega.name}?\n\nThis uses ${mega.consumes} of your ${mega.minCopies} ${baseName} copies and grants 1 ${mega.name}.`)) {
-    return;
-  }
+  const pct = Math.min(100, Math.round((mega.baseOwned / mega.minCopies) * 100));
+  const ready = mega.canEvolveNow;
+  const remaining = Math.max(0, mega.minCopies - mega.baseOwned);
+  const media = mega.owned && mega.videoUrl
+    ? `<video class="mega-modal-vid" autoplay loop muted playsinline poster="${mega.sprite || ""}"><source src="${mega.videoUrl}" type="video/mp4"></video>`
+    : `<img class="mega-modal-img${ready || mega.owned ? "" : " locked"}" src="${mega.sprite || ""}" alt="${escape(mega.name)}">`;
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "mega-modal-backdrop";
+  backdrop.innerHTML = `
+    <div class="mega-modal" role="dialog" aria-modal="true">
+      <button class="mega-modal-x" aria-label="Close">✕</button>
+      <div class="mega-modal-media">${media}<span class="mega-modal-badge">MEGA</span></div>
+      <div class="mega-modal-title">${escape(mega.name)}</div>
+      <div class="mega-modal-sub">Mega Evolution of ${escape(baseName)}</div>
+      <div class="mega-modal-progress">
+        <div class="mega-modal-progress-top">
+          <span>${escape(baseName)} copies</span>
+          <span class="${ready ? "done" : ""}">${mega.baseOwned} / ${mega.minCopies}${ready ? " ✓" : ""}</span>
+        </div>
+        <div class="mega-modal-bar"><div class="mega-modal-fill${ready ? " ready" : ""}" style="width:${pct}%"></div></div>
+      </div>
+      <div class="mega-modal-note">${ready
+        ? `Ready! Mega Evolving uses ${mega.consumes} ${escape(baseName)} (you keep ${mega.minCopies - mega.consumes}).`
+        : `Collect ${remaining} more ${escape(baseName)} to unlock this Mega Evolution.`}${mega.owned ? ` · You already own ×${mega.quantity}` : ""}</div>
+      <button class="mega-modal-go" ${ready ? "" : "disabled"}>${ready ? "⚡ Mega Evolve" : `Need ${remaining} more ${escape(baseName)}`}</button>
+    </div>`;
+  document.body.appendChild(backdrop);
+  document.addEventListener("keydown", _megaModalKey, true);
+  backdrop.querySelector(".mega-modal-x").addEventListener("click", closeMegaModal);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeMegaModal(); });
+  const go = backdrop.querySelector(".mega-modal-go");
+  if (ready) go.addEventListener("click", () => doMegaEvolve(overlay, mega, backdrop));
+}
+
+async function doMegaEvolve(overlay, mega, backdrop) {
+  const baseName = _nameById.get(mega.baseId) || `#${mega.baseId}`;
+  const go = backdrop.querySelector(".mega-modal-go");
+  go.disabled = true;
+  go.textContent = "Mega Evolving…";
   try {
     const r = await fetch("/me/mega-evolve", {
       method: "POST",
@@ -185,9 +259,24 @@ async function megaEvolve(overlay, mega) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok || !data.ok) throw new Error(data.error || r.statusText || "Mega Evolution failed");
-    await refresh(overlay);
-    toast(overlay, `🌟 ${baseName} Mega Evolved into ${data.to?.name || mega.name}!`);
+    await refresh(overlay); // updates counts + showcase behind the modal
+    // Swap the modal to a celebratory success view using fresh data.
+    const updated = _megas.find((x) => x.id === mega.id) || mega;
+    const media = updated.videoUrl
+      ? `<video class="mega-modal-vid" autoplay loop muted playsinline poster="${updated.sprite || ""}"><source src="${updated.videoUrl}" type="video/mp4"></video>`
+      : `<img class="mega-modal-img" src="${updated.sprite || ""}" alt="${escape(updated.name)}">`;
+    backdrop.querySelector(".mega-modal").innerHTML = `
+      <button class="mega-modal-x" aria-label="Close">✕</button>
+      <div class="mega-modal-media celebrate">${media}<span class="mega-modal-badge">MEGA</span></div>
+      <div class="mega-modal-title">🌟 ${escape(updated.name)}!</div>
+      <div class="mega-modal-sub">${escape(baseName)} Mega Evolved. You now own ×${data.to?.quantity ?? updated.quantity}.</div>
+      <div class="mega-modal-note">It's a playable card — add it to a deck from the Collection.</div>
+      <button class="mega-modal-go done-btn">Done</button>`;
+    backdrop.querySelector(".mega-modal-x").addEventListener("click", closeMegaModal);
+    backdrop.querySelector(".mega-modal-go").addEventListener("click", closeMegaModal);
   } catch (err) {
+    go.disabled = false;
+    go.textContent = "⚡ Mega Evolve";
     toast(overlay, `Couldn't Mega Evolve: ${err.message || "unknown"}`, true);
   }
 }
@@ -235,8 +324,8 @@ function paintGrid(overlay, rows, { evolveView = false } = {}) {
     if (canMega) {
       cell.querySelector(".pdx-mega-evolve").addEventListener("click", (e) => {
         e.stopPropagation();
-        const m = _megas.find((x) => x.baseId === r.id);
-        if (m) megaEvolve(overlay, m);
+        const m = megaForBase(r.id);
+        if (m) openMegaModal(overlay, m);
       });
     }
     grid.appendChild(cell);
