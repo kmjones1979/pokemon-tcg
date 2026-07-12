@@ -924,7 +924,9 @@ h1, h2, h3,
 .mega-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  /* Must sit above the Pokédex overlay (z-index 2500), or the modal opens
+     behind it and looks like the button did nothing. */
+  z-index: 3000;
   display: flex;
   align-items: center;
   justify-content: center;

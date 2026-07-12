@@ -219,12 +219,24 @@ function mount(app, supabase) {
   // Pokédex completion view — minimal data per row so the grid stays fast.
   app.get("/me/pokedex", async (req, res) => {
     if (!requireAuth(req, res)) return;
-    // All 1025 species in order (id, name, sprite, generation, types).
-    const { data: all, error: e1 } = await supabase
-      .from("pokemon")
-      .select("id, name, sprite_front, generation, types, is_legendary, is_mythical")
-      .order("id", { ascending: true });
-    if (e1) return res.status(500).json({ error: e1.message });
+    // All species + Mega rows. PostgREST caps a response at 1000 rows, and the
+    // table holds 1025 species + the Megas (ids 10000+), so we MUST paginate —
+    // a plain select silently drops everything past id 1000 (incl. the Megas).
+    const all = [];
+    const PAGE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error: e1 } = await supabase
+        .from("pokemon")
+        .select("id, name, sprite_front, generation, types, is_legendary, is_mythical")
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (e1) return res.status(500).json({ error: e1.message });
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
     const { data: mine, error: e2 } = await supabase
       .from("owned_cards")
       .select("pokemon_id, quantity, shiny_level")
