@@ -73,6 +73,15 @@ let _prevActivePlayer = null; // tracks active player so we can fire a turn-star
 // every turn.
 let _handLifted = false;
 try { _handLifted = localStorage.getItem("pokemon-tcg-hand-lifted") === "1"; } catch {}
+// Auto-attack: when ON, the player's ready Pokémon automatically pick a target
+// + ability and strike at the start of each of your turns (summoning + ending
+// the turn stay manual). Persisted so it survives reloads. `_autoAttackRunning`
+// guards against re-entrancy; `_autoArmed` fires the loop exactly once per turn
+// — it re-arms whenever control leaves the player (see render()).
+let autoAttackEnabled = false;
+try { autoAttackEnabled = localStorage.getItem("pokemon-tcg-auto-attack") === "1"; } catch {}
+let _autoAttackRunning = false;
+let _autoArmed = true;
 // Touch devices get a "tap-to-peek, tap-again-to-play" affordance so users
 // can read a card's abilities before committing. Desktop one-click play
 // stays unchanged.
@@ -1296,6 +1305,14 @@ function render() {
     <div class="hand" id="hand"></div>
 
     <aside class="log-panel" id="log-panel"></aside>
+
+    ${gameMode !== "mp" && state.youAre !== "spectator" ? `
+    <button id="auto-attack-toggle"
+            class="auto-attack-toggle ${autoAttackEnabled ? "is-on" : ""}"
+            title="Auto-attack: your Pokémon automatically use their abilities and strike the opponent each turn. Summoning and ending the turn stay manual.">
+      <span class="aa-icon">⚔️</span>
+      <span class="aa-text">Auto<br><strong>${autoAttackEnabled ? "ON" : "OFF"}</strong></span>
+    </button>` : ""}
   `;
 
   renderFields();
@@ -1304,6 +1321,7 @@ function render() {
 
   $("#end-turn-btn").addEventListener("click", onEndTurn);
   $("#hand-toggle-btn")?.addEventListener("click", toggleHandLift);
+  $("#auto-attack-toggle")?.addEventListener("click", toggleAutoAttack);
   // Apply hand-lift class. We honor the user's persisted preference, BUT
   // auto-suppress it when there's nothing playable in hand — no reason to
   // keep the fan covering the field once energy can't afford anything.
@@ -1340,6 +1358,13 @@ function render() {
     showYourTurnBanner();
   }
   _prevActivePlayer = state.activePlayer;
+
+  // Auto-attack: re-arm whenever control is NOT ours (so the loop fires once
+  // when our turn next begins), then try to run it when it IS our turn. The
+  // trigger is deferred inside maybeAutoAttack so the current render finishes
+  // painting before any attack animation starts.
+  if (state.activePlayer !== "player" || state.winner) _autoArmed = true;
+  maybeAutoAttack();
 
   // Trainer HP flash: if either side's HP dropped vs the previous render,
   // run the damage animation on that bar. When the PLAYER's HP drops
@@ -1496,6 +1521,140 @@ function performAttackFromDrag(fromSlot, target) {
   // classified by attackResultToEvents (super/weak/hit + maybe ko).
   for (const ev of attackResultToEvents(result)) playEmote(ev);
   animateHit(attackerEl, defenderEl, attackerInst, result, () => render());
+}
+
+// --- Auto-attack ------------------------------------------------------------
+// A left-rail toggle that plays out your attack step for you: each ready
+// Pokémon picks the best target + ability and strikes. It deliberately does
+// NOT summon cards or end your turn — those stay in your hands so the board
+// doesn't drain itself while the toggle is left on.
+function toggleAutoAttack() {
+  autoAttackEnabled = !autoAttackEnabled;
+  try { localStorage.setItem("pokemon-tcg-auto-attack", autoAttackEnabled ? "1" : "0"); } catch {}
+  flashVerdict(autoAttackEnabled ? "⚔️ Auto-attack ON" : "Auto-attack OFF", autoAttackEnabled ? "super" : "weak");
+  // Turning it on should act on the current turn too, so re-arm the loop.
+  if (autoAttackEnabled) _autoArmed = true;
+  render(); // repaint the button; render() calls maybeAutoAttack()
+}
+
+// Fire the auto-attack loop at most once per turn. Guarded so it only runs on
+// your own solo turn and never re-enters itself.
+function maybeAutoAttack() {
+  if (!autoAttackEnabled || !_autoArmed) return;
+  if (_autoAttackRunning) return;
+  if (!state || state.winner) return;
+  if (gameMode === "mp") return;            // server-authoritative — not supported here
+  if (state.youAre === "spectator") return;
+  if (state.activePlayer !== "player") return;
+  _autoArmed = false;
+  // Defer so the in-progress render() finishes painting before we animate.
+  setTimeout(() => { runAutoAttack(); }, 400);
+}
+
+async function runAutoAttack() {
+  if (_autoAttackRunning) return;
+  _autoAttackRunning = true;
+  // Drop any half-made manual selection so the two flows don't fight.
+  selectedAttacker = null;
+  chosenAbilityId = "basic";
+  hideAbilityPopover();
+  try {
+    // Cap well above FIELD_SIZE in case a strike somehow doesn't clear its
+    // attacker's ready flag — this must never loop forever.
+    for (let guard = 0; guard < 12; guard++) {
+      if (!autoAttackEnabled) break;
+      if (!state || state.winner) break;
+      if (state.activePlayer !== "player") break;
+      const p = state.players.player;
+      const ready = [];
+      for (let slot = 0; slot < p.field.length; slot++) {
+        const inst = p.field[slot];
+        if (inst && !inst.summoningSickness && !inst.attackedThisTurn) ready.push(slot);
+      }
+      if (!ready.length) break;
+      let acted = false;
+      for (const slot of ready) {
+        if (await autoAttackOne(slot)) { acted = true; break; }
+      }
+      if (!acted) break; // no ready attacker landed a legal strike — stop spinning
+      await sleep(320);  // brief beat between strikes so they read as distinct
+    }
+  } catch (err) {
+    console.error("[auto-attack] loop errored:", err);
+  } finally {
+    _autoAttackRunning = false;
+  }
+}
+
+// Plan + execute the best strike for a single ready attacker. Returns true if
+// a strike actually landed. Targeting rules (must-hit-Pokémon first, Guardian
+// routing) are enforced by attack(); we try candidates best-first and take the
+// first the engine accepts.
+async function autoAttackOne(fromSlot) {
+  const p = state.players.player;
+  const o = state.players.ai;
+  const inst = p.field[fromSlot];
+  if (!inst) return false;
+  const [basic, special] = abilitiesFor(inst.card);
+  const canSpecial = p.energy >= (special.energyCost || 0);
+
+  // Ordered target list. With no enemy Pokémon on the board the only legal
+  // target is the opposing trainer.
+  const hasField = o.field.some((s) => s != null);
+  let targets;
+  if (!hasField) {
+    targets = ["trainer"];
+  } else {
+    const cand = [];
+    for (let s = 0; s < o.field.length; s++) {
+      const d = o.field[s];
+      if (!d) continue;
+      const dmgSpecial = computeDamage(inst.card, d.card, { ability: special, preview: true }).damage;
+      const dmgBasic = computeDamage(inst.card, d.card, { ability: basic, preview: true }).damage;
+      cand.push({ slot: s, hp: d.currentHp, dmgSpecial, dmgBasic });
+    }
+    // Prefer a target we can KO with our best affordable ability, then raw damage.
+    cand.sort((a, b) => {
+      const aBest = canSpecial ? a.dmgSpecial : a.dmgBasic;
+      const bBest = canSpecial ? b.dmgSpecial : b.dmgBasic;
+      const aKO = aBest >= a.hp, bKO = bBest >= b.hp;
+      if (aKO !== bKO) return aKO ? -1 : 1;
+      return bBest - aBest;
+    });
+    targets = cand;
+  }
+
+  for (const t of targets) {
+    const target = t === "trainer" ? "trainer" : t.slot;
+    // Default to the free Basic; upgrade to the Special when affordable AND
+    // Basic alone wouldn't finish the target — spend energy where it matters,
+    // conserve it where Basic already secures the KO.
+    let abilityId = "basic";
+    if (canSpecial && target !== "trainer" && t.dmgBasic < t.hp) abilityId = "special";
+    if (await doAutoStrike(fromSlot, target, abilityId)) return true;
+  }
+  return false;
+}
+
+// Execute one strike with animation, mirroring performAttackFromDrag but
+// awaitable so the loop paces itself. Resolves false if the engine rejects the
+// move (e.g. Guardian routing) so the caller can try the next candidate.
+function doAutoStrike(fromSlot, target, abilityId) {
+  const attackerEl = $(`.player-field .field-slot[data-slot="${fromSlot}"] .card`);
+  const defenderEl = target === "trainer"
+    ? $(".trainer-block.ai")
+    : $(`.ai-field .field-slot[data-slot="${target}"] .card`);
+  const attackerInst = state.players.player.field[fromSlot];
+  const result = attack(state, "player", fromSlot, target, { abilityId });
+  if (!result.ok) return Promise.resolve(false);
+  for (const ev of attackResultToEvents(result)) playEmote(ev);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => { if (settled) return; settled = true; render(); resolve(true); };
+    // Safety net: if animateHit's callback never fires, don't hang the loop.
+    const safety = setTimeout(finish, 2500);
+    animateHit(attackerEl, defenderEl, attackerInst, result, () => { clearTimeout(safety); finish(); });
+  });
 }
 
 function renderComboTags(p) {

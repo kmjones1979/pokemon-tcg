@@ -763,6 +763,82 @@ h1, h2, h3,
   padding: 1px 4px;
   border-radius: 4px;
 }
+.pdx-evolve-filter {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--bg-mid);
+  color: var(--ink);
+  border: 1px solid rgba(99, 179, 237, 0.4);
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.13s ease;
+}
+.pdx-evolve-filter:hover:not(:disabled) { border-color: rgba(99, 179, 237, 0.8); transform: translateY(-1px); }
+.pdx-evolve-filter:disabled { opacity: 0.4; cursor: not-allowed; }
+.pdx-evolve-filter.active {
+  background: linear-gradient(140deg, #63b3ed, #3f7fd4);
+  color: #04122b;
+  border-color: transparent;
+  box-shadow: 0 0 12px rgba(99, 179, 237, 0.4);
+}
+.pdx-evolve-badge {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.28);
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  text-align: center;
+}
+.pdx-evolve-filter.active .pdx-evolve-badge { background: rgba(4, 18, 43, 0.35); }
+
+.pdx-cell.can-evolve {
+  border-color: rgba(99, 179, 237, 0.55);
+  box-shadow: 0 0 12px rgba(99, 179, 237, 0.22);
+}
+.pdx-evolve {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 3px 2px;
+  background: linear-gradient(140deg, #63b3ed, #3f7fd4);
+  color: #04122b;
+  border: none;
+  border-radius: 5px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 7px;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.12s ease;
+}
+.pdx-evolve:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.pdx-evolve:active { transform: translateY(0); }
+
+.pdx-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  transform: translate(-50%, 20px);
+  background: rgba(20, 24, 44, 0.96);
+  color: var(--ink);
+  border: 1px solid rgba(99, 179, 237, 0.5);
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-size: 13px;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  max-width: 80vw;
+  text-align: center;
+}
+.pdx-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.pdx-toast.err { border-color: var(--bad); color: #ffd7d9; }
+
 .pdx-loading, .pdx-err {
   color: var(--muted);
   padding: 28px;
@@ -1986,6 +2062,51 @@ h1, h2, h3,
 }
 #concede-btn { color: var(--bad); }
 
+/* Auto-attack toggle — a fixed rail button on the LEFT edge, vertically
+   centered so it stays clear of the hand + action bar on the right. */
+.auto-attack-toggle {
+  position: fixed;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 64px;
+  padding: 10px 6px;
+  background: var(--bg-mid);
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  line-height: 1.5;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.auto-attack-toggle:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-50%) scale(1.04);
+}
+.auto-attack-toggle .aa-icon { font-size: 20px; filter: grayscale(0.7) opacity(0.7); }
+.auto-attack-toggle .aa-text strong { color: var(--muted); }
+.auto-attack-toggle.is-on {
+  background: linear-gradient(160deg, #ef6d6d, #c0392b);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 0 14px rgba(239, 109, 109, 0.55);
+  animation: aa-pulse 1.6s ease-in-out infinite;
+}
+.auto-attack-toggle.is-on .aa-icon { filter: none; }
+.auto-attack-toggle.is-on .aa-text strong { color: #fff; }
+@keyframes aa-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(239, 109, 109, 0.45); }
+  50%      { box-shadow: 0 0 20px rgba(239, 109, 109, 0.85); }
+}
+
 .log-panel {
   position: fixed;
   top: 80px;
@@ -2621,6 +2742,17 @@ body.in-arena .landscape-prompt {
     flex: 1 1 0;
   }
   body.in-arena .hand-toggle { padding: 8px 10px; font-size: 10px; min-height: 38px; }
+
+  /* Auto-attack rail shrinks + rides higher on phones so it clears the
+     fanned hand at the bottom. */
+  .auto-attack-toggle {
+    left: 8px;
+    top: 38%;
+    width: 50px;
+    padding: 7px 4px;
+    font-size: 7px;
+  }
+  .auto-attack-toggle .aa-icon { font-size: 15px; }
 
   /* Hand fan: in portrait the hand stays inline at the bottom rather
      than its peek-and-lift overlay. The fan-y offset is dropped so
@@ -3562,6 +3694,7 @@ html { overscroll-behavior: none; }
 .pdx-search-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 8px 14px 4px;
 }

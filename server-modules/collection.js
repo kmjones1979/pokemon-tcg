@@ -9,6 +9,11 @@
 //   DELETE /me/decks/:id        -> delete deck
 
 const { toCard } = require("../shared/deck-builder");
+const { evolutionFor } = require("../shared/evolution-chains");
+
+// Duplicates consumed to evolve one copy up a stage (base → stage 1,
+// stage 1 → stage 2). Matches the "3 copies" rule used by shiny upgrades.
+const EVOLVE_COST = 3;
 
 const DECK_SIZE = 30;
 const MAX_COPIES = 2;
@@ -54,6 +59,20 @@ async function ensureOwnsAll(supabase, userId, cardIds) {
     }
   }
   return null;
+}
+
+// Best-effort restore of a base card's quantity after a failed evolve grant,
+// so an interrupted evolution doesn't burn the player's copies.
+async function rollbackDeduct(supabase, userId, pokemonId, originalQty) {
+  try {
+    await supabase
+      .from("owned_cards")
+      .update({ quantity: originalQty })
+      .eq("user_id", userId)
+      .eq("pokemon_id", pokemonId);
+  } catch (err) {
+    console.error("[evolve] rollback failed:", err);
+  }
 }
 
 function mount(app, supabase) {
@@ -210,9 +229,102 @@ function mount(app, supabase) {
         mythical: !!p.is_mythical,
         quantity: o?.quantity || 0,
         shinyLevel: o?.shiny_level || 0,
+        // Next form in the evolution chain (null for final forms / species
+        // with no curated chain). Powers the Pokédex "Evolve" action, which
+        // is offered when the player owns ${EVOLVE_COST}+ copies.
+        evolvesToId: evolutionFor(p.id) || null,
       };
     });
     res.json({ total, owned: ownedCount, rows });
+  });
+
+  // POST /me/evolve — consume EVOLVE_COST copies of `pokemonId` and grant one
+  // copy of its next evolved form. Mirrors the shiny-upgrade economy (3-for-1)
+  // but produces a different species rather than a shiny level. The species
+  // must have a next form in shared/evolution-chains.js.
+  app.post("/me/evolve", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const pokemonId = Number(req.body?.pokemonId);
+    if (!Number.isInteger(pokemonId) || pokemonId < 1) {
+      return res.status(400).json({ error: "bad id" });
+    }
+    const targetId = evolutionFor(pokemonId);
+    if (!targetId) {
+      return res.status(400).json({ error: "This Pokémon has no further evolution." });
+    }
+
+    // How many of the base species do we hold?
+    const { data: baseRow, error: readErr } = await supabase
+      .from("owned_cards")
+      .select("quantity")
+      .eq("user_id", req.user.id)
+      .eq("pokemon_id", pokemonId)
+      .maybeSingle();
+    if (readErr) return res.status(500).json({ error: readErr.message });
+    if (!baseRow || baseRow.quantity < EVOLVE_COST) {
+      return res.status(400).json({ error: `Need ${EVOLVE_COST} copies to evolve.` });
+    }
+
+    // Resolve display names for a friendly response + client toast.
+    const { data: names, error: nameErr } = await supabase
+      .from("pokemon")
+      .select("id, name")
+      .in("id", [pokemonId, targetId]);
+    if (nameErr) return res.status(500).json({ error: nameErr.message });
+    const nameById = new Map((names || []).map((n) => [n.id, n.name]));
+    if (!nameById.has(targetId)) {
+      // The evolved species isn't in the active Pokédex — refuse rather than
+      // grant a card that can't be displayed/played.
+      return res.status(500).json({ error: "Evolved species is unavailable." });
+    }
+
+    const newBaseQty = baseRow.quantity - EVOLVE_COST;
+
+    // No cross-row transaction available over the REST client, so order the
+    // writes to fail safe: deduct the base copies first, then grant the
+    // evolved form. If the grant fails we roll the deduction back so the
+    // player never silently loses cards.
+    const { error: deductErr } = await supabase
+      .from("owned_cards")
+      .update({ quantity: newBaseQty })
+      .eq("user_id", req.user.id)
+      .eq("pokemon_id", pokemonId);
+    if (deductErr) return res.status(500).json({ error: deductErr.message });
+
+    // Read + upsert the evolved form's quantity (+1).
+    const { data: evoRow, error: evoReadErr } = await supabase
+      .from("owned_cards")
+      .select("quantity")
+      .eq("user_id", req.user.id)
+      .eq("pokemon_id", targetId)
+      .maybeSingle();
+    if (evoReadErr) {
+      await rollbackDeduct(supabase, req.user.id, pokemonId, baseRow.quantity);
+      return res.status(500).json({ error: evoReadErr.message });
+    }
+    const newEvoQty = (evoRow?.quantity || 0) + 1;
+    const { error: grantErr } = await supabase
+      .from("owned_cards")
+      .upsert(
+        {
+          user_id: req.user.id,
+          pokemon_id: targetId,
+          quantity: newEvoQty,
+          acquired_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,pokemon_id" },
+      );
+    if (grantErr) {
+      await rollbackDeduct(supabase, req.user.id, pokemonId, baseRow.quantity);
+      return res.status(500).json({ error: grantErr.message });
+    }
+
+    res.json({
+      ok: true,
+      from: { id: pokemonId, name: nameById.get(pokemonId) || `#${pokemonId}`, quantity: newBaseQty },
+      to: { id: targetId, name: nameById.get(targetId), quantity: newEvoQty },
+      consumed: EVOLVE_COST,
+    });
   });
 
   // Upgrade a card by consuming 3 duplicate copies — increments shiny_level.
