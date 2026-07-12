@@ -69,7 +69,8 @@ async function startVeo(def) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       instances: [{ prompt: def.videoPrompt, image }],
-      parameters: { aspectRatio: "16:9", personGeneration: "allow_all" },
+      // 9:16 vertical so the clip fills a portrait trading-card frame.
+      parameters: { aspectRatio: "9:16", personGeneration: "allow_all" },
     }),
   });
   const body = await res.json().catch(() => ({}));

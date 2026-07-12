@@ -42,7 +42,7 @@ const MEGA_DEFS = {
     stats: { hp: 80, attack: 100, defense: 123, sp_attack: 122, sp_defense: 120, speed: 80 },
     posterUrl: ARTWORK(10033),
     videoUrl: null,
-    videoPrompt: "Mega Venusaur, majestic, the giant flower on its back blooming and pulsing with pink and green light, leaves swaying, subtle breathing, cinematic HD, seamless loop, dark vignette background",
+    videoPrompt: "Mega Venusaur centered, majestic, the giant flower on its back blooming and pulsing with pink and green light, leaves swaying, subtle breathing, cinematic HD, seamless loop, isolated on a solid pure black background, vertical portrait composition",
   },
   10006: {
     id: 10006, baseId: 6, name: "Mega Charizard X", slug: "charizard-mega-x",
@@ -50,7 +50,7 @@ const MEGA_DEFS = {
     stats: { hp: 78, attack: 130, defense: 111, sp_attack: 130, sp_defense: 85, speed: 100 },
     posterUrl: ARTWORK(10034),
     videoUrl: null,
-    videoPrompt: "Mega Charizard X breathing blue-white flames, wings flexing, embers rising, black dragon scales glinting, powerful idle animation, cinematic HD, seamless loop, dark background",
+    videoPrompt: "Mega Charizard X centered, breathing blue-white flames, wings flexing, embers rising, black dragon scales glinting, powerful idle animation, cinematic HD, seamless loop, isolated on a solid pure black background, vertical portrait composition",
   },
   10009: {
     id: 10009, baseId: 9, name: "Mega Blastoise", slug: "blastoise-mega",
@@ -58,7 +58,7 @@ const MEGA_DEFS = {
     stats: { hp: 79, attack: 103, defense: 120, sp_attack: 135, sp_defense: 115, speed: 78 },
     posterUrl: ARTWORK(10036),
     videoUrl: null,
-    videoPrompt: "Mega Blastoise with its huge central water cannon, water swirling and dripping, cannons rotating slightly, powerful stance, cinematic HD, seamless loop, dark background",
+    videoPrompt: "Mega Blastoise centered, with its huge central water cannon, water swirling and dripping, cannons rotating slightly, powerful stance, cinematic HD, seamless loop, isolated on a solid pure black background, vertical portrait composition",
   },
   10094: {
     id: 10094, baseId: 94, name: "Mega Gengar", slug: "gengar-mega",
@@ -66,7 +66,7 @@ const MEGA_DEFS = {
     stats: { hp: 60, attack: 65, defense: 80, sp_attack: 170, sp_defense: 95, speed: 130 },
     posterUrl: ARTWORK(10038),
     videoUrl: null,
-    videoPrompt: "Mega Gengar grinning mischievously, purple shadow aura swirling, ghostly wisps and glowing red eyes, floating and pulsing, spooky cinematic HD, seamless loop, dark background",
+    videoPrompt: "Mega Gengar centered, grinning mischievously, purple shadow aura swirling, ghostly wisps and glowing red eyes, floating and pulsing, spooky cinematic HD, seamless loop, isolated on a solid pure black background, vertical portrait composition",
   },
 };
 

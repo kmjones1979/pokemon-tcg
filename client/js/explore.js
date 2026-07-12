@@ -103,13 +103,20 @@ function paintGrid() {
     cell.className = "explore-cell";
     cell.dataset.id = String(row.id);
     if (_selectedId === row.id) cell.classList.add("selected");
-    if (row.is_legendary) cell.classList.add("legendary");
+    const isMega = !!row.is_mega;
+    if (isMega) cell.classList.add("mega");
+    else if (row.is_legendary) cell.classList.add("legendary");
     else if (row.is_mythical) cell.classList.add("mythical");
     const primary = row.types?.[0] || "normal";
     cell.style.setProperty("--type-1", TYPE_COLORS[primary] || "#888");
+    // Megas play their looping video (only a handful exist); everything else
+    // uses the static sprite.
+    const media = isMega && row.videoUrl
+      ? `<video class="explore-cell-vid" autoplay loop muted playsinline poster="${escapeAttr(row.sprite_front || "")}"><source src="${escapeAttr(row.videoUrl)}" type="video/mp4"></video>`
+      : `<img class="explore-cell-sprite" src="${escapeAttr(row.sprite_front || "")}" alt="${escapeAttr(row.name)}" loading="lazy">`;
     cell.innerHTML = `
-      <div class="explore-cell-id">#${String(row.id).padStart(3, "0")}</div>
-      <img class="explore-cell-sprite" src="${escapeAttr(row.sprite_front || "")}" alt="${escapeAttr(row.name)}" loading="lazy">
+      <div class="explore-cell-id">${isMega ? "⚡ MEGA" : `#${String(row.id).padStart(3, "0")}`}</div>
+      ${media}
       <div class="explore-cell-name">${escapeHtml(row.name)}</div>
       <div class="explore-cell-types">${(row.types || []).map((t) => `<span class="explore-type-pill" style="background:${TYPE_COLORS[t] || "#888"}">${escapeHtml(t)}</span>`).join("")}</div>
     `;
@@ -146,12 +153,15 @@ function renderDetail(row) {
   };
   panel.innerHTML = `
     <div class="explore-detail-inner">
-      <div class="explore-detail-art">
-        <img src="${escapeAttr(row.sprite_front || "")}" alt="${escapeAttr(row.name)}">
-        ${row.is_legendary ? `<div class="explore-detail-flag legendary">★ LEGENDARY ★</div>`
+      <div class="explore-detail-art${row.is_mega ? " mega" : ""}">
+        ${row.is_mega && row.videoUrl
+          ? `<video autoplay loop muted playsinline poster="${escapeAttr(row.sprite_front || "")}"><source src="${escapeAttr(row.videoUrl)}" type="video/mp4"></video>`
+          : `<img src="${escapeAttr(row.sprite_front || "")}" alt="${escapeAttr(row.name)}">`}
+        ${row.is_mega ? `<div class="explore-detail-flag mega">✦ MEGA ✦</div>`
+         : row.is_legendary ? `<div class="explore-detail-flag legendary">★ LEGENDARY ★</div>`
          : row.is_mythical ? `<div class="explore-detail-flag mythical">✦ MYTHICAL ✦</div>` : ""}
       </div>
-      <div class="explore-detail-id">#${String(row.id).padStart(3, "0")}</div>
+      <div class="explore-detail-id">${row.is_mega ? "⚡ MEGA EVOLUTION" : `#${String(row.id).padStart(3, "0")}`}</div>
       <h2 class="explore-detail-name">${escapeHtml(row.name)}</h2>
       <div class="explore-detail-types">
         ${(row.types || []).map((t) => `<span class="explore-type-pill" style="background:${TYPE_COLORS[t] || "#888"}">${escapeHtml(t)}</span>`).join("")}
@@ -403,7 +413,8 @@ function buildSwipeCard(row) {
   const primary = row.types?.[0] || "normal";
   const c1 = TYPE_COLORS[primary] || "#888";
   card.className = "swipe-card";
-  if (row.is_legendary) card.classList.add("legendary");
+  if (row.is_mega) card.classList.add("mega");
+  else if (row.is_legendary) card.classList.add("legendary");
   else if (row.is_mythical) card.classList.add("mythical");
   card.style.setProperty("--type-1", c1);
   const rarityLabel = (row.rarity || "common").replace(/^./, (c) => c.toUpperCase());
@@ -419,12 +430,15 @@ function buildSwipeCard(row) {
   };
   card.innerHTML = `
     <div class="swipe-card-inner">
-      ${row.is_legendary ? `<div class="swipe-card-flag legendary">★ LEGENDARY ★</div>`
+      ${row.is_mega ? `<div class="swipe-card-flag mega">✦ MEGA ✦</div>`
+        : row.is_legendary ? `<div class="swipe-card-flag legendary">★ LEGENDARY ★</div>`
         : row.is_mythical ? `<div class="swipe-card-flag mythical">✦ MYTHICAL ✦</div>` : ""}
-      <div class="swipe-card-art">
-        <img src="${escapeAttr(row.sprite_front || "")}" alt="${escapeAttr(row.name)}" draggable="false">
+      <div class="swipe-card-art${row.is_mega ? " mega" : ""}">
+        ${row.is_mega && row.videoUrl
+          ? `<video autoplay loop muted playsinline poster="${escapeAttr(row.sprite_front || "")}"><source src="${escapeAttr(row.videoUrl)}" type="video/mp4"></video>`
+          : `<img src="${escapeAttr(row.sprite_front || "")}" alt="${escapeAttr(row.name)}" draggable="false">`}
       </div>
-      <div class="swipe-card-id">#${String(row.id).padStart(3, "0")}</div>
+      <div class="swipe-card-id">${row.is_mega ? "⚡ MEGA EVOLUTION" : `#${String(row.id).padStart(3, "0")}`}</div>
       <h2 class="swipe-card-name">${escapeHtml(row.name)}</h2>
       <div class="swipe-card-types">
         ${(row.types || []).map((t) => `<span class="swipe-type-pill" style="background:${TYPE_COLORS[t] || "#888"}">${escapeHtml(t)}</span>`).join("")}

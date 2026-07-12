@@ -118,7 +118,8 @@ watcher.on("change", (p) => {
 // is just a static host + a card-data API. We load the full Pokédex into
 // memory on boot so deck draws don't hit Supabase per-request.
 const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
-let pokedex = []; // array of card objects, lazily loaded
+let pokedex = []; // array of card objects, lazily loaded (Megas excluded)
+let megaCards = []; // Mega cards, kept out of the drop/deck pool but shown in Explore
 let _pokedexPromise = null;
 
 function loadPokedex() {
@@ -158,6 +159,9 @@ function loadPokedex() {
     // their own Megas — those load via deck hydration, which queries by id.
     const { isMegaId } = require("./shared/mega-evolutions");
     pokedex = all.filter((r) => !isMegaId(r.id)).map(toCard);
+    // Megas: kept out of the gameplay pool above, but exposed to the Explore
+    // browser (see /api/pokedex/all) as a prestige section.
+    megaCards = all.filter((r) => isMegaId(r.id)).map(toCard);
     // Bake the evolution-target card data onto each card so the engine
     // can transform a Pokémon mid-match without needing a separate
     // pokedex lookup. The chain table is static (shared/evolution-
@@ -271,28 +275,33 @@ app.get("/api/pokedex/size", async (_req, res) => {
 // rather than hand-rolling pagination.
 app.get("/api/pokedex/all", async (_req, res) => {
   await ensurePokedex();
+  const { megaVideoUrl } = require("./shared/mega-evolutions");
+  const toRow = (c) => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    sprite_front: c.sprite_front,
+    sprite_back: c.sprite_back,
+    types: c.types,
+    generation: c.generation,
+    bst: c.bst,
+    tier: c.tier,
+    rarity: c.rarity,
+    energyCost: c.energyCost,
+    cardHp: c.cardHp,
+    cardAttack: c.cardAttack,
+    is_legendary: !!c.is_legendary,
+    is_mythical: !!c.is_mythical,
+    flavor_text: c.flavor_text,
+    abilities: c.abilities || [],
+    raw: c.raw,
+  });
+  // Species first, then the Mega section (flagged + carrying the looping
+  // video URL so Explore can animate them).
   const rows = pokedex
     .filter((c) => c.kind !== "spell")
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      sprite_front: c.sprite_front,
-      sprite_back: c.sprite_back,
-      types: c.types,
-      generation: c.generation,
-      bst: c.bst,
-      tier: c.tier,
-      rarity: c.rarity,
-      energyCost: c.energyCost,
-      cardHp: c.cardHp,
-      cardAttack: c.cardAttack,
-      is_legendary: !!c.is_legendary,
-      is_mythical: !!c.is_mythical,
-      flavor_text: c.flavor_text,
-      abilities: c.abilities || [],
-      raw: c.raw,
-    }));
+    .map(toRow)
+    .concat(megaCards.map((c) => ({ ...toRow(c), is_mega: true, videoUrl: megaVideoUrl(c.id) })));
   // Cache for 10 minutes — the dex doesn't change at runtime, so even
   // long-tab users don't need fresh data.
   res.set("Cache-Control", "public, max-age=600");
