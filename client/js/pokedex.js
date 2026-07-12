@@ -153,9 +153,15 @@ function renderMegaShowcase() {
         ${action}
       </div>`;
   }).join("");
+  const ownedN = _megas.filter((m) => m.owned).length;
+  const badges = [
+    ownedN ? `<span class="pdx-mega-owned-badge">${ownedN} owned</span>` : "",
+    readyN ? `<span class="pdx-mega-ready-badge">${readyN} ready</span>` : "",
+  ].join("");
+  // Always open so owned Megas are visible even when none are ready to evolve.
   return `
-    <details class="pdx-mega-section" ${readyN ? "open" : ""}>
-      <summary class="pdx-mega-summary">⚡ Mega Evolutions${readyN ? ` <span class="pdx-mega-ready-badge">${readyN} ready</span>` : ""}</summary>
+    <details class="pdx-mega-section" open>
+      <summary class="pdx-mega-summary">⚡ Mega Evolutions ${badges}</summary>
       <div class="pdx-mega-strip">${tiles}</div>
     </details>`;
 }

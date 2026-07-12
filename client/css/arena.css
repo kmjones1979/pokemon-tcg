@@ -846,14 +846,15 @@ h1, h2, h3,
   gap: 10px;
   user-select: none;
 }
-.pdx-mega-ready-badge {
-  background: linear-gradient(140deg, #c678f6, #8b3fd4);
+.pdx-mega-ready-badge, .pdx-mega-owned-badge {
   color: #fff;
   font-family: "Press Start 2P", monospace;
   font-size: 8px;
   padding: 3px 7px;
   border-radius: 9px;
 }
+.pdx-mega-ready-badge { background: linear-gradient(140deg, #c678f6, #8b3fd4); }
+.pdx-mega-owned-badge { background: linear-gradient(140deg, #f7d02c, #ee8130); color: #1a0a00; }
 .pdx-mega-strip {
   display: flex;
   gap: 12px;
