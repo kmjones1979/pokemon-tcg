@@ -11,14 +11,15 @@ let _query = "";     // current search string
 let _evolveOnly = false; // when true, grid shows only "ready to evolve" species
 let _nameById = new Map(); // id → name, for resolving evolution targets
 
-// Duplicates it costs to evolve one copy up a stage. Must match the server's
-// EVOLVE_COST in server-modules/collection.js.
-const EVOLVE_COST = 3;
+// Copies you must own before a species can be evolved. Must match the
+// server's EVOLVE_MIN_COPIES in server-modules/collection.js. The number
+// actually consumed is stage-dependent and comes from each row's evolveCost.
+const EVOLVE_MIN_COPIES = 3;
 
 // A species is ready to evolve when you own enough duplicates AND it has a
 // next form. Single source of truth for the button + the filter view.
 function isReadyToEvolve(r) {
-  return !!r.evolvesToId && r.quantity >= EVOLVE_COST;
+  return !!r.evolvesToId && r.quantity >= EVOLVE_MIN_COPIES;
 }
 
 export async function open() {
@@ -127,7 +128,7 @@ function paintGrid(overlay, rows, { evolveView = false } = {}) {
   grid.innerHTML = "";
   if (rows.length === 0) {
     grid.innerHTML = `<div class="pdx-empty">${evolveView
-      ? `Nothing ready to evolve yet — collect ${EVOLVE_COST} copies of a Pokémon that has a next form.`
+      ? `Nothing ready to evolve yet — collect ${EVOLVE_MIN_COPIES} copies of a Pokémon that has a next form.`
       : "No Pokémon match that search."}</div>`;
     return;
   }
@@ -136,8 +137,10 @@ function paintGrid(overlay, rows, { evolveView = false } = {}) {
     const ownedClass = r.quantity > 0 ? "owned" : "locked";
     const rarity = r.legendary ? "legendary" : r.mythical ? "mythical" : "";
     // Evolvable when we own enough duplicates AND the species has a next form.
-    const canEvolve = r.evolvesToId && r.quantity >= EVOLVE_COST;
+    const canEvolve = isReadyToEvolve(r);
     const evoName = r.evolvesToId ? (_nameById.get(r.evolvesToId) || `#${r.evolvesToId}`) : "";
+    // Copies this evolution actually consumes (1 for a basic, 2 for a stage 1).
+    const cost = r.evolveCost || 1;
     cell.className = `pdx-cell ${ownedClass} ${rarity}${canEvolve ? " can-evolve" : ""}`;
     cell.title = r.quantity > 0
       ? `#${r.id} ${r.name} ×${r.quantity}${r.shinyLevel ? ` ★${r.shinyLevel}` : ""}`
@@ -148,21 +151,23 @@ function paintGrid(overlay, rows, { evolveView = false } = {}) {
       <div class="pdx-name">${r.quantity > 0 ? escape(r.name) : "???"}</div>
       ${r.quantity > 1 ? `<div class="pdx-qty">×${r.quantity}</div>` : ""}
       ${r.shinyLevel > 0 ? `<div class="pdx-shiny">★${r.shinyLevel}</div>` : ""}
-      ${canEvolve ? `<button class="pdx-evolve" title="Evolve into ${escape(evoName)} (uses ${EVOLVE_COST} copies)">▲ Evolve</button>` : ""}
+      ${canEvolve ? `<button class="pdx-evolve" title="Evolve into ${escape(evoName)} (uses ${cost} ${cost === 1 ? "copy" : "copies"})">▲ Evolve</button>` : ""}
     `;
     if (canEvolve) {
       cell.querySelector(".pdx-evolve").addEventListener("click", (e) => {
         e.stopPropagation();
-        evolveCard(overlay, r.id, r.name, evoName);
+        evolveCard(overlay, r.id, r.name, evoName, cost);
       });
     }
     grid.appendChild(cell);
   }
 }
 
-// Consume EVOLVE_COST copies of `pokemonId` → gain one copy of its next form.
-async function evolveCard(overlay, pokemonId, fromName, toName) {
-  if (!confirm(`Evolve ${fromName} into ${toName}?\n\nThis uses ${EVOLVE_COST} copies of ${fromName} and gives you 1 ${toName}.`)) {
+// Evolve one copy of `pokemonId` into its next form. `cost` copies are
+// consumed (1 for a basic, 2 for a stage 1); the server is authoritative.
+async function evolveCard(overlay, pokemonId, fromName, toName, cost) {
+  const copies = cost === 1 ? "1 copy" : `${cost} copies`;
+  if (!confirm(`Evolve ${fromName} into ${toName}?\n\nThis uses ${copies} of ${fromName} and gives you 1 ${toName}.`)) {
     return;
   }
   try {

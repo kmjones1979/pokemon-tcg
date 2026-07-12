@@ -9,11 +9,21 @@
 //   DELETE /me/decks/:id        -> delete deck
 
 const { toCard } = require("../shared/deck-builder");
-const { evolutionFor } = require("../shared/evolution-chains");
+const { evolutionFor, evolvingToIds } = require("../shared/evolution-chains");
 
-// Duplicates consumed to evolve one copy up a stage (base → stage 1,
-// stage 1 → stage 2). Matches the "3 copies" rule used by shiny upgrades.
-const EVOLVE_COST = 3;
+// You must own this many copies of a species before it can be evolved.
+const EVOLVE_MIN_COPIES = 3;
+
+// Set of species that are themselves an evolution target — i.e. something
+// evolves INTO them. Used to tell a "stage 1" (mid-chain) apart from a basic.
+const EVOLUTION_TARGETS = new Set(evolvingToIds());
+
+// Copies consumed by a single evolution. A basic → stage 1 costs 1; a
+// stage 1 → stage 2 costs 2. (A species is "stage 1" when it is itself the
+// target of an earlier evolution.) The owner keeps the remainder.
+function copiesConsumed(pokemonId) {
+  return EVOLUTION_TARGETS.has(pokemonId) ? 2 : 1;
+}
 
 const DECK_SIZE = 30;
 const MAX_COPIES = 2;
@@ -231,17 +241,21 @@ function mount(app, supabase) {
         shinyLevel: o?.shiny_level || 0,
         // Next form in the evolution chain (null for final forms / species
         // with no curated chain). Powers the Pokédex "Evolve" action, which
-        // is offered when the player owns ${EVOLVE_COST}+ copies.
+        // is offered when the player owns EVOLVE_MIN_COPIES+ copies.
         evolvesToId: evolutionFor(p.id) || null,
+        // Copies an evolution of THIS species consumes (1 for a basic, 2 for
+        // a stage 1). null when the species can't evolve.
+        evolveCost: evolutionFor(p.id) ? copiesConsumed(p.id) : null,
       };
     });
     res.json({ total, owned: ownedCount, rows });
   });
 
-  // POST /me/evolve — consume EVOLVE_COST copies of `pokemonId` and grant one
-  // copy of its next evolved form. Mirrors the shiny-upgrade economy (3-for-1)
-  // but produces a different species rather than a shiny level. The species
-  // must have a next form in shared/evolution-chains.js.
+  // POST /me/evolve — evolve one copy of `pokemonId` into its next form. You
+  // must own EVOLVE_MIN_COPIES to be eligible, but the evolution only consumes
+  // a stage-dependent number of copies: 1 for a basic → stage 1, 2 for a
+  // stage 1 → stage 2 (see copiesConsumed). The remainder is kept. Chain data
+  // lives in shared/evolution-chains.js.
   app.post("/me/evolve", async (req, res) => {
     if (!requireAuth(req, res)) return;
     const pokemonId = Number(req.body?.pokemonId);
@@ -252,6 +266,7 @@ function mount(app, supabase) {
     if (!targetId) {
       return res.status(400).json({ error: "This Pokémon has no further evolution." });
     }
+    const consumed = copiesConsumed(pokemonId);
 
     // How many of the base species do we hold?
     const { data: baseRow, error: readErr } = await supabase
@@ -261,8 +276,8 @@ function mount(app, supabase) {
       .eq("pokemon_id", pokemonId)
       .maybeSingle();
     if (readErr) return res.status(500).json({ error: readErr.message });
-    if (!baseRow || baseRow.quantity < EVOLVE_COST) {
-      return res.status(400).json({ error: `Need ${EVOLVE_COST} copies to evolve.` });
+    if (!baseRow || baseRow.quantity < EVOLVE_MIN_COPIES) {
+      return res.status(400).json({ error: `Need ${EVOLVE_MIN_COPIES} copies to evolve.` });
     }
 
     // Resolve display names for a friendly response + client toast.
@@ -278,7 +293,7 @@ function mount(app, supabase) {
       return res.status(500).json({ error: "Evolved species is unavailable." });
     }
 
-    const newBaseQty = baseRow.quantity - EVOLVE_COST;
+    const newBaseQty = baseRow.quantity - consumed;
 
     // No cross-row transaction available over the REST client, so order the
     // writes to fail safe: deduct the base copies first, then grant the
@@ -323,7 +338,7 @@ function mount(app, supabase) {
       ok: true,
       from: { id: pokemonId, name: nameById.get(pokemonId) || `#${pokemonId}`, quantity: newBaseQty },
       to: { id: targetId, name: nameById.get(targetId), quantity: newEvoQty },
-      consumed: EVOLVE_COST,
+      consumed,
     });
   });
 
