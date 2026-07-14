@@ -2738,39 +2738,48 @@ function renderAccountPanel() {
     const sel = avatars.getRosterByKey(avatars.getSelected());
     return `
       <div class="account-panel signed-in">
-        <div class="account-avatar-wrap">
-          <img class="account-avatar" id="account-avatar-img"
-               src="${escape(sel?.sprite || "")}"
-               alt="${escape(sel?.name || "Trainer")}"
-               style="${sel ? "" : "display:none"}">
-          <button class="account-avatar-change" id="account-avatar-change-btn">Change avatar</button>
-        </div>
-        <div class="account-id">
-          <span class="account-greeting">Signed in as</span>
-          <strong>${escape(currentUser.display_name)}</strong>
-          <div class="trainer-level-chip" id="trainer-level-chip"></div>
-        </div>
-        <div class="account-actions">
-          <button id="account-collection-btn">Collection</button>
-          <button id="account-pokedex-btn">Pokédex</button>
-          <button id="account-achievements-btn">Achievements</button>
-          <button id="account-matches-btn">History</button>
-          <button id="account-leaderboard-btn">Leaderboard</button>
-          <button id="account-logout-btn">Sign out</button>
+        <div class="account-bar-inner">
+          <div class="account-brand">
+            <div class="account-avatar-wrap">
+              <img class="account-avatar" id="account-avatar-img"
+                   src="${escape(sel?.sprite || "")}"
+                   alt="${escape(sel?.name || "Trainer")}"
+                   style="${sel ? "" : "display:none"}">
+              <button class="account-avatar-change" id="account-avatar-change-btn"
+                      title="Change avatar" aria-label="Change avatar">✎</button>
+            </div>
+            <div class="account-id">
+              <span class="account-greeting">Signed in as</span>
+              <strong>${escape(currentUser.display_name)}</strong>
+              <div class="trainer-level-chip" id="trainer-level-chip"></div>
+            </div>
+          </div>
+          <nav class="account-actions">
+            <button id="account-collection-btn">Collection</button>
+            <button id="account-pokedex-btn">Pokédex</button>
+            <button id="account-achievements-btn">Achievements</button>
+            <button id="account-matches-btn">History</button>
+            <button id="account-leaderboard-btn">Leaderboard</button>
+            <button id="account-logout-btn">Sign out</button>
+          </nav>
         </div>
       </div>
     `;
   }
   return `
     <div class="account-panel signed-out">
-      <div class="account-id">
-        <span class="account-greeting">Playing as guest</span>
-        <span class="account-sub">Sign in to save stats and earn cards</span>
-      </div>
-      <div class="account-actions">
-        <button id="account-leaderboard-btn">Leaderboard</button>
-        <button id="account-signin-btn">Sign in</button>
-        <button id="account-register-btn" class="primary">Create account</button>
+      <div class="account-bar-inner">
+        <div class="account-brand">
+          <div class="account-id">
+            <span class="account-greeting">Playing as guest</span>
+            <span class="account-sub">Sign in to save stats and earn cards</span>
+          </div>
+        </div>
+        <nav class="account-actions">
+          <button id="account-leaderboard-btn">Leaderboard</button>
+          <button id="account-signin-btn">Sign in</button>
+          <button id="account-register-btn" class="primary">Create account</button>
+        </nav>
       </div>
     </div>
   `;

@@ -532,8 +532,19 @@ body.dragging-attack .trainer-block.ai {
 .card-art.mega-art {
   background: #000;
   padding: 0;
+  overflow: hidden;
 }
-.card-art.mega-art .card-mega-vid { width: 100%; height: 100%; object-fit: cover; }
+/* The mega videos are vertical (9:16) on a pure-black background, so
+   `contain` shows the whole frame centered on black — the subject stays
+   put instead of hopping around inside a `cover` crop. object-position
+   pins it dead-center in every context (bench slot, hand, detail). */
+.card-art.mega-art .card-mega-vid {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center center;
+  filter: none;
+}
 .card.card-mega {
   border-color: rgba(198, 120, 246, 0.8);
   box-shadow: 0 0 16px rgba(198, 120, 246, 0.45), inset 0 0 12px rgba(198, 120, 246, 0.18);
