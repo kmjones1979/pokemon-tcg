@@ -1,4 +1,4 @@
-# Pokémon TCG
+# Pokémon Battle
 
 A vanilla-JS 1v1 Pokémon card game. Vanilla JS modules in the browser, plain
 Node on the server, no build step. Backed by Supabase for the 1,025-Pokémon

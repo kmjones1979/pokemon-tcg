@@ -480,7 +480,7 @@ function renderAdminPage({ adminOk, userId }) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Admin · Pokémon TCG</title>
+<title>Admin · Pokémon Battle</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   body { font-family: system-ui, -apple-system, sans-serif; max-width: 880px; margin: 24px auto; padding: 0 16px; background: #0b1224; color: #f5f6fb; line-height: 1.5; }

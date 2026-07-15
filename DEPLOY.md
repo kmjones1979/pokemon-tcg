@@ -1,4 +1,4 @@
-# Deploying Pokémon TCG
+# Deploying Pokémon Battle
 
 This game is a long-lived Node + Socket.IO process with in-memory match state.
 Pick a host that gives you a persistent process — pure-serverless platforms
@@ -23,7 +23,7 @@ will drop ongoing matches when they cold-start or scale.
    | `SESSION_SECRET` | ✅ | 32+ random bytes hex; signs session cookies |
    | `RP_ID` | ✅ | Your domain hostname (e.g. `pokemon.example.com`) — **must match the URL users visit**, otherwise passkeys reject |
    | `ORIGIN` | ✅ | Full origin including scheme (e.g. `https://pokemon.example.com`) |
-   | `RP_NAME` | optional | Friendly label shown in the OS passkey UI; defaults to `Pokémon TCG` |
+   | `RP_NAME` | optional | Friendly label shown in the OS passkey UI; defaults to `Pokémon Battle` |
    | `NODE_ENV` | optional | Set to `production` to silence the QR-code/LAN-IP banner |
    | `PORT` | optional | Honoured automatically; defaults to 3000 |
 

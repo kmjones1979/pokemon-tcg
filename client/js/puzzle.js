@@ -322,8 +322,8 @@ function renderPostGame(payload, result, currentUser, fromReplay = false, localO
       // Reconstruct locally for replay / anonymous paths.
       const url = `${location.origin}/?puzzle=${dayNumber}`;
       const text = solved
-        ? `Pokémon TCG Puzzle #${dayNumber} · "${puzzle.title || ""}"\n${starsFor({ solved, movesUsed: moves, par })}  ✅ Cleared in ${moves}/${par} ${moves === 1 ? "move" : "moves"}\nplay: ${url}`
-        : `Pokémon TCG Puzzle #${dayNumber} · "${puzzle.title || ""}"\n${starsFor({ solved, movesUsed: moves, par })}  ❌ Defeated after ${moves} ${moves === 1 ? "move" : "moves"}\nplay: ${url}`;
+        ? `Pokémon Battle Puzzle #${dayNumber} · "${puzzle.title || ""}"\n${starsFor({ solved, movesUsed: moves, par })}  ✅ Cleared in ${moves}/${par} ${moves === 1 ? "move" : "moves"}\nplay: ${url}`
+        : `Pokémon Battle Puzzle #${dayNumber} · "${puzzle.title || ""}"\n${starsFor({ solved, movesUsed: moves, par })}  ❌ Defeated after ${moves} ${moves === 1 ? "move" : "moves"}\nplay: ${url}`;
       showDailyShare({ shareText: text, shareUrl: url, dayNumber, stars: "", bossName: puzzle.title });
     }
   });

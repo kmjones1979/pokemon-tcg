@@ -142,7 +142,7 @@ export function showShareDialog(result) {
         <a class="share-social tw" target="_blank" rel="noopener noreferrer"
            href="https://twitter.com/intent/tweet?text=${tweetText}">𝕏 / Twitter</a>
         <a class="share-social rd" target="_blank" rel="noopener noreferrer"
-           href="https://www.reddit.com/submit?title=${encodeURIComponent(`Pokémon TCG Daily #${result.dayNumber}: ${result.bossName}`)}&url=${encodeURIComponent(result.shareUrl)}">Reddit</a>
+           href="https://www.reddit.com/submit?title=${encodeURIComponent(`Pokémon Battle Daily #${result.dayNumber}: ${result.bossName}`)}&url=${encodeURIComponent(result.shareUrl)}">Reddit</a>
         <a class="share-social wa" target="_blank" rel="noopener noreferrer"
            href="https://wa.me/?text=${tweetText}">WhatsApp</a>
         <a class="share-social tg" target="_blank" rel="noopener noreferrer"
@@ -179,7 +179,7 @@ async function nativeShare(result) {
   if (!navigator.share) { copyToClipboard(result.shareText); return; }
   try {
     await navigator.share({
-      title: `Pokémon TCG Daily #${result.dayNumber}`,
+      title: `Pokémon Battle Daily #${result.dayNumber}`,
       text: result.shareText,
       url: result.shareUrl,
     });
@@ -198,8 +198,8 @@ function shareLastResult() {
     ? (p.turns <= 8 ? "★★★★★" : p.turns <= 12 ? "★★★★☆" : p.turns <= 18 ? "★★★☆☆" : "★★☆☆☆")
     : "💀";
   const text = p.won
-    ? `Pokémon TCG Daily #${_today.dayNumber} · ${_today.boss.displayName}\n${stars}  ✅ ${p.turns} turn${p.turns === 1 ? "" : "s"} · ${p.hp_left} HP left\nplay: ${url}`
-    : `Pokémon TCG Daily #${_today.dayNumber} · ${_today.boss.displayName}\n${stars}  ❌ Survived ${p.turns} turns\nplay: ${url}`;
+    ? `Pokémon Battle Daily #${_today.dayNumber} · ${_today.boss.displayName}\n${stars}  ✅ ${p.turns} turn${p.turns === 1 ? "" : "s"} · ${p.hp_left} HP left\nplay: ${url}`
+    : `Pokémon Battle Daily #${_today.dayNumber} · ${_today.boss.displayName}\n${stars}  ❌ Survived ${p.turns} turns\nplay: ${url}`;
   showShareDialog({ shareText: text, shareUrl: url, dayNumber: _today.dayNumber, stars, bossName: _today.boss.displayName });
 }
 

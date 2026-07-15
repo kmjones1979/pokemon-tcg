@@ -124,8 +124,8 @@ function mount(app, supabase) {
                 || (req.headers.host && `https://${req.headers.host}`) || "";
     const url = `${origin}/?puzzle=${dayNumber}`;
     const shareText = solved
-      ? `Pokémon TCG Puzzle #${dayNumber} · "${puzzle.title}"\n${stars}  ✅ Cleared in ${movesUsed}/${puzzle.par} ${movesUsed === 1 ? "move" : "moves"}\nplay: ${url}`
-      : `Pokémon TCG Puzzle #${dayNumber} · "${puzzle.title}"\n${stars}  ❌ Defeated after ${movesUsed} ${movesUsed === 1 ? "move" : "moves"}\nplay: ${url}`;
+      ? `Pokémon Battle Puzzle #${dayNumber} · "${puzzle.title}"\n${stars}  ✅ Cleared in ${movesUsed}/${puzzle.par} ${movesUsed === 1 ? "move" : "moves"}\nplay: ${url}`
+      : `Pokémon Battle Puzzle #${dayNumber} · "${puzzle.title}"\n${stars}  ❌ Defeated after ${movesUsed} ${movesUsed === 1 ? "move" : "moves"}\nplay: ${url}`;
     res.json({ ok: true, dayNumber, stars, shareText, shareUrl: url, puzzleTitle: puzzle.title, par: puzzle.par });
   });
 

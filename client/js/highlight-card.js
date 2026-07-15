@@ -166,7 +166,7 @@ export async function generateHighlight({ state, currentUser, format = DEFAULT_F
   }
 
   // 7. Footer.
-  drawText(ctx, "play • pokemon TCG", {
+  drawText(ctx, "play • pokemon battle", {
     x: W / 2, y: H - cfg.footerY,
     color: "rgba(255,255,255,0.55)",
     font: "italic 22px Inter, system-ui",
@@ -391,11 +391,11 @@ export async function showHighlightShare({ state, currentUser } = {}) {
       const file = new File([currentBlob], "pokemon-tcg-highlight.png", { type: "image/png" });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({
-          title: state.winner === "player" ? "I won my Pokémon TCG match!" : "Tough match in Pokémon TCG",
+          title: state.winner === "player" ? "I won my Pokémon Battle match!" : "Tough match in Pokémon Battle",
           files: [file],
         });
       } else if (navigator.share) {
-        await navigator.share({ title: "Pokémon TCG", url: location.origin });
+        await navigator.share({ title: "Pokémon Battle", url: location.origin });
       }
     } catch {}
   });

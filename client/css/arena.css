@@ -109,8 +109,14 @@ h1, h2, h3,
   text-align: center;
 }
 .game-title {
-  font-size: 56px;
-  letter-spacing: 4px;
+  /* Fluid so the title never overflows: "Pokémon Battle" is 14 wide chars in
+     Press Start 2P (a near-monospace face), which at a fixed 56px would run
+     past .menu-stage on narrow laptops and shear badly on phones. 5.6vw keeps
+     14 chars inside the 92%-wide stage at every width; the 56px cap preserves
+     the original desktop size. Height-constrained landscape still overrides
+     this below. */
+  font-size: clamp(17px, 5.6vw, 56px);
+  letter-spacing: 0.07em;
   margin: 0 0 12px;
   /* Room for the accented "é" and the trailing letter — background-clip:text
      clips glyphs tight to the box, so give it line-height + a little padding
@@ -399,7 +405,7 @@ h1, h2, h3,
 
 /* === Account panel — full-width sticky top navigation bar ===
    Previously a floating pill anchored top-left; on mobile its buttons
-   wrapped and the bar grew tall enough to cover the "Pokémon TCG" title.
+   wrapped and the bar grew tall enough to cover the "Pokémon Battle" title.
    Now it's a proper edge-to-edge header: a single row that never wraps
    (actions scroll horizontally on narrow screens), so the title below it
    is always clear. `#menu` reserves 80px of top padding for it. */
@@ -3089,7 +3095,7 @@ body.in-arena .landscape-prompt {
   .turn-banner .turn-hint { font-size: 9px; min-height: 11px; }
   .field { padding: 4px 6px; gap: 6px; }
   .trainer-row { padding: 6px 8px; gap: 8px; }
-  .game-title { font-size: 26px; }
+  /* .game-title size is fluid (clamp) — no width-based override needed. */
 
   /* Top bar stays a single edge-to-edge row; actions scroll horizontally
      instead of wrapping so the bar height stays fixed and never covers the
@@ -3200,7 +3206,6 @@ body.in-arena .landscape-prompt {
   .trainer-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .difficulty-grid { grid-template-columns: 1fr; gap: 8px; }
   .play-modes { grid-template-columns: 1fr; }
-  .game-title { font-size: 22px; }
   .menu-stage { width: 100%; }
 }
 

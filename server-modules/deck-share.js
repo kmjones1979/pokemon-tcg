@@ -78,9 +78,9 @@ function mount(app, supabase, getPokedex) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shared deck · Pokémon TCG</title>
-  <meta name="description" content="${escape("A 30-card Pokémon TCG deck with " + topTypes.map(([t, n]) => `${n} ${t}`).join(", ") + ".")}" />
-  <meta property="og:title" content="${escape(`Deck: ${topTypes.map(([t]) => t).join("/") || "Pokémon TCG"}`)}" />
+  <title>Shared deck · Pokémon Battle</title>
+  <meta name="description" content="${escape("A 30-card Pokémon Battle deck with " + topTypes.map(([t, n]) => `${n} ${t}`).join(", ") + ".")}" />
+  <meta property="og:title" content="${escape(`Deck: ${topTypes.map(([t]) => t).join("/") || "Pokémon Battle"}`)}" />
   <meta property="og:description" content="${escape(`A 30-card build featuring ${previewCards.map((c) => c.name).slice(0, 4).join(", ")}…`)}" />
   <meta property="og:image" content="${origin}/og-card.png" />
   <meta property="og:url" content="${origin}/d/${escape(code)}" />
@@ -109,7 +109,7 @@ function mount(app, supabase, getPokedex) {
 <body>
   <div class="wrap">
     <h1>Shared deck</h1>
-    <p class="sub">A 30-card Pokémon TCG build. Load it into your collection or battle against it.</p>
+    <p class="sub">A 30-card Pokémon Battle build. Load it into your collection or battle against it.</p>
     <div class="meta">
       ${topTypes.map(([t, n]) => `<span>${escape(t)} ×${n}</span>`).join("")}
       ${[1,2,3,4,5].map((t) => byTier[t] ? `<span>T${t}: ${byTier[t]}</span>` : "").join("")}

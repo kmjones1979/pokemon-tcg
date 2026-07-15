@@ -74,7 +74,7 @@ async function shareDeckCode() {
     }
     // Best-effort native share too.
     if (navigator.share) {
-      navigator.share({ title: "My Pokémon TCG deck", url }).catch(() => {});
+      navigator.share({ title: "My Pokémon Battle deck", url }).catch(() => {});
     }
   } catch (err) {
     alert("Couldn't build a deck code: " + (err.message || "unknown"));

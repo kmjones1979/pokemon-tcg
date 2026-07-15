@@ -320,7 +320,7 @@ function renderMenu() {
   menu.innerHTML = `
     <div id="account-panel-host">${renderAccountPanel()}</div>
     <div class="menu-stage">
-      <h1 class="game-title">Pokémon TCG</h1>
+      <h1 class="game-title">Pokémon Battle</h1>
       <div class="menu-tagline">Build a 30-card deck. Wield Legendary signature moves. Out-strategize your rival.</div>
       ${renderFeatureStrip()}
       <div id="daily-card-slot"></div>

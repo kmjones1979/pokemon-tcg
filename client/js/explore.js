@@ -348,8 +348,8 @@ async function shareCard(row) {
   const name = (row.name || "Pokémon").replace(/\b\w/g, (c) => c.toUpperCase());
   const id3 = String(row.id).padStart(3, "0");
   const url = `${location.origin}/p/${row.id}`;
-  const text = `Check out ${name} #${id3} on Pokémon TCG!`;
-  const title = `${name} #${id3} — Pokémon TCG`;
+  const text = `Check out ${name} #${id3} on Pokémon Battle!`;
+  const title = `${name} #${id3} — Pokémon Battle`;
   // Web Share API is the one good thing — iOS/Android show the native
   // sheet with Messages, Mail, AirDrop, X, WhatsApp, etc. Falls back to
   // our own popover when unsupported (most desktop browsers).

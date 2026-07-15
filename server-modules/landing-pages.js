@@ -94,14 +94,14 @@ function renderLandingHtml(row, req) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(name)} #${id3} — Pokémon TCG</title>
+  <title>${escapeHtml(name)} #${id3} — Pokémon Battle</title>
   <meta name="description" content="${escapeHtml(description)}">
   <meta name="theme-color" content="${primaryColor}">
   <link rel="canonical" href="${escapeHtml(url)}">
 
   <meta property="og:type" content="article">
-  <meta property="og:site_name" content="Pokémon TCG">
-  <meta property="og:title" content="${escapeHtml(name)} #${id3} — Pokémon TCG">
+  <meta property="og:site_name" content="Pokémon Battle">
+  <meta property="og:title" content="${escapeHtml(name)} #${id3} — Pokémon Battle">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:image" content="${escapeHtml(artwork)}">
   <meta property="og:image:secure_url" content="${escapeHtml(artwork)}">
@@ -112,7 +112,7 @@ function renderLandingHtml(row, req) {
   <meta property="og:url" content="${escapeHtml(url)}">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="${escapeHtml(name)} #${id3} — Pokémon TCG">
+  <meta name="twitter:title" content="${escapeHtml(name)} #${id3} — Pokémon Battle">
   <meta name="twitter:description" content="${escapeHtml(description)}">
   <meta name="twitter:image" content="${escapeHtml(artwork)}">
   <meta name="twitter:image:alt" content="${escapeHtml(name)}">
@@ -349,7 +349,7 @@ function renderLandingHtml(row, req) {
 </head>
 <body>
   <div class="nav">
-    <a class="back-link" href="/">← Pokémon TCG</a>
+    <a class="back-link" href="/">← Pokémon Battle</a>
   </div>
 
   <main class="card">
@@ -382,15 +382,15 @@ function renderLandingHtml(row, req) {
     ${row.flavor_text ? `<p class="flavor">${escapeHtml(row.flavor_text)}</p>` : ""}
 
     <div class="actions">
-      <a class="play-btn" href="/">🎮 Play Pokémon TCG</a>
+      <a class="play-btn" href="/">🎮 Play Pokémon Battle</a>
       <button class="share-btn" id="share-btn">↗ Share</button>
     </div>
   </main>
 
   <script>
     const shareData = {
-      title: ${JSON.stringify(`${name} #${id3} — Pokémon TCG`)},
-      text:  ${JSON.stringify(`Check out ${name} on Pokémon TCG!`)},
+      title: ${JSON.stringify(`${name} #${id3} — Pokémon Battle`)},
+      text:  ${JSON.stringify(`Check out ${name} on Pokémon Battle!`)},
       url:   ${JSON.stringify(url)}
     };
     document.getElementById("share-btn").addEventListener("click", async () => {
@@ -418,7 +418,7 @@ function renderLandingHtml(row, req) {
 }
 
 function notFoundHtml() {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Not Found · Pokémon TCG</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#f1f5f9;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center;}a{color:#818cf8;}</style></head><body><h1 style="font-size:48px;margin:0">404</h1><p>That Pokémon doesn't exist.</p><p><a href="/">← Back to Pokémon TCG</a></p></body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Not Found · Pokémon Battle</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Inter,system-ui,sans-serif;background:#0f172a;color:#f1f5f9;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center;}a{color:#818cf8;}</style></head><body><h1 style="font-size:48px;margin:0">404</h1><p>That Pokémon doesn't exist.</p><p><a href="/">← Back to Pokémon Battle</a></p></body></html>`;
 }
 
 function mount(app, getPokedex) {

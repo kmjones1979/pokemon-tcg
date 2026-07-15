@@ -1,4 +1,4 @@
--- Pokémon TCG — Pokédex schema.
+-- Pokémon Battle — Pokédex schema.
 -- Paste this into your Supabase project's SQL editor (Project → SQL Editor → New query)
 -- and click "Run" before running scripts/seed-pokedex.js.
 
