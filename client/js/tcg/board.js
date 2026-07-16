@@ -5,7 +5,8 @@
 
 import * as engine from "./engine.js";
 import { aiTakeTurn } from "./ai.js";
-import { renderTcgCard, renderCardBack, TCG_COLORS, TYPE_GLYPH } from "./card-face.js";
+import { renderTcgCard, renderCardBack, TCG_COLORS } from "./card-face.js";
+import { energyBadge, pileSVG, trainerSVG, trophySVG, pokeballSVG } from "./icons.js";
 import { STARTER_DECKS } from "./decks.js";
 
 const ART = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`;
@@ -250,7 +251,11 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
 
   function prizePips(s) {
     let pips = "";
-    for (let i = 0; i < engine.PRIZE_COUNT; i++) pips += `<span class="tcg-prize-pip${i < s.prizes.length ? "" : " taken"}"></span>`;
+    for (let i = 0; i < engine.PRIZE_COUNT; i++) {
+      pips += i < s.prizes.length
+        ? `<span class="tcg-prize-pip">${pokeballSVG()}</span>`
+        : `<span class="tcg-prize-pip taken"></span>`;
+    }
     return pips;
   }
 
@@ -259,9 +264,9 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     panel.appendChild(eln("div", "tcg-opp-id", `<strong>${a.name}</strong>`));
     panel.appendChild(eln("div", "tcg-prizes", `<span class="tcg-prize-label">Prizes</span>${prizePips(a)}`));
     panel.appendChild(eln("div", "tcg-piles",
-      `<span title="Cards in hand">✋ ${a.hand.length}</span>
-       <span title="Cards in deck">🂠 ${a.deck.length}</span>
-       <span title="Discard pile">🗑 ${a.discard.length}</span>`));
+      `<span title="Cards in hand">${pileSVG("hand")}${a.hand.length}</span>
+       <span title="Cards in deck">${pileSVG("deck")}${a.deck.length}</span>
+       <span title="Discard pile">${pileSVG("discard")}${a.discard.length}</span>`));
     return panel;
   }
 
@@ -318,7 +323,7 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     const who = state.activePlayer === "player" ? "Your" : `${state.players.ai.name}'s`;
     const turnTxt = state.winner ? "Game over" : `${who} turn ${state.turn}`;
     c.appendChild(eln("div", "tcg-turn", turnTxt));
-    if (state.stadium) c.appendChild(eln("div", "tcg-stadium", `🏟 ${state.stadium.card.name}`));
+    if (state.stadium) c.appendChild(eln("div", "tcg-stadium", `${trainerSVG("stadium")}${state.stadium.card.name}`));
     return c;
   }
 
@@ -354,9 +359,9 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
         const list = eln("div", "tcg-attack-choose");
         p.active.card.attacks.forEach((atk, i) => {
           const can = engine.affordableAttacks(p.active).includes(atk) && !state.noAttack;
-          const cost = (atk.cost || []).map((t) => `<span class="tcg-pip" style="background:${TCG_COLORS[t]}">${TYPE_GLYPH[t]}</span>`).join("");
+          const cost = (atk.cost || []).map((t) => energyBadge(t, "pip-cost")).join("");
           const b = eln("button", `tcg-atk-btn${can ? "" : " disabled"}`,
-            `${cost} <span class="tcg-atk-btn-name">${atk.name}</span>${atk.damage ? `<span class="tcg-atk-btn-dmg">${atk.damage}</span>` : ""}`);
+            `<span class="tcg-cost">${cost}</span> <span class="tcg-atk-btn-name">${atk.name}</span>${atk.damage ? `<span class="tcg-atk-btn-dmg">${atk.damage}</span>` : ""}`);
           if (can) { b.dataset.action = "attack"; b.dataset.i = i; }
           list.appendChild(b);
         });
@@ -375,8 +380,8 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
         btns.appendChild(button("Cancel", "cancel", "ghost"));
       }
       if (mode === "idle") {
-        if (p.active) btns.appendChild(button("⚔ Attack", "open-attacks"));
-        btns.appendChild(button("End Turn ▸", "end-turn", "primary"));
+        if (p.active) btns.appendChild(button("Attack", "open-attacks"));
+        btns.appendChild(button("End Turn ›", "end-turn", "primary"));
       }
     }
     bar.appendChild(btns);
@@ -399,7 +404,7 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     const won = state.winner === "player";
     const ov = eln("div", "tcg-gameover");
     const card = eln("div", `tcg-gameover-card ${won ? "win" : "lose"}`);
-    card.appendChild(eln("div", "tcg-go-title", won ? "🏆 You win!" : "Defeated"));
+    card.appendChild(eln("div", "tcg-go-title", won ? `${trophySVG()} You win!` : "Defeated"));
     card.appendChild(eln("div", "tcg-go-sub", won
       ? "You knocked out your rival's team."
       : "Your rival cleared the field. Try another deck!"));
