@@ -5,6 +5,8 @@
 // Card kinds: "pokemon" | "energy" | "item" | "supporter" | "stadium".
 // Effects are declarative descriptors interpreted by effects.js.
 
+import GENERATED_ART from "./tcg-art.js";
+
 const ART = (dex) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`;
 
@@ -119,6 +121,12 @@ const TRAINERS = [
   { id: "trainer-stadium-spa", kind: "stadium", name: "Health Spa", text: "At the start of each player's turn, heal 10 damage from that player's Active Pokémon.", effect: { type: "startTurnHeal", amount: 10 }, art: ART(113), artStyle: "mon" },
   { id: "trainer-stadium-arena", kind: "stadium", name: "Battle Arena", text: "Attacks from both players' Active Pokémon do 10 more damage to the opposing Active.", effect: { type: "attackBonus", amount: 10 }, art: ART(68), artStyle: "mon" },
 ];
+
+// Prefer bespoke illustrator-style artwork (scripts/generate-tcg-art.js) when a
+// card has it; it fills the whole art window (artStyle "art").
+for (const t of TRAINERS) {
+  if (GENERATED_ART[t.id]) { t.art = GENERATED_ART[t.id]; t.artStyle = "art"; }
+}
 
 // --- Lookup ---------------------------------------------------------------
 

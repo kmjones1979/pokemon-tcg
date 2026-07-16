@@ -20,16 +20,19 @@ body.tcg-mode #site-footer { display: none; }
   font-family: "Inter", system-ui, sans-serif;
 }
 
-/* ---- playmat: a felt table that centres the field and splits the two sides
-   with a glowing mid-line. ---- */
+/* ---- playmat: a left rail (prizes/deck/discard) + the field column ---- */
 .tcg-mat {
-  flex: 1; width: 100%; max-width: 780px; margin: 0 auto; box-sizing: border-box;
-  display: flex; flex-direction: column; justify-content: center; gap: 5px;
-  padding: 8px max(10px, env(safe-area-inset-left)) 10px;
-  position: relative;
+  flex: 1; width: 100%; max-width: 820px; margin: 0 auto; box-sizing: border-box;
+  display: flex; flex-direction: row; align-items: stretch; gap: 8px;
+  padding: 8px max(8px, env(safe-area-inset-left)) 10px;
 }
-.tcg-mat::before {
-  content: ""; position: absolute; left: 6%; right: 6%; top: 50%; height: 2px; transform: translateY(-50%);
+.tcg-field {
+  flex: 1; min-width: 0; position: relative;
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+}
+/* Glowing mid-line splitting the two players' halves. */
+.tcg-field::before {
+  content: ""; position: absolute; left: 2%; right: 2%; top: 50%; height: 2px; transform: translateY(-50%);
   background: linear-gradient(90deg, transparent, rgba(247, 208, 44, 0.35), rgba(255, 255, 255, 0.25), rgba(247, 208, 44, 0.35), transparent);
   pointer-events: none; z-index: 0;
 }
@@ -42,30 +45,32 @@ body.tcg-mode #site-footer { display: none; }
 }
 .tcg-board > * { position: relative; z-index: 1; }
 
-/* ---- player strips (prizes + name + piles) ---- */
-.tcg-strip {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 4px 8px; border-radius: 10px;
-  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.07);
+/* ---- left rail: prizes + deck + discard for both players ---- */
+.tcg-rail {
+  flex: 0 0 66px; width: 66px; display: flex; flex-direction: column;
+  justify-content: space-between; padding: 2px 0;
 }
-.tcg-strip-player { padding-right: 8px; }
-.tcg-strip-ai { padding-right: 54px; } /* clear the fixed mute toggle */
-.tcg-strip-name { font-weight: 800; font-size: 13px; color: #d7daff; text-align: center; }
-.tcg-strip-name.active { color: #f7d02c; text-shadow: 0 0 10px rgba(247, 208, 44, 0.55); }
-.tcg-strip-name.active::after { content: " ●"; font-size: 9px; vertical-align: middle; }
-
-.tcg-prizes { display: flex; align-items: center; gap: 5px; }
-.tcg-prize-label { font-size: 8px; color: var(--muted, #8a8eaa); text-transform: uppercase; letter-spacing: 1px; }
-.tcg-prize-row { display: flex; gap: 2px; }
+.tcg-rail-half { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 2px; border-radius: 10px; background: rgba(0, 0, 0, 0.26); border: 1px solid rgba(255, 255, 255, 0.07); }
+.tcg-rail-mid { flex: 1; min-height: 8px; }
+.tcg-rail-label { font-size: 7px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted, #8a8eaa); font-weight: 700; }
+.tcg-rail-prizes { display: grid; grid-template-columns: repeat(2, auto); gap: 3px; justify-content: center; }
+.tcg-rail-piles { display: flex; gap: 5px; margin-top: 1px; }
 .tcg-prize-card {
-  width: 15px; height: 21px; border-radius: 3px; display: grid; place-items: center;
+  width: 16px; height: 22px; border-radius: 3px; display: grid; place-items: center;
   background: linear-gradient(150deg, #2f61bd, #16357a); border: 1px solid rgba(233, 230, 216, 0.55);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 .tcg-prize-card .tcg-ball { width: 78%; }
 .tcg-prize-card.empty { background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 255, 255, 0.16); box-shadow: none; }
 
-.tcg-piles { display: flex; align-items: center; gap: 8px; }
+/* ---- name bars (whose turn) ---- */
+.tcg-namebar { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 1px 0; }
+.tcg-strip-name { font-weight: 800; font-size: 13px; color: #d7daff; }
+.tcg-strip-name.active { color: #f7d02c; text-shadow: 0 0 10px rgba(247, 208, 44, 0.55); }
+.tcg-strip-name.active::after { content: " ●"; font-size: 9px; vertical-align: middle; }
+.tcg-hand-count { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #b9bdd6; }
+.tcg-hand-count .tcg-pilesvg { width: 15px; height: 15px; color: #aeb2cc; }
+
 .tcg-pile { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .tcg-pile-n { font-size: 10px; font-weight: 700; color: #b9bdd6; line-height: 1; }
 .tcg-pile-stack {
@@ -251,6 +256,9 @@ body.tcg-mode #site-footer { display: none; }
 .art-trainer .tcg-trainer-art img { max-height: 100%; }
 .tcg-trainer-art-icon { color: var(--tk); }
 .tcg-trainer-art-icon .tcg-tsvg { width: 42%; height: 42%; }
+/* Bespoke illustrations fill the whole window (cover). */
+.art-art .tcg-trainer-art { border-color: color-mix(in srgb, var(--tk) 70%, #6f6033); background: #2a2620; }
+.art-art .tcg-trainer-art img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; filter: none; image-rendering: auto; }
 .tcg-trainer-name { font-weight: 800; font-size: 11px; text-align: center; padding: 2px 4px 0; }
 .tcg-mini .tcg-trainer-name { font-size: 9px; }
 .tcg-trainer-text { font-size: 8.5px; color: #5f5943; text-align: center; padding: 0 6px; line-height: 1.3; }

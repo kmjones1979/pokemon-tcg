@@ -251,14 +251,20 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     const board = eln("div", "tcg-board");
     const mat = eln("div", "tcg-mat");
 
-    mat.appendChild(renderStrip(a, "ai"));
-    mat.appendChild(renderHandFan(a));
-    mat.appendChild(renderRow(a.bench, "ai"));
-    mat.appendChild(renderActiveRow(a.active, "ai"));
-    mat.appendChild(renderCenter());
-    mat.appendChild(renderActiveRow(p.active, "player"));
-    mat.appendChild(renderRow(p.bench, "player"));
-    mat.appendChild(renderStrip(p, "player"));
+    // Left rail: prizes + deck + discard for both players, freeing vertical
+    // space in the field so the Bench is fully visible.
+    mat.appendChild(renderRail(a, p));
+
+    const field = eln("div", "tcg-field");
+    field.appendChild(renderNameBar(a, "ai"));
+    field.appendChild(renderHandFan(a));
+    field.appendChild(renderRow(a.bench, "ai"));
+    field.appendChild(renderActiveRow(a.active, "ai"));
+    field.appendChild(renderCenter());
+    field.appendChild(renderActiveRow(p.active, "player"));
+    field.appendChild(renderRow(p.bench, "player"));
+    field.appendChild(renderNameBar(p, "player"));
+    mat.appendChild(field);
     board.appendChild(mat);
     // Hand + controls live in a dock pinned to the bottom of the viewport, so
     // your hand is always visible while the field scrolls above it.
@@ -274,38 +280,41 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     if (state.winner) arena.appendChild(renderGameOver());
   }
 
-  // Prize cards shown as a row of face-down Pokéball cards; taken ones become
-  // empty slots. This is the real win-track — 6 to take.
-  function prizeRow(s) {
-    let cells = "";
+  // Prize cards as face-down Pokéball cards (the real win-track — 6 to take)
+  // plus deck + discard stacks, laid out vertically for the left rail.
+  function railHalf(s, side) {
+    let prizes = "";
     for (let i = 0; i < engine.PRIZE_COUNT; i++) {
-      cells += i < s.prizes.length
+      prizes += i < s.prizes.length
         ? `<span class="tcg-prize-card">${pokeballSVG()}</span>`
         : `<span class="tcg-prize-card empty"></span>`;
     }
-    return `<div class="tcg-prizes" title="${s.prizes.length} Prize cards left">
-      <span class="tcg-prize-label">Prizes</span><div class="tcg-prize-row">${cells}</div></div>`;
-  }
-
-  // Deck + discard as small card stacks; opponent strip also shows hand count.
-  function pilesMini(s, side) {
-    const deck = `<div class="tcg-pile" title="${s.deck.length} in deck">
+    const deck = `<div class="tcg-pile" title="${s.deck.length} cards in deck">
       <div class="tcg-pile-stack">${pokeballSVG()}</div><span class="tcg-pile-n">${s.deck.length}</span></div>`;
-    const discard = `<div class="tcg-pile${s.discard.length ? "" : " empty"}" title="${s.discard.length} in discard">
+    const discard = `<div class="tcg-pile${s.discard.length ? "" : " empty"}" title="${s.discard.length} cards in discard">
       <div class="tcg-pile-discard">${pileSVG("discard")}</div><span class="tcg-pile-n">${s.discard.length}</span></div>`;
-    const hand = side === "ai"
-      ? `<div class="tcg-pile" title="${s.hand.length} in hand"><div class="tcg-pile-hand">${pileSVG("hand")}</div><span class="tcg-pile-n">${s.hand.length}</span></div>`
-      : "";
-    return `<div class="tcg-piles">${hand}${deck}${discard}</div>`;
+    return `<div class="tcg-rail-half tcg-rail-${side}">
+      <div class="tcg-rail-label">Prizes</div>
+      <div class="tcg-rail-prizes" title="${s.prizes.length} Prizes left">${prizes}</div>
+      <div class="tcg-rail-piles">${deck}${discard}</div>
+    </div>`;
   }
 
-  function renderStrip(s, side) {
-    const strip = eln("div", `tcg-strip tcg-strip-${side}`);
-    const name = side === "ai" ? s.name : "You";
-    strip.innerHTML = `${prizeRow(s)}
-      <div class="tcg-strip-name${state.activePlayer === side && !state.winner ? " active" : ""}">${name}</div>
-      ${pilesMini(s, side)}`;
-    return strip;
+  function renderRail(a, p) {
+    const rail = eln("div", "tcg-rail");
+    rail.innerHTML = railHalf(a, "ai") + `<div class="tcg-rail-mid"></div>` + railHalf(p, "player");
+    return rail;
+  }
+
+  // Compact name bar (whose turn); opponent's also shows hand count.
+  function renderNameBar(s, side) {
+    const bar = eln("div", `tcg-namebar tcg-namebar-${side}`);
+    const nameCls = state.activePlayer === side && !state.winner ? " active" : "";
+    const hand = side === "ai"
+      ? `<span class="tcg-hand-count" title="${s.hand.length} cards in hand">${pileSVG("hand")}${s.hand.length}</span>`
+      : "";
+    bar.innerHTML = `<span class="tcg-strip-name${nameCls}">${side === "ai" ? s.name : "You"}</span>${hand}`;
+    return bar;
   }
 
   // Opponent's hand as a fanned row of face-down card backs (shows hand size).
