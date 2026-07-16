@@ -534,14 +534,27 @@ body.dragging-attack .trainer-block.ai {
   padding: 0;
   overflow: hidden;
 }
-/* The mega videos are vertical (9:16) on a pure-black background, so
-   `contain` shows the whole frame centered on black — the subject stays
-   put instead of hopping around inside a `cover` crop. object-position
-   pins it dead-center in every context (bench slot, hand, detail). */
+/* The video box MUST be pinned with position:absolute rather than sized with
+   height:100%. .card-art is sized by `flex: 1`, so its height is indefinite
+   as far as percentage resolution goes: height:100% silently fell back to
+   `auto`, so the video took its intrinsic 9:16 height (~178px) inside a
+   ~69px art box. That overflowed the art — which is what made the video
+   spill over the card and appear to hop around and sit off-center — and the
+   box also resized on every re-render, because the square `poster` and the
+   9:16 video imply different auto heights.
+
+   inset:0 makes the box exactly the art box in both the poster and playing
+   states, so nothing shifts. `cover` then fills that landscape box from the
+   portrait source, cropping away the video's black padding; the subject is
+   centered in frame, so object-position:center keeps it put. (`contain`
+   would letterbox a 9:16 frame into a landscape box and shrink the Pokémon
+   to a ~39px sliver.) */
 .card-art.mega-art .card-mega-vid {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center center;
   filter: none;
 }
