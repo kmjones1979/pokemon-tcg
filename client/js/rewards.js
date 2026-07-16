@@ -4,6 +4,20 @@
 
 import { renderCard } from "./cards.js";
 
+// Ask the server how many of each pick the player already owns. Resolves to a
+// { [id]: quantity } map, or null if we couldn't tell (signed out, offline) —
+// null means "show nothing" rather than wrongly labelling everything NEW.
+async function fetchOwnedCounts(ids) {
+  try {
+    const res = await fetch(`/me/owned?ids=${ids.join(",")}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.owned || null;
+  } catch {
+    return null;
+  }
+}
+
 export function showOffer(offer, { onClaim, didWin } = {}) {
   if (!offer || !offer.picks?.length) {
     onClaim?.(null);
@@ -37,6 +51,11 @@ export function showOffer(offer, { onClaim, didWin } = {}) {
     badge.className = `reward-tier tier-${card.tier} rarity-${rarity}`;
     badge.textContent = rarityLabel;
     wrap.appendChild(badge);
+    // Owned-count badge. Starts empty and is filled in when /me/owned resolves
+    // so the modal paints immediately; stays empty if the lookup fails.
+    const ownedBadge = document.createElement("div");
+    ownedBadge.className = "reward-owned";
+    wrap.appendChild(ownedBadge);
     // Sparkle particle layer behind the card.
     const sparkle = document.createElement("div");
     sparkle.className = "reward-sparkle";
@@ -76,4 +95,24 @@ export function showOffer(offer, { onClaim, didWin } = {}) {
     onClaim?.(null);
   });
   document.body.appendChild(overlay);
+
+  // Label each pick "NEW" or "Owned xN" so the player can weigh a duplicate
+  // against a card they've never had. Fire-and-forget: the modal is already
+  // interactive, and a failed lookup just leaves the badges blank.
+  fetchOwnedCounts(offer.picks.map((c) => c.id)).then((owned) => {
+    if (!owned || !overlay.isConnected) return;
+    offer.picks.forEach((card, i) => {
+      const wrap = picksEl.children[i];
+      const el = wrap?.querySelector(".reward-owned");
+      if (!el) return;
+      const qty = owned[card.id] ?? owned[String(card.id)] ?? 0;
+      if (qty > 0) {
+        el.textContent = `Owned x${qty}`;
+      } else {
+        el.textContent = "NEW";
+        el.classList.add("is-new");
+        wrap.classList.add("is-new-pick");
+      }
+    });
+  });
 }

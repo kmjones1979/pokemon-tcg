@@ -112,6 +112,32 @@ function mount(app, supabase) {
     res.json({ cards, total });
   });
 
+  // Owned quantities for a handful of specific ids. The reward modal uses this
+  // to tell the player which picks are new before they choose. /me/collection
+  // would answer the same question but joins the full pokemon row for every
+  // card they own, which is a lot of payload for a 3-5 card offer.
+  app.get("/me/owned", async (req, res) => {
+    if (!requireAuth(req, res)) return;
+    const ids = [...new Set(
+      String(req.query.ids || "")
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n > 0),
+    )].slice(0, 50);
+    if (!ids.length) return res.json({ owned: {} });
+    const { data, error } = await supabase
+      .from("owned_cards")
+      .select("pokemon_id, quantity")
+      .eq("user_id", req.user.id)
+      .in("pokemon_id", ids);
+    if (error) return res.status(500).json({ error: error.message });
+    // Absent row means they don't own it — report 0 rather than omitting the
+    // key, so the client can distinguish "new" from "not looked up".
+    const owned = Object.fromEntries(ids.map((id) => [id, 0]));
+    for (const row of data || []) owned[row.pokemon_id] = row.quantity || 0;
+    res.json({ owned });
+  });
+
   app.get("/me/decks", async (req, res) => {
     if (!requireAuth(req, res)) return;
     const { data, error } = await supabase

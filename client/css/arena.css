@@ -2582,7 +2582,10 @@ h1, h2, h3,
   display: flex;
   gap: 16px;
   justify-content: center;
-  margin-bottom: 18px;
+  /* Room for the absolutely-positioned rarity pill (bottom:-10px) and the
+     owned badge below it (bottom:-32px), which add no layout height of their
+     own and would otherwise land on the Skip button. */
+  margin-bottom: 46px;
 }
 .reward-pick {
   position: relative;
@@ -2626,6 +2629,47 @@ h1, h2, h3,
   35%  { opacity: 1;   transform: scale(1.4) translate(0,-6px); }
   100% { opacity: 0;   transform: scale(0.6) translate(0,-30px); }
 }
+/* Owned-count badge — says whether a pick is a duplicate or a card the player
+   has never had, which is the deciding factor when the offer makes them
+   choose. Sits above the card, opposite the rarity pill. Empty until the
+   /me/owned lookup resolves, and stays empty (hidden) if it fails. */
+.reward-owned {
+  position: absolute;
+  /* Below the rarity pill, not above the card: guardian cards mount a 🛡 at
+     top-center and a DEFENDER tag to its right, which together span almost
+     the full 160px card width and would cover a badge placed along the top. */
+  bottom: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: "Press Start 2P", monospace;
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg-mid);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+}
+.reward-owned:empty { display: none; }
+.reward-owned.is-new {
+  color: #0d2a12;
+  background: linear-gradient(90deg, #6cd97c, #f7d02c);
+  border-color: transparent;
+  animation: newPulse 1.6s ease-in-out infinite;
+}
+@keyframes newPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(108, 217, 124, 0); }
+  50%      { box-shadow: 0 0 14px rgba(108, 217, 124, 0.75); }
+}
+/* Green edge so a never-owned pick reads from across the modal. Declared
+   before .chosen so the gold "picked" glow still wins once clicked. */
+.reward-pick.is-new-pick .card {
+  box-shadow: 0 0 16px rgba(108, 217, 124, 0.5);
+}
+
 .reward-pick.chosen .card {
   box-shadow: 0 0 22px #f7d02c, 0 0 50px #f7d02c;
 }
