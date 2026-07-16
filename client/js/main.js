@@ -46,6 +46,7 @@ import * as trading from "./trading.js";
 import * as daily from "./daily.js";
 import * as puzzle from "./puzzle.js";
 import { trackEvent } from "./analytics.js";
+import { openTcgMode } from "./tcg/board.js";
 import { init as initI18n } from "./i18n.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -358,6 +359,7 @@ function renderMenu() {
               <button class="mode-btn" id="mode-mp-match" title="Get matched against another trainer online">🌐 Find online match</button>
               <button class="mode-btn" id="mode-mp-friend" title="Share a code and play a friend">👥 Play vs friend</button>
               <button class="mode-btn" id="mode-champion" title="Take on a Champion boss">👑 Fight a Champion</button>
+              <button class="mode-btn" id="mode-tcg" title="Play the real Trading Card Game — Energy, Evolutions, Bench, Prizes">⚔️ TCG Battle</button>
               <button class="mode-btn story-launch" id="mode-story" ${currentUser ? "" : "disabled"} title="${currentUser ? "Begin a Story Mode chapter" : "Sign in to unlock Story Mode"}">📖 Story Mode</button>
             </div>
           </div>
@@ -551,6 +553,7 @@ function renderMenu() {
   $("#mode-mp-match").addEventListener("click", () => startMultiplayer({ mode: "queue" }));
   $("#mode-mp-friend").addEventListener("click", () => startMultiplayer({ mode: "friend" }));
   $("#mode-champion").addEventListener("click", () => openChampionPicker());
+  $("#mode-tcg")?.addEventListener("click", () => openTcgMode({ onExit: renderMenu }));
   $("#mode-story")?.addEventListener("click", () => story.openStoryHub({ currentUser }));
   $("#mode-trade")?.addEventListener("click", () => trading.openTradeMarket({ currentUser }));
   $("#mode-puzzle")?.addEventListener("click", () => puzzle.openPuzzle({ currentUser }));

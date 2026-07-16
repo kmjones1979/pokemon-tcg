@@ -1,0 +1,197 @@
+/* TCG mode — board layout + card faces. Scoped under .tcg-board / .tcg-card so
+   it never touches the legacy battler. The board is a vertical scroll column
+   that fills the viewport with a sticky action bar at the bottom. */
+
+/* The global site footer would otherwise flow under the board's log. */
+body.tcg-mode #site-footer { display: none; }
+/* Keep the opponent's pile counts clear of the fixed top-right mute button. */
+.tcg-opp-panel { padding-right: 46px; }
+
+.tcg-board {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(90, 60, 160, 0.25), transparent 55%),
+    radial-gradient(circle at 50% 100%, rgba(40, 120, 160, 0.22), transparent 55%),
+    linear-gradient(180deg, #10101f, #171326);
+  color: var(--ink, #f0eee2);
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+/* ---- opponent status ---- */
+.tcg-opp-panel {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px; padding: 5px 10px; font-size: 12px;
+}
+.tcg-opp-id strong { font-size: 13px; }
+.tcg-prizes { display: flex; align-items: center; gap: 4px; }
+.tcg-prize-label { font-size: 10px; color: var(--muted, #8a8eaa); text-transform: uppercase; letter-spacing: 1px; margin-right: 2px; }
+.tcg-prize-pip { width: 11px; height: 11px; border-radius: 50%; background: linear-gradient(135deg, #f7d02c, #ee8130); box-shadow: 0 0 5px rgba(247, 208, 44, 0.6); }
+.tcg-prize-pip.taken { background: rgba(255, 255, 255, 0.12); box-shadow: none; }
+.tcg-piles { display: flex; gap: 10px; color: var(--muted, #8a8eaa); font-size: 11px; }
+
+/* ---- rows ---- */
+.tcg-bench-row, .tcg-active-row {
+  display: flex; justify-content: center; align-items: flex-start; gap: 6px;
+  min-height: 30px;
+}
+.tcg-active-row { margin: 2px 0; }
+.tcg-active-ai { align-items: flex-start; }
+.tcg-slot-empty {
+  width: 66px; height: 92px; border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.1); flex: 0 0 auto;
+}
+.tcg-empty-active {
+  min-width: 120px; min-height: 60px; display: grid; place-items: center;
+  color: var(--muted, #8a8eaa); font-size: 12px; font-style: italic;
+  border: 1px dashed rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 8px 16px;
+}
+
+.tcg-center { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 2px 0; }
+.tcg-turn { font-family: "Press Start 2P", monospace; font-size: 10px; letter-spacing: 1px; color: #f7d02c; }
+.tcg-stadium { font-size: 11px; color: #9fd8ff; background: rgba(60, 155, 255, 0.12); border: 1px solid rgba(60, 155, 255, 0.3); border-radius: 999px; padding: 2px 10px; }
+
+/* ---- card face ---- */
+.tcg-card {
+  position: relative; box-sizing: border-box; flex: 0 0 auto;
+  border-radius: 10px; overflow: hidden; cursor: default; user-select: none;
+  background: linear-gradient(180deg, #24243a, #1a1a2c);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, outline-color 0.12s ease;
+}
+.tcg-pokemon { border-top: 3px solid var(--type, #888); }
+.tcg-full { width: 132px; }
+.tcg-mini { width: 66px; }
+
+.tcg-card-head {
+  display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px;
+  padding: 3px 6px 2px; background: rgba(0, 0, 0, 0.25);
+}
+.tcg-stage { grid-column: 1 / -1; font-size: 7px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted, #8a8eaa); }
+.tcg-name { font-weight: 700; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcg-hp { font-family: "Press Start 2P", monospace; font-size: 11px; color: #ff6b6b; white-space: nowrap; }
+.tcg-hp small { font-size: 7px; opacity: 0.7; margin-left: 1px; }
+
+.tcg-art {
+  position: relative; height: 74px; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--type, #888) 30%, transparent), rgba(0, 0, 0, 0.45));
+}
+.tcg-mini .tcg-art { height: 52px; }
+.tcg-art img { max-width: 92%; max-height: 92%; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.6)); image-rendering: auto; }
+.tcg-attached { position: absolute; left: 3px; bottom: 3px; display: flex; gap: 2px; flex-wrap: wrap; max-width: 60%; }
+.tcg-damage { position: absolute; right: 3px; top: 3px; background: rgba(200, 30, 30, 0.92); color: #fff; font-family: "Press Start 2P", monospace; font-size: 9px; padding: 2px 4px; border-radius: 5px; }
+
+.tcg-pip {
+  display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%;
+  font-size: 9px; color: #1a1a1a; border: 1px solid rgba(0, 0, 0, 0.35); box-shadow: inset 0 0 2px rgba(255, 255, 255, 0.5);
+}
+.tcg-pip-none { background: transparent; color: var(--muted, #8a8eaa); border: none; box-shadow: none; }
+.tcg-cost { display: inline-flex; gap: 2px; }
+
+.tcg-attacks { padding: 3px 5px; display: flex; flex-direction: column; gap: 2px; }
+.tcg-attack { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px; padding: 2px 3px; border-radius: 5px; font-size: 11px; }
+.tcg-attack.affordable { background: rgba(108, 217, 124, 0.14); box-shadow: inset 0 0 0 1px rgba(108, 217, 124, 0.4); cursor: pointer; }
+.tcg-atk-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcg-atk-dmg { font-family: "Press Start 2P", monospace; font-size: 10px; }
+.tcg-card-foot { display: flex; justify-content: space-between; font-size: 8.5px; color: var(--muted, #8a8eaa); padding: 2px 6px 4px; }
+.tcg-mini-foot { display: flex; align-items: center; gap: 3px; padding: 2px 4px; font-size: 8px; }
+.tcg-mini-foot span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* energy + trainer + back */
+.tcg-energy { width: 66px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 4px; border-top: 3px solid var(--type); }
+.tcg-full.tcg-energy { width: 92px; padding: 14px 6px; }
+.tcg-energy-badge { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 18px; background: var(--type); color: #1a1a1a; box-shadow: 0 0 8px color-mix(in srgb, var(--type) 60%, transparent); }
+.tcg-energy-name { font-size: 9px; text-align: center; color: var(--muted, #8a8eaa); }
+.tcg-trainer { border-top: 3px solid #d6a13d; }
+.tcg-trainer.kind-supporter { border-top-color: #e06cc0; }
+.tcg-trainer.kind-stadium { border-top-color: #5fc0e0; }
+.tcg-trainer-head { padding: 4px 6px 2px; background: rgba(0, 0, 0, 0.25); }
+.tcg-trainer-kind { display: block; font-size: 7px; text-transform: uppercase; letter-spacing: 1px; color: #d6a13d; }
+.tcg-trainer.kind-supporter .tcg-trainer-kind { color: #e06cc0; }
+.tcg-trainer.kind-stadium .tcg-trainer-kind { color: #5fc0e0; }
+.tcg-trainer-glyph { height: 46px; display: grid; place-items: center; font-size: 26px; }
+.tcg-mini .tcg-trainer-glyph { height: 34px; font-size: 20px; }
+.tcg-trainer-text { font-size: 9px; color: var(--muted, #8a8eaa); padding: 0 6px 5px; line-height: 1.3; }
+.tcg-back { background: repeating-linear-gradient(45deg, #2a2550, #2a2550 6px, #211d40 6px, #211d40 12px); border-color: rgba(255, 255, 255, 0.14); display: grid; place-items: center; height: 92px; }
+.tcg-mini.tcg-back { height: 52px; }
+.tcg-back-logo { font-size: 22px; color: rgba(255, 255, 255, 0.35); }
+
+/* interaction states */
+.tcg-card[data-zone="hand"], .tcg-card[data-uid] { cursor: pointer; }
+.tcg-card.selected { outline: 2px solid #f7d02c; outline-offset: 2px; transform: translateY(-6px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+.tcg-card.targetable { outline: 2px solid #6cd97c; outline-offset: 2px; box-shadow: 0 0 16px rgba(108, 217, 124, 0.5); cursor: pointer; }
+.tcg-active-player .tcg-card[data-uid] { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1); }
+
+/* ---- hand ---- */
+.tcg-hand-wrap { margin-top: auto; }
+.tcg-hand { display: flex; gap: 6px; overflow-x: auto; padding: 8px 2px 4px; scrollbar-width: thin; }
+.tcg-hand::-webkit-scrollbar { height: 6px; }
+.tcg-hand .tcg-card { transform-origin: bottom center; }
+.tcg-hand-empty { color: var(--muted, #8a8eaa); font-size: 12px; padding: 20px; }
+
+/* ---- action bar ---- */
+.tcg-action-bar {
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; flex-direction: column; gap: 6px;
+  background: linear-gradient(180deg, rgba(16, 16, 31, 0.6), rgba(16, 16, 31, 0.96));
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 4px 10px;
+}
+.tcg-status { font-size: 12px; color: var(--ink, #f0eee2); text-align: center; min-height: 16px; }
+.tcg-note { font-size: 10px; color: #ffb27a; text-align: center; }
+.tcg-buttons { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.tcg-btn {
+  background: rgba(255, 255, 255, 0.08); color: var(--ink, #f0eee2);
+  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 9px;
+  padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.tcg-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.15); }
+.tcg-btn.primary { background: linear-gradient(90deg, #f7d02c, #ee8130); color: #1a0a00; border-color: transparent; }
+.tcg-btn.ghost { background: transparent; }
+.tcg-attack-choose { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.tcg-atk-btn { display: flex; align-items: center; gap: 6px; background: rgba(108, 217, 124, 0.16); border: 1px solid rgba(108, 217, 124, 0.45); color: var(--ink, #f0eee2); border-radius: 9px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.tcg-atk-btn.disabled { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.12); color: var(--muted, #8a8eaa); cursor: not-allowed; }
+.tcg-atk-btn-name { font-weight: 600; }
+.tcg-atk-btn-dmg { font-family: "Press Start 2P", monospace; font-size: 11px; }
+
+/* ---- log ---- */
+.tcg-log { display: flex; flex-direction: column; gap: 1px; padding: 4px 6px 10px; font-size: 10.5px; color: var(--muted, #8a8eaa); text-align: center; }
+.tcg-log-line:last-child { color: var(--ink, #f0eee2); }
+
+/* ---- game over ---- */
+.tcg-gameover { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; background: rgba(6, 6, 14, 0.72); backdrop-filter: blur(4px); }
+.tcg-gameover-card { background: linear-gradient(180deg, #24243a, #16162a); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 16px; padding: 26px 30px; text-align: center; max-width: 90%; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.tcg-gameover-card.win { border-color: rgba(247, 208, 44, 0.5); box-shadow: 0 0 40px rgba(247, 208, 44, 0.3); }
+.tcg-go-title { font-family: "Press Start 2P", monospace; font-size: 20px; margin-bottom: 10px; }
+.tcg-gameover-card.win .tcg-go-title { color: #f7d02c; }
+.tcg-go-sub { color: var(--muted, #8a8eaa); font-size: 13px; margin-bottom: 20px; }
+.tcg-go-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* ---- deck picker (pre-match) ---- */
+.tcg-picker { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 40px 16px; box-sizing: border-box; background: radial-gradient(circle at 50% 0%, rgba(90,60,160,0.25), transparent 55%), linear-gradient(180deg, #10101f, #171326); }
+.tcg-picker h2 { font-family: "Press Start 2P", monospace; font-size: 18px; text-align: center; margin: 0; }
+.tcg-picker-sub { color: var(--muted, #8a8eaa); font-size: 13px; text-align: center; max-width: 460px; }
+.tcg-deck-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; width: 100%; max-width: 720px; }
+.tcg-deck-card { background: rgba(20, 20, 36, 0.7); border: 2px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 14px; cursor: pointer; text-align: center; transition: all 0.15s ease; }
+.tcg-deck-card:hover { transform: translateY(-4px); border-color: var(--type); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4); }
+.tcg-deck-art { width: 96px; height: 96px; margin: 0 auto 8px; background-size: contain; background-repeat: no-repeat; background-position: center; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5)); }
+.tcg-deck-name { font-family: "Press Start 2P", monospace; font-size: 12px; color: var(--type); margin-bottom: 6px; }
+.tcg-deck-blurb { font-size: 11px; color: var(--muted, #8a8eaa); line-height: 1.4; }
+.tcg-picker-exit { margin-top: 6px; }
+
+@media (max-width: 560px) {
+  .tcg-full { width: 116px; }
+  .tcg-mini { width: 58px; }
+  .tcg-deck-grid { grid-template-columns: 1fr; max-width: 340px; }
+  .tcg-go-title { font-size: 16px; }
+}
