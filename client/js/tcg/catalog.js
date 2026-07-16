@@ -101,17 +101,23 @@ const ENERGY = [
 
 // --- Trainers (Item / Supporter / Stadium) --------------------------------
 
+// Authentic Pokémon art for Trainer cards: official item sprites for Items
+// (pixel style), Showdown trainer character art for Supporters, and Pokémon
+// artwork for Stadiums. `artStyle` tells the renderer how to fit each.
+const ITEM_ART = (n) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${n}.png`;
+const TRAINER_ART = (n) => `https://play.pokemonshowdown.com/sprites/trainers/${n}.png`;
+
 const TRAINERS = [
-  { id: "trainer-potion", kind: "item", name: "Potion", text: "Heal 30 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 30 } },
-  { id: "trainer-super-potion", kind: "item", name: "Super Potion", text: "Heal 60 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 60 } },
-  { id: "trainer-poke-ball", kind: "item", name: "Poké Ball", text: "Search your deck for a Basic Pokémon and put it into your hand.", effect: { type: "search", filter: "basic", count: 1 } },
-  { id: "trainer-great-ball", kind: "item", name: "Great Ball", text: "Search your deck for a Pokémon and put it into your hand.", effect: { type: "search", filter: "pokemon", count: 1 } },
-  { id: "trainer-energy-search", kind: "item", name: "Energy Search", text: "Search your deck for a basic Energy and put it into your hand.", effect: { type: "search", filter: "energy", count: 1 } },
-  { id: "trainer-switch", kind: "item", name: "Switch", text: "Switch your Active Pokémon with 1 of your Benched Pokémon.", effect: { type: "switchOwn" } },
-  { id: "trainer-research", kind: "supporter", name: "Professor's Research", text: "Discard your hand and draw 7 cards.", effect: { type: "discardHandDraw", count: 7 } },
-  { id: "trainer-hop", kind: "supporter", name: "Hop", text: "Draw 3 cards.", effect: { type: "draw", count: 3 } },
-  { id: "trainer-stadium-spa", kind: "stadium", name: "Health Spa", text: "At the start of each player's turn, heal 10 damage from that player's Active Pokémon.", effect: { type: "startTurnHeal", amount: 10 } },
-  { id: "trainer-stadium-arena", kind: "stadium", name: "Battle Arena", text: "Attacks from both players' Active Pokémon do 10 more damage to the opposing Active.", effect: { type: "attackBonus", amount: 10 } },
+  { id: "trainer-potion", kind: "item", name: "Potion", text: "Heal 30 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 30 }, art: ITEM_ART("potion"), artStyle: "item" },
+  { id: "trainer-super-potion", kind: "item", name: "Super Potion", text: "Heal 60 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 60 }, art: ITEM_ART("super-potion"), artStyle: "item" },
+  { id: "trainer-poke-ball", kind: "item", name: "Poké Ball", text: "Search your deck for a Basic Pokémon and put it into your hand.", effect: { type: "search", filter: "basic", count: 1 }, art: ITEM_ART("poke-ball"), artStyle: "item" },
+  { id: "trainer-great-ball", kind: "item", name: "Great Ball", text: "Search your deck for a Pokémon and put it into your hand.", effect: { type: "search", filter: "pokemon", count: 1 }, art: ITEM_ART("great-ball"), artStyle: "item" },
+  { id: "trainer-energy-search", kind: "item", name: "Energy Search", text: "Search your deck for a basic Energy and put it into your hand.", effect: { type: "search", filter: "energy", count: 1 }, art: ITEM_ART("dowsing-machine"), artStyle: "item" },
+  { id: "trainer-switch", kind: "item", name: "Switch", text: "Switch your Active Pokémon with 1 of your Benched Pokémon.", effect: { type: "switchOwn" }, art: ITEM_ART("escape-rope"), artStyle: "item" },
+  { id: "trainer-research", kind: "supporter", name: "Professor's Research", text: "Discard your hand and draw 7 cards.", effect: { type: "discardHandDraw", count: 7 }, art: TRAINER_ART("magnolia"), artStyle: "trainer" },
+  { id: "trainer-hop", kind: "supporter", name: "Hop", text: "Draw 3 cards.", effect: { type: "draw", count: 3 }, art: TRAINER_ART("hop"), artStyle: "trainer" },
+  { id: "trainer-stadium-spa", kind: "stadium", name: "Health Spa", text: "At the start of each player's turn, heal 10 damage from that player's Active Pokémon.", effect: { type: "startTurnHeal", amount: 10 }, art: ART(113), artStyle: "mon" },
+  { id: "trainer-stadium-arena", kind: "stadium", name: "Battle Arena", text: "Attacks from both players' Active Pokémon do 10 more damage to the opposing Active.", effect: { type: "attackBonus", amount: 10 }, art: ART(68), artStyle: "mon" },
 ];
 
 // --- Lookup ---------------------------------------------------------------

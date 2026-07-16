@@ -235,10 +235,23 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-trainer.kind-supporter { --tk: #e06cc0; }
 .tcg-trainer.kind-stadium { --tk: #4bb0d8; }
 .tcg-trainer-banner { width: 100%; background: var(--tk); color: #fff; font-size: 7px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; text-align: center; padding: 2px 0; }
-.tcg-trainer-icon { width: 40px; height: 40px; color: var(--tk); margin-top: 5px; }
-.tcg-trainer-icon .tcg-tsvg { width: 100%; height: 100%; }
-.tcg-mini .tcg-trainer-icon { width: 30px; height: 30px; margin-top: 3px; }
-.tcg-trainer-name { font-weight: 800; font-size: 11px; text-align: center; padding: 0 4px; }
+/* Framed illustration window, mirroring the Pokémon card art window. */
+.tcg-trainer-art {
+  width: calc(100% - 10px); margin: 4px 5px 0; height: 78px; border-radius: 4px; overflow: hidden;
+  display: grid; place-items: center;
+  border: 1.5px solid color-mix(in srgb, var(--tk) 55%, #6f6033);
+  background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--tk) 24%, #fff), #cbc5b4 92%);
+}
+.tcg-mini .tcg-trainer-art { height: 54px; }
+.tcg-trainer-art img { max-width: 92%; max-height: 92%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
+/* Item sprites are small pixel art — upscale crisply and centre. */
+.art-item .tcg-trainer-art img { image-rendering: pixelated; max-width: 60%; max-height: 60%; }
+/* Trainer character sprites sit taller and bottom-aligned. */
+.art-trainer .tcg-trainer-art { align-items: end; }
+.art-trainer .tcg-trainer-art img { max-height: 100%; }
+.tcg-trainer-art-icon { color: var(--tk); }
+.tcg-trainer-art-icon .tcg-tsvg { width: 42%; height: 42%; }
+.tcg-trainer-name { font-weight: 800; font-size: 11px; text-align: center; padding: 2px 4px 0; }
 .tcg-mini .tcg-trainer-name { font-size: 9px; }
 .tcg-trainer-text { font-size: 8.5px; color: #5f5943; text-align: center; padding: 0 6px; line-height: 1.3; }
 
@@ -272,16 +285,17 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-hand::-webkit-scrollbar { height: 6px; }
 .tcg-hand .tcg-card {
   transform-origin: bottom center;
-  transition: transform 0.14s ease, box-shadow 0.14s ease, margin 0.14s ease;
+  transform: translateY(var(--fan-y, 0)) rotate(var(--fan-rot, 0deg));
+  transition: transform 0.18s cubic-bezier(0.2, 0.9, 0.25, 1.15), box-shadow 0.14s ease, margin 0.14s ease;
 }
 /* Overlap ramps up with hand size so many cards stay on one row. */
 .tcg-hand[data-size="7"] .tcg-card, .tcg-hand[data-size="8"] .tcg-card { margin: 0 -14px; }
 .tcg-hand[data-size="9"] .tcg-card, .tcg-hand[data-size="10"] .tcg-card { margin: 0 -26px; }
 .tcg-hand[data-size="11"] .tcg-card, .tcg-hand[data-size="12"] .tcg-card,
 .tcg-hand[data-size="13"] .tcg-card, .tcg-hand[data-size="14"] .tcg-card { margin: 0 -38px; }
-/* Hovered/selected cards rise clear of the stack and become fully visible. */
-.tcg-hand .tcg-card:hover { transform: translateY(-14px) scale(1.04); z-index: 20; box-shadow: 0 12px 26px rgba(0, 0, 0, 0.6); }
-.tcg-hand .tcg-card.selected { z-index: 21; }
+/* Hovered/selected cards straighten, rise clear of the fan, and enlarge. */
+.tcg-hand .tcg-card:hover { transform: translateY(-18px) rotate(0deg) scale(1.06); z-index: 20; box-shadow: 0 14px 28px rgba(0, 0, 0, 0.62); }
+.tcg-hand .tcg-card.selected { transform: translateY(-14px) rotate(0deg) scale(1.03); z-index: 21; }
 .tcg-hand-empty { color: var(--muted, #8a8eaa); font-size: 12px; padding: 20px; }
 
 /* ---- action bar (inside the dock) ---- */

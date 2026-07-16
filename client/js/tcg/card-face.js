@@ -95,12 +95,18 @@ function renderEnergyCard(card, size) {
 }
 
 function renderTrainerCard(card, size) {
-  const wrap = el("div", `tcg-card tcg-trainer kind-${card.kind} tcg-${size}`);
+  const wrap = el("div", `tcg-card tcg-trainer kind-${card.kind} art-${card.artStyle || "icon"} tcg-${size}`);
   wrap.dataset.cardId = card.id;
   const label = card.kind === "item" ? "Item" : card.kind === "supporter" ? "Supporter" : "Stadium";
+  // Real trainer-card look: a framed illustration window with the category
+  // banner above and the name/text below. Falls back to the SVG icon if a
+  // card has no art.
+  const art = card.art
+    ? `<div class="tcg-trainer-art"><img loading="lazy" src="${card.art}" alt="${card.name}" draggable="false"></div>`
+    : `<div class="tcg-trainer-art tcg-trainer-art-icon">${trainerSVG(card.kind)}</div>`;
   wrap.innerHTML =
     `<div class="tcg-trainer-banner">${label}</div>
-     <div class="tcg-trainer-icon">${trainerSVG(card.kind)}</div>
+     ${art}
      <div class="tcg-name tcg-trainer-name">${card.name}</div>
      ${size === "full" ? `<div class="tcg-trainer-text">${card.text || ""}</div>` : ""}`;
   return wrap;

@@ -386,11 +386,17 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     // Drive the fan/overlap amount from hand size (see .tcg-hand[data-size] CSS)
     // so a big hand (e.g. after Professor's Research) stays on one row instead
     // of a long scroll; hovering/selecting a card lifts it clear of the stack.
-    hand.dataset.size = String(Math.min(p.hand.length, 14));
-    if (p.hand.length) wrap.appendChild(eln("div", "tcg-hand-label", `Your hand · ${p.hand.length}`));
+    const n = p.hand.length;
+    hand.dataset.size = String(Math.min(n, 14));
+    if (n) wrap.appendChild(eln("div", "tcg-hand-label", `Your hand · ${n}`));
     p.hand.forEach((card, i) => {
       const c = renderTcgCard(card, { size: "full" });
       c.dataset.zone = "hand"; c.dataset.handIndex = i;
+      // Arc fan (like the main battle game): rotate outward and dip the edge
+      // cards down, pivoting from the bottom.
+      const t = n > 1 ? i / (n - 1) - 0.5 : 0; // -0.5 .. 0.5
+      c.style.setProperty("--fan-rot", `${(t * Math.min(n * 3.2, 20)).toFixed(2)}deg`);
+      c.style.setProperty("--fan-y", `${(Math.abs(t) * Math.min(n * 2.4, 16)).toFixed(1)}px`);
       if (i === selHand) c.classList.add("selected");
       hand.appendChild(c);
     });
