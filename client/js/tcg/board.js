@@ -260,9 +260,13 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     mat.appendChild(renderRow(p.bench, "player"));
     mat.appendChild(renderStrip(p, "player"));
     board.appendChild(mat);
-    board.appendChild(renderHand(p));
-    board.appendChild(renderActionBar(p));
-    board.appendChild(renderLog());
+    // Hand + controls live in a dock pinned to the bottom of the viewport, so
+    // your hand is always visible while the field scrolls above it.
+    const dock = eln("div", "tcg-dock");
+    dock.appendChild(renderHand(p));
+    dock.appendChild(renderActionBar(p));
+    dock.appendChild(renderLog());
+    board.appendChild(dock);
 
     // NOTE: the click handler is a single delegated listener on #arena added
     // once in startTcgMatch — NOT re-added per board here.
@@ -379,6 +383,11 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   function renderHand(p) {
     const wrap = eln("div", "tcg-hand-wrap");
     const hand = eln("div", "tcg-hand");
+    // Drive the fan/overlap amount from hand size (see .tcg-hand[data-size] CSS)
+    // so a big hand (e.g. after Professor's Research) stays on one row instead
+    // of a long scroll; hovering/selecting a card lifts it clear of the stack.
+    hand.dataset.size = String(Math.min(p.hand.length, 14));
+    if (p.hand.length) wrap.appendChild(eln("div", "tcg-hand-label", `Your hand · ${p.hand.length}`));
     p.hand.forEach((card, i) => {
       const c = renderTcgCard(card, { size: "full" });
       c.dataset.zone = "hand"; c.dataset.handIndex = i;

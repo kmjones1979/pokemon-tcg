@@ -31,8 +31,16 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-mat::before {
   content: ""; position: absolute; left: 6%; right: 6%; top: 50%; height: 2px; transform: translateY(-50%);
   background: linear-gradient(90deg, transparent, rgba(247, 208, 44, 0.35), rgba(255, 255, 255, 0.25), rgba(247, 208, 44, 0.35), transparent);
-  pointer-events: none;
+  pointer-events: none; z-index: 0;
 }
+/* Faint felt weave over the whole board. */
+.tcg-board::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.5;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 4px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 4px);
+}
+.tcg-board > * { position: relative; z-index: 1; }
 
 /* ---- player strips (prizes + name + piles) ---- */
 .tcg-strip {
@@ -106,8 +114,12 @@ body.tcg-mode #site-footer { display: none; }
   background: rgba(255, 255, 255, 0.02);
 }
 
-.tcg-center { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 2px 0; }
-.tcg-turn { font-family: "Press Start 2P", monospace; font-size: 10px; letter-spacing: 1px; color: #f7d02c; }
+.tcg-center { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 3px 0; position: relative; z-index: 1; }
+.tcg-turn {
+  font-family: "Press Start 2P", monospace; font-size: 10px; letter-spacing: 1px; color: #f7d02c;
+  background: rgba(18, 15, 30, 0.8); border: 1px solid rgba(247, 208, 44, 0.35); border-radius: 999px;
+  padding: 5px 14px; box-shadow: 0 0 16px rgba(247, 208, 44, 0.18);
+}
 .tcg-stadium { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #9fd8ff; background: rgba(60, 155, 255, 0.12); border: 1px solid rgba(60, 155, 255, 0.3); border-radius: 999px; padding: 2px 10px; }
 .tcg-stadium .tcg-tsvg { width: 14px; height: 14px; }
 
@@ -240,19 +252,41 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-card.selected { outline: 3px solid #f7d02c; outline-offset: 2px; transform: translateY(-8px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55); z-index: 3; }
 .tcg-card.targetable { outline: 3px solid #57d06a; outline-offset: 2px; box-shadow: 0 0 18px rgba(87, 208, 106, 0.6); cursor: pointer; }
 
-/* ---- hand ---- */
+/* ---- bottom dock: hand + controls pinned to the viewport bottom ---- */
+.tcg-dock {
+  position: sticky; bottom: 0; z-index: 6;
+  background: linear-gradient(180deg, rgba(13, 11, 24, 0) 0%, rgba(13, 11, 24, 0.82) 22%, rgba(13, 11, 24, 0.97) 55%);
+  backdrop-filter: blur(6px);
+}
+
+/* ---- hand (fans + overlaps as it grows) ---- */
 .tcg-hand-wrap { margin-top: auto; }
-.tcg-hand { display: flex; gap: 6px; overflow-x: auto; padding: 8px 2px 4px; scrollbar-width: thin; }
+.tcg-hand-label { text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #8a8eaa; padding: 2px 0; }
+/* Hand cards are a touch shorter than in-play cards so the dock stays compact;
+   selecting/hovering lifts them clear and readable. */
+.tcg-hand .tcg-art-frame { height: 60px; }
+.tcg-hand {
+  display: flex; justify-content: center; align-items: flex-end;
+  gap: 6px; padding: 6px 8px 4px; overflow-x: auto; overflow-y: visible; scrollbar-width: thin;
+}
 .tcg-hand::-webkit-scrollbar { height: 6px; }
-.tcg-hand .tcg-card { transform-origin: bottom center; }
+.tcg-hand .tcg-card {
+  transform-origin: bottom center;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, margin 0.14s ease;
+}
+/* Overlap ramps up with hand size so many cards stay on one row. */
+.tcg-hand[data-size="7"] .tcg-card, .tcg-hand[data-size="8"] .tcg-card { margin: 0 -14px; }
+.tcg-hand[data-size="9"] .tcg-card, .tcg-hand[data-size="10"] .tcg-card { margin: 0 -26px; }
+.tcg-hand[data-size="11"] .tcg-card, .tcg-hand[data-size="12"] .tcg-card,
+.tcg-hand[data-size="13"] .tcg-card, .tcg-hand[data-size="14"] .tcg-card { margin: 0 -38px; }
+/* Hovered/selected cards rise clear of the stack and become fully visible. */
+.tcg-hand .tcg-card:hover { transform: translateY(-14px) scale(1.04); z-index: 20; box-shadow: 0 12px 26px rgba(0, 0, 0, 0.6); }
+.tcg-hand .tcg-card.selected { z-index: 21; }
 .tcg-hand-empty { color: var(--muted, #8a8eaa); font-size: 12px; padding: 20px; }
 
-/* ---- action bar ---- */
+/* ---- action bar (inside the dock) ---- */
 .tcg-action-bar {
-  position: sticky; bottom: 0; z-index: 5;
   display: flex; flex-direction: column; gap: 6px;
-  background: linear-gradient(180deg, rgba(16, 16, 31, 0.6), rgba(16, 16, 31, 0.96));
-  backdrop-filter: blur(8px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 8px 4px 10px;
 }
@@ -373,4 +407,11 @@ body.tcg-mode #site-footer { display: none; }
   .tcg-mini { width: 64px; }
   .tcg-deck-grid { grid-template-columns: 1fr; max-width: 340px; }
   .tcg-go-title { font-size: 16px; }
+  /* Lighter hand overlap on touch screens so each card stays easy to tap;
+     the hand scrolls horizontally for overflow instead of hiding tap targets. */
+  .tcg-hand { justify-content: flex-start; }
+  .tcg-hand[data-size="7"] .tcg-card, .tcg-hand[data-size="8"] .tcg-card { margin: 0 -4px; }
+  .tcg-hand[data-size="9"] .tcg-card, .tcg-hand[data-size="10"] .tcg-card { margin: 0 -10px; }
+  .tcg-hand[data-size="11"] .tcg-card, .tcg-hand[data-size="12"] .tcg-card,
+  .tcg-hand[data-size="13"] .tcg-card, .tcg-hand[data-size="14"] .tcg-card { margin: 0 -16px; }
 }
