@@ -14,6 +14,7 @@ const el = (tag, cls, html) => {
 };
 
 const STAGE = { basic: "Basic", stage1: "Stage 1", stage2: "Stage 2" };
+const RARITY_MARK = { common: "●", uncommon: "◆", rare: "★", ultra: "✦" };
 
 // Render a Pokémon / Energy / Trainer card. `inst` overlays in-play state
 // (current HP, attached Energy, damage). `opts.affordable` is a Set of attack
@@ -24,11 +25,11 @@ export function renderTcgCard(card, opts = {}) {
   if (["item", "supporter", "stadium"].includes(card.kind)) return renderTrainerCard(card, size);
 
   const type = card.type || "colorless";
-  const wrap = el("div", `tcg-card tcg-pokemon tcg-${size} type-${type}`);
+  const rarity = card.rarity || "common";
+  const wrap = el("div", `tcg-card tcg-pokemon tcg-${size} type-${type} rarity-${rarity}${card.genArt ? " gen-art" : ""}`);
   wrap.style.setProperty("--type", TCG_COLORS[type] || "#888");
   wrap.dataset.cardId = card.id;
   if (inst) wrap.dataset.uid = inst.uid;
-  if (card.stage === "stage2") wrap.classList.add("is-foil");
 
   const curHp = inst ? Math.max(0, card.hp - inst.damage) : card.hp;
 
@@ -80,6 +81,9 @@ export function renderTcgCard(card, opts = {}) {
     wrap.appendChild(el("div", "tcg-mini-foot",
       `${energyBadge(type, "pip-mini")}<span class="tcg-mini-name">${card.name}</span>`));
   }
+  // Holographic sheen for Rare/Ultra, plus a rarity mark like real cards.
+  if (rarity === "rare" || rarity === "ultra") wrap.appendChild(el("div", "tcg-holo"));
+  if (size === "full") wrap.appendChild(el("div", `tcg-rarity-mark rm-${rarity}`, RARITY_MARK[rarity] || ""));
   return wrap;
 }
 

@@ -128,6 +128,18 @@ for (const t of TRAINERS) {
   if (GENERATED_ART[t.id]) { t.art = GENERATED_ART[t.id]; t.artStyle = "art"; }
 }
 
+// Rarity tiers (visual treatment, like real TCG): the three deck aces are Ultra
+// Rares (rainbow holo), Stage 2s are Rares (holo), Stage 1s Uncommon, Basics
+// Common. Bespoke Pokémon illustrations (generate-pokemon-art.js) fill the card
+// full-bleed as an "Illustration Rare"-style full art.
+const ACES = new Set(["fire-charizard", "water-blastoise", "grass-venusaur"]);
+for (const p of POKEMON) {
+  p.rarity = ACES.has(p.id) ? "ultra"
+    : p.stage === "stage2" ? "rare"
+    : p.stage === "stage1" ? "uncommon" : "common";
+  if (GENERATED_ART[p.id]) { p.art = GENERATED_ART[p.id]; p.genArt = true; }
+}
+
 // --- Lookup ---------------------------------------------------------------
 
 export const ALL_CARDS = [...POKEMON, ...ENERGY, ...TRAINERS];
