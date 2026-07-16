@@ -82,9 +82,9 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   });
 
   // UI selection state.
-  let mode = "idle";            // idle | attach | evolve | heal | switch | retreat | attack
+  let mode = "idle";            // idle | attach | evolve | heal | retreat | attack
   let selHand = -1;             // selected hand index
-  let inputLocked = false;
+  let aiRunning = false;        // re-entrancy guard for the AI turn loop
   let message = "";
 
   function clearSel() { mode = "idle"; selHand = -1; message = ""; }
@@ -92,7 +92,17 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   // ---- interaction ------------------------------------------------------
 
   function onBoardClick(e) {
-    if (inputLocked || state.winner) return;
+    // Gate on whose turn it ACTUALLY is (the engine is the source of truth),
+    // not a manual lock flag. The old inputLocked flag lagged: after the AI
+    // ended its turn, its final cosmetic render showed "your turn" while the
+    // flag was still set for another ~720ms, so the first taps of your turn
+    // were silently dropped — which read as "can't attach Energy".
+    if (state.winner) {
+      const go = e.target.closest('[data-action="again"], [data-action="exit"]');
+      if (go) return handleAction(go.dataset.action, go.dataset);
+      return;
+    }
+    if (state.activePlayer !== "player") return;
     const actionEl = e.target.closest("[data-action]");
     if (actionEl) return handleAction(actionEl.dataset.action, actionEl.dataset);
     const atk = e.target.closest(".tcg-attack");
@@ -148,30 +158,16 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     const s = state.players.player;
     const inst = engine.findInst(s, uid);
     if (!inst) return;
-    if (mode === "attach") {
-      try { engine.attachEnergy(state, "player", selHand, uid); } catch (err) { flash(err.message); }
-      clearSel(); return render();
-    }
-    if (mode === "evolve") {
-      try { engine.evolve(state, "player", selHand, uid); } catch (err) { flash(err.message); }
-      clearSel(); return render();
-    }
-    if (mode === "heal") {
-      try { engine.playTrainer(state, "player", selHand, { targetUid: uid }); } catch (err) { flash(err.message); }
-      clearSel(); return render();
-    }
-    if (mode === "switch") {
-      const benchIdx = s.bench.indexOf(inst);
-      if (benchIdx < 0) { flash("Pick a Benched Pokémon."); return; }
-      // Move selected card via engine after locating its bench index.
-      try { engine.playTrainer(state, "player", selHand); } catch (err) { flash(err.message); }
-      clearSel(); return render();
-    }
+    // On success clear the selection; on failure KEEP the error visible (don't
+    // clearSel, which would wipe the message and make the tap look inert).
+    const attempt = (fn) => { try { fn(); clearSel(); } catch (err) { message = err.message; } render(); };
+    if (mode === "attach") return attempt(() => engine.attachEnergy(state, "player", selHand, uid));
+    if (mode === "evolve") return attempt(() => engine.evolve(state, "player", selHand, uid));
+    if (mode === "heal") return attempt(() => engine.playTrainer(state, "player", selHand, { targetUid: uid }));
     if (mode === "retreat") {
       const benchIdx = s.bench.indexOf(inst);
-      if (benchIdx < 0) { flash("Pick a Benched Pokémon."); return; }
-      try { engine.retreat(state, "player", benchIdx); } catch (err) { flash(err.message); }
-      clearSel(); return render();
+      if (benchIdx < 0) { message = "Pick a Benched Pokémon."; return render(); }
+      return attempt(() => engine.retreat(state, "player", benchIdx));
     }
     // idle: tapping the Active opens its attack panel.
     if (inst === s.active) { mode = "attack"; return render(); }
@@ -201,25 +197,30 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   }
 
   async function runAiTurn() {
-    inputLocked = true; render();
-    // Loop in case of any future extra-turn effects; today aiTakeTurn ends the
-    // turn itself, handing control back to the player.
+    if (aiRunning) return;       // never overlap two AI loops
+    aiRunning = true; render();
     let guard = 0;
     while (state.activePlayer === "ai" && !state.winner && guard++ < 3) {
-      await aiTakeTurn(state, "ai", async () => { render(); await delay(720); });
+      // Delay only WHILE it's still the AI's turn. Once the AI's final action
+      // hands control back to the player, render immediately with no trailing
+      // delay so the player's turn is live the instant it begins.
+      await aiTakeTurn(state, "ai", async () => { render(); if (state.activePlayer === "ai") await delay(720); });
     }
-    inputLocked = false;
+    aiRunning = false;
     if (state.winner) return finish();
     render();
   }
 
   function exit(again = false) {
+    // Remove this match's delegated listener so matches don't stack handlers
+    // on the reused #arena element across "Play again".
+    arena.removeEventListener("click", onBoardClick);
     // Screen/class cleanup is owned by the caller (openTcgMode) so "Play again"
     // can re-enter the picker without flicker.
     onExit(again);
   }
 
-  function finish() { inputLocked = true; render(); }
+  function finish() { render(); }
 
   // ---- rendering --------------------------------------------------------
 
@@ -238,7 +239,11 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     board.appendChild(renderActionBar(p));
     board.appendChild(renderLog());
 
-    board.addEventListener("click", onBoardClick);
+    // NOTE: the click handler is a single delegated listener on #arena added
+    // once in startTcgMatch — NOT re-added per board here. Re-adding it to a
+    // fresh board every render created a window where a click landing during a
+    // re-render hit a board whose listener wiring was momentarily off, which is
+    // why taps (e.g. attaching Energy) intermittently did nothing.
     arena.appendChild(board);
     if (state.winner) arena.appendChild(renderGameOver());
   }
@@ -407,6 +412,9 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   }
 
   // ---- kick off ---------------------------------------------------------
+  // One delegated listener on the stable #arena container, live for the whole
+  // match regardless of how often the board re-renders.
+  arena.addEventListener("click", onBoardClick);
   render();
   if (state.activePlayer === "ai") runAiTurn();
 }
