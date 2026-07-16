@@ -3,6 +3,8 @@
 // any non-Energy card, basic Energy unlimited. Each deck carries ~9-10 Basic
 // Pokémon for opening-hand consistency.
 
+import { cardById } from "./catalog.js";
+
 const rep = (id, n) => Array(n).fill(id);
 
 // Shared Trainer package (20) + a deck-specific Stadium (2) = 22 Trainers.
@@ -63,3 +65,21 @@ export const STARTER_DECKS = [
 ];
 
 export const deckById = (id) => STARTER_DECKS.find((d) => d.id === id) || null;
+
+// Composition summary for the deck-selection screen: card-type counts plus the
+// marquee Pokémon (highest evolution stages first) for preview thumbnails.
+export function deckStats(deck) {
+  let pokemon = 0, trainers = 0, energy = 0;
+  const weight = new Map(); // dex → stage weight (Stage 2 ranks highest)
+  for (const id of deck.cards) {
+    const c = cardById(id);
+    if (c.kind === "energy") energy++;
+    else if (c.kind === "pokemon") {
+      pokemon++;
+      const w = c.stage === "stage2" ? 100 : c.stage === "stage1" ? 10 : 1;
+      weight.set(c.dex, Math.max(weight.get(c.dex) || 0, w));
+    } else trainers++;
+  }
+  const preview = [...weight.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map((e) => e[0]);
+  return { pokemon, trainers, energy, preview };
+}

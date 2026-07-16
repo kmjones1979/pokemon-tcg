@@ -7,9 +7,10 @@ import * as engine from "./engine.js";
 import { aiTakeTurn } from "./ai.js";
 import { renderTcgCard, renderCardBack, TCG_COLORS } from "./card-face.js";
 import { energyBadge, pileSVG, trainerSVG, trophySVG, pokeballSVG } from "./icons.js";
-import { STARTER_DECKS } from "./decks.js";
+import { STARTER_DECKS, deckStats } from "./decks.js";
 
 const ART = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`;
+const SPRITE = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`;
 
 // Entry point: show the deck picker, then run matches. The picker owns the
 // screen (body classes) so "Play again" can return here cleanly.
@@ -32,16 +33,35 @@ export function openTcgMode({ onExit = () => {} } = {}) {
     arena.innerHTML = "";
     const wrap = document.createElement("div");
     wrap.className = "tcg-picker";
-    wrap.innerHTML = `<h2>Trading Card Battle</h2>
-      <div class="tcg-picker-sub">Pick a starter deck — you'll face a rival running one of the others. Real TCG rules: attach Energy, evolve, Bench + Active, Prize cards, and Weakness ×2.</div>`;
+    wrap.innerHTML = `
+      <div class="tcg-picker-head">
+        <h2 class="tcg-picker-title">Trading Card Battle</h2>
+        <div class="tcg-picker-sub">Choose your deck — your rival runs one of the others.<br>Attach Energy, evolve, work the Bench, take Prizes, exploit Weakness ×2.</div>
+      </div>`;
     const grid = document.createElement("div");
     grid.className = "tcg-deck-grid";
-    STARTER_DECKS.forEach((d) => {
+    STARTER_DECKS.forEach((d, i) => {
+      const s = deckStats(d);
       const c = document.createElement("div");
-      c.className = "tcg-deck-card";
+      c.className = `tcg-deck-card type-${d.type}`;
       c.style.setProperty("--type", TCG_COLORS[d.type]);
-      c.innerHTML = `<div class="tcg-deck-art" style="background-image:url('${ART(d.cover)}')"></div>
-        <div class="tcg-deck-name">${d.name}</div><div class="tcg-deck-blurb">${d.blurb}</div>`;
+      c.style.setProperty("--pick-delay", `${i * 90}ms`);
+      c.innerHTML = `
+        <div class="tcg-deck-shine"></div>
+        <div class="tcg-deck-top">
+          <span class="tcg-deck-type">${energyBadge(d.type, "pip-cost")}<b>${d.type}</b></span>
+          <span class="tcg-deck-total">60</span>
+        </div>
+        <div class="tcg-deck-hero"><img src="${ART(d.cover)}" alt="${d.name}" draggable="false"></div>
+        <div class="tcg-deck-name">${d.name}</div>
+        <div class="tcg-deck-blurb">${d.blurb}</div>
+        <div class="tcg-deck-preview">${s.preview.map((dex) => `<span class="tcg-deck-thumb" style="background-image:url('${SPRITE(dex)}')"></span>`).join("")}</div>
+        <div class="tcg-deck-stats">
+          <span title="Pokémon">${pokeballSVG()}${s.pokemon}</span>
+          <span title="Trainers">${trainerSVG("item")}${s.trainers}</span>
+          <span title="Energy">${energyBadge(d.type, "pip-mini")}${s.energy}</span>
+        </div>
+        <div class="tcg-deck-play">Play this deck ›</div>`;
       c.onclick = () => chooseDeck(d);
       grid.appendChild(c);
     });
@@ -229,45 +249,74 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     const p = state.players.player, a = state.players.ai;
     arena.innerHTML = "";
     const board = eln("div", "tcg-board");
+    const mat = eln("div", "tcg-mat");
 
-    board.appendChild(renderOppPanel(a));
-    board.appendChild(renderRow(a.bench, "ai", "bench", "Opponent Bench"));
-    board.appendChild(renderActiveRow(a.active, "ai"));
-    board.appendChild(renderCenter());
-    board.appendChild(renderActiveRow(p.active, "player"));
-    board.appendChild(renderRow(p.bench, "player", "bench", "Your Bench"));
+    mat.appendChild(renderStrip(a, "ai"));
+    mat.appendChild(renderHandFan(a));
+    mat.appendChild(renderRow(a.bench, "ai"));
+    mat.appendChild(renderActiveRow(a.active, "ai"));
+    mat.appendChild(renderCenter());
+    mat.appendChild(renderActiveRow(p.active, "player"));
+    mat.appendChild(renderRow(p.bench, "player"));
+    mat.appendChild(renderStrip(p, "player"));
+    board.appendChild(mat);
     board.appendChild(renderHand(p));
     board.appendChild(renderActionBar(p));
     board.appendChild(renderLog());
 
     // NOTE: the click handler is a single delegated listener on #arena added
-    // once in startTcgMatch — NOT re-added per board here. Re-adding it to a
-    // fresh board every render created a window where a click landing during a
-    // re-render hit a board whose listener wiring was momentarily off, which is
-    // why taps (e.g. attaching Energy) intermittently did nothing.
+    // once in startTcgMatch — NOT re-added per board here.
     arena.appendChild(board);
     if (state.winner) arena.appendChild(renderGameOver());
   }
 
-  function prizePips(s) {
-    let pips = "";
+  // Prize cards shown as a row of face-down Pokéball cards; taken ones become
+  // empty slots. This is the real win-track — 6 to take.
+  function prizeRow(s) {
+    let cells = "";
     for (let i = 0; i < engine.PRIZE_COUNT; i++) {
-      pips += i < s.prizes.length
-        ? `<span class="tcg-prize-pip">${pokeballSVG()}</span>`
-        : `<span class="tcg-prize-pip taken"></span>`;
+      cells += i < s.prizes.length
+        ? `<span class="tcg-prize-card">${pokeballSVG()}</span>`
+        : `<span class="tcg-prize-card empty"></span>`;
     }
-    return pips;
+    return `<div class="tcg-prizes" title="${s.prizes.length} Prize cards left">
+      <span class="tcg-prize-label">Prizes</span><div class="tcg-prize-row">${cells}</div></div>`;
   }
 
-  function renderOppPanel(a) {
-    const panel = eln("div", "tcg-opp-panel");
-    panel.appendChild(eln("div", "tcg-opp-id", `<strong>${a.name}</strong>`));
-    panel.appendChild(eln("div", "tcg-prizes", `<span class="tcg-prize-label">Prizes</span>${prizePips(a)}`));
-    panel.appendChild(eln("div", "tcg-piles",
-      `<span title="Cards in hand">${pileSVG("hand")}${a.hand.length}</span>
-       <span title="Cards in deck">${pileSVG("deck")}${a.deck.length}</span>
-       <span title="Discard pile">${pileSVG("discard")}${a.discard.length}</span>`));
-    return panel;
+  // Deck + discard as small card stacks; opponent strip also shows hand count.
+  function pilesMini(s, side) {
+    const deck = `<div class="tcg-pile" title="${s.deck.length} in deck">
+      <div class="tcg-pile-stack">${pokeballSVG()}</div><span class="tcg-pile-n">${s.deck.length}</span></div>`;
+    const discard = `<div class="tcg-pile${s.discard.length ? "" : " empty"}" title="${s.discard.length} in discard">
+      <div class="tcg-pile-discard">${pileSVG("discard")}</div><span class="tcg-pile-n">${s.discard.length}</span></div>`;
+    const hand = side === "ai"
+      ? `<div class="tcg-pile" title="${s.hand.length} in hand"><div class="tcg-pile-hand">${pileSVG("hand")}</div><span class="tcg-pile-n">${s.hand.length}</span></div>`
+      : "";
+    return `<div class="tcg-piles">${hand}${deck}${discard}</div>`;
+  }
+
+  function renderStrip(s, side) {
+    const strip = eln("div", `tcg-strip tcg-strip-${side}`);
+    const name = side === "ai" ? s.name : "You";
+    strip.innerHTML = `${prizeRow(s)}
+      <div class="tcg-strip-name${state.activePlayer === side && !state.winner ? " active" : ""}">${name}</div>
+      ${pilesMini(s, side)}`;
+    return strip;
+  }
+
+  // Opponent's hand as a fanned row of face-down card backs (shows hand size).
+  function renderHandFan(s) {
+    const fan = eln("div", "tcg-hand-fan");
+    const n = Math.min(s.hand.length, 8);
+    for (let i = 0; i < n; i++) {
+      const c = eln("div", "tcg-fan-card", pokeballSVG());
+      const spread = i - (n - 1) / 2;
+      c.style.setProperty("--rot", `${spread * 4}deg`);
+      c.style.setProperty("--x", `${spread * 15}px`);
+      c.style.setProperty("--y", `${Math.abs(spread) * 2}px`);
+      fan.appendChild(c);
+    }
+    return fan;
   }
 
   function renderActiveRow(inst, side) {

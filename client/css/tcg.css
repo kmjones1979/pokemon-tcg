@@ -4,58 +4,106 @@
 
 /* The global site footer would otherwise flow under the board's log. */
 body.tcg-mode #site-footer { display: none; }
-/* Keep the opponent's pile counts clear of the fixed top-right mute button. */
-.tcg-opp-panel { padding-right: 56px; }
 
 .tcg-board {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px 0;
+  padding: 0 0 0;
   box-sizing: border-box;
   overflow-y: auto;
   background:
-    radial-gradient(circle at 50% 0%, rgba(90, 60, 160, 0.25), transparent 55%),
-    radial-gradient(circle at 50% 100%, rgba(40, 120, 160, 0.22), transparent 55%),
-    linear-gradient(180deg, #10101f, #171326);
+    radial-gradient(circle at 50% -5%, rgba(120, 70, 200, 0.28), transparent 42%),
+    radial-gradient(circle at 50% 105%, rgba(50, 130, 180, 0.26), transparent 42%),
+    linear-gradient(180deg, #0d0b18, #14111f 50%, #0d0b18);
   color: var(--ink, #f0eee2);
   font-family: "Inter", system-ui, sans-serif;
 }
 
-/* ---- opponent status ---- */
-.tcg-opp-panel {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; flex-wrap: wrap;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px; padding: 5px 10px; font-size: 12px;
+/* ---- playmat: a felt table that centres the field and splits the two sides
+   with a glowing mid-line. ---- */
+.tcg-mat {
+  flex: 1; width: 100%; max-width: 780px; margin: 0 auto; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center; gap: 5px;
+  padding: 8px max(10px, env(safe-area-inset-left)) 10px;
+  position: relative;
 }
-.tcg-opp-id strong { font-size: 13px; }
-.tcg-prizes { display: flex; align-items: center; gap: 3px; }
-.tcg-prize-label { font-size: 10px; color: var(--muted, #8a8eaa); text-transform: uppercase; letter-spacing: 1px; margin-right: 2px; }
-.tcg-prize-pip { width: 15px; height: 15px; display: inline-grid; place-items: center; }
-.tcg-prize-pip .tcg-ball { width: 100%; display: block; filter: drop-shadow(0 0 3px rgba(247, 208, 44, 0.5)); }
-.tcg-prize-pip.taken { width: 11px; height: 11px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); }
-.tcg-piles { display: flex; gap: 11px; color: #b9bdd6; font-size: 12px; font-weight: 700; }
-.tcg-piles span { display: inline-flex; align-items: center; gap: 4px; }
-.tcg-pilesvg { width: 16px; height: 16px; color: #aeb2cc; }
+.tcg-mat::before {
+  content: ""; position: absolute; left: 6%; right: 6%; top: 50%; height: 2px; transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(247, 208, 44, 0.35), rgba(255, 255, 255, 0.25), rgba(247, 208, 44, 0.35), transparent);
+  pointer-events: none;
+}
+
+/* ---- player strips (prizes + name + piles) ---- */
+.tcg-strip {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.tcg-strip-player { padding-right: 8px; }
+.tcg-strip-ai { padding-right: 54px; } /* clear the fixed mute toggle */
+.tcg-strip-name { font-weight: 800; font-size: 13px; color: #d7daff; text-align: center; }
+.tcg-strip-name.active { color: #f7d02c; text-shadow: 0 0 10px rgba(247, 208, 44, 0.55); }
+.tcg-strip-name.active::after { content: " ●"; font-size: 9px; vertical-align: middle; }
+
+.tcg-prizes { display: flex; align-items: center; gap: 5px; }
+.tcg-prize-label { font-size: 8px; color: var(--muted, #8a8eaa); text-transform: uppercase; letter-spacing: 1px; }
+.tcg-prize-row { display: flex; gap: 2px; }
+.tcg-prize-card {
+  width: 15px; height: 21px; border-radius: 3px; display: grid; place-items: center;
+  background: linear-gradient(150deg, #2f61bd, #16357a); border: 1px solid rgba(233, 230, 216, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.tcg-prize-card .tcg-ball { width: 78%; }
+.tcg-prize-card.empty { background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 255, 255, 0.16); box-shadow: none; }
+
+.tcg-piles { display: flex; align-items: center; gap: 8px; }
+.tcg-pile { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.tcg-pile-n { font-size: 10px; font-weight: 700; color: #b9bdd6; line-height: 1; }
+.tcg-pile-stack {
+  width: 17px; height: 23px; border-radius: 3px; display: grid; place-items: center;
+  background: linear-gradient(150deg, #2f61bd, #16357a); border: 1px solid rgba(233, 230, 216, 0.55);
+  box-shadow: 1.5px 1.5px 0 -0.5px #16357a, 3px 3px 0 -1px rgba(233, 230, 216, 0.4);
+}
+.tcg-pile-stack .tcg-ball { width: 80%; }
+.tcg-pile-discard, .tcg-pile-hand { width: 17px; height: 23px; border-radius: 3px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.16); }
+.tcg-pile-discard .tcg-pilesvg, .tcg-pile-hand .tcg-pilesvg { width: 13px; height: 13px; color: #aeb2cc; }
+.tcg-pile.empty .tcg-pile-discard { border-style: dashed; opacity: 0.6; }
+
+/* ---- opponent hand fan (face-down) ---- */
+.tcg-hand-fan { display: flex; justify-content: center; align-items: flex-start; height: 26px; margin-bottom: 2px; }
+.tcg-fan-card {
+  width: 20px; height: 28px; margin: 0 -6px; border-radius: 3px; display: grid; place-items: center;
+  background: linear-gradient(150deg, #2f61bd, #16357a); border: 1px solid rgba(233, 230, 216, 0.5);
+  transform: translate(var(--x, 0), var(--y, 0)) rotate(var(--rot, 0deg)); transform-origin: bottom center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+.tcg-fan-card .tcg-ball { width: 74%; }
 
 /* ---- rows ---- */
 .tcg-bench-row, .tcg-active-row {
   display: flex; justify-content: center; align-items: flex-start; gap: 6px;
   min-height: 30px;
 }
-.tcg-active-row { margin: 2px 0; }
-.tcg-active-ai { align-items: flex-start; }
+/* Active Pokémon sit in a glowing "spot" on the mat. */
+.tcg-active-row { position: relative; padding: 4px 0; }
+.tcg-active-row::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 176px; height: 176px;
+  transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 0;
+}
+.tcg-active-player::before { background: radial-gradient(circle, rgba(108, 217, 124, 0.24), transparent 68%); }
+.tcg-active-ai::before { background: radial-gradient(circle, rgba(255, 108, 108, 0.2), transparent 68%); }
+.tcg-active-row .tcg-card { position: relative; z-index: 1; }
 .tcg-slot-empty {
-  width: 66px; height: 92px; border-radius: 8px;
-  border: 1px dashed rgba(255, 255, 255, 0.1); flex: 0 0 auto;
+  width: 62px; height: 84px; border-radius: 8px; flex: 0 0 auto;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,0.015) 0 6px, transparent 6px 12px);
 }
 .tcg-empty-active {
-  min-width: 120px; min-height: 60px; display: grid; place-items: center;
-  color: var(--muted, #8a8eaa); font-size: 12px; font-style: italic;
-  border: 1px dashed rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 8px 16px;
+  min-width: 96px; min-height: 116px; display: grid; place-items: center;
+  color: var(--muted, #8a8eaa); font-size: 11px; font-style: italic; text-align: center;
+  border: 1.5px dashed rgba(255, 255, 255, 0.18); border-radius: 10px; padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .tcg-center { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 2px 0; }
@@ -141,22 +189,35 @@ body.tcg-mode #site-footer { display: none; }
 }
 @keyframes tcgFoil { 0% { background-position: 0% 0%; } 100% { background-position: 100% 100%; } }
 
-/* Energy card — big Energy symbol on a type-colored field. */
+/* Energy card — big glowing Energy symbol on a type field with a sunburst. */
 .tcg-energy {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
   width: 72px; padding: 12px 4px; border: 3px solid #f4efdd;
-  background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--type) 55%, #fff), color-mix(in srgb, var(--type) 88%, #000));
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45);
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--type) 52%, #fff), color-mix(in srgb, var(--type) 90%, #000));
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+.tcg-energy::before {
+  content: ""; position: absolute; inset: -25%; pointer-events: none; opacity: 0.6;
+  background: repeating-conic-gradient(from 0deg at 50% 42%, rgba(255, 255, 255, 0.12) 0 7deg, transparent 7deg 19deg);
 }
 .tcg-full.tcg-energy { width: 96px; padding: 18px 6px; }
-.tcg-energy-symbol { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55); }
-.tcg-energy-symbol .tcg-esvg { width: 62%; height: 62%; fill: #fff; }
-.tcg-energy-name { font-size: 9px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); }
+.tcg-energy-symbol {
+  position: relative; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.12));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.65), 0 0 14px rgba(255, 255, 255, 0.4);
+}
+.tcg-energy-symbol .tcg-esvg { width: 62%; height: 62%; fill: #fff; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)); }
+.tcg-energy-name { position: relative; font-size: 9px; font-weight: 800; letter-spacing: 0.3px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
 
-/* Trainer card — light with a colored category banner. */
+/* Trainer card — light with a colored category banner + faint tint. */
 .tcg-trainer {
+  position: relative; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 0 5px;
-  background: linear-gradient(180deg, #fbf7ea, #ece5d1); color: #211f18;
+  background:
+    radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--tk) 16%, transparent), transparent 62%),
+    linear-gradient(180deg, #fbf7ea, #e9e2ce);
+  color: #211f18;
   border: 3px solid var(--tk); box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45); --tk: #d6a13d;
 }
 .tcg-trainer.kind-supporter { --tk: #e06cc0; }
@@ -228,16 +289,84 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-go-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
 /* ---- deck picker (pre-match) ---- */
-.tcg-picker { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 40px 16px; box-sizing: border-box; background: radial-gradient(circle at 50% 0%, rgba(90,60,160,0.25), transparent 55%), linear-gradient(180deg, #10101f, #171326); }
-.tcg-picker h2 { font-family: "Press Start 2P", monospace; font-size: 18px; text-align: center; margin: 0; }
-.tcg-picker-sub { color: var(--muted, #8a8eaa); font-size: 13px; text-align: center; max-width: 460px; }
-.tcg-deck-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; width: 100%; max-width: 720px; }
-.tcg-deck-card { background: rgba(20, 20, 36, 0.7); border: 2px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 14px; cursor: pointer; text-align: center; transition: all 0.15s ease; }
-.tcg-deck-card:hover { transform: translateY(-4px); border-color: var(--type); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4); }
-.tcg-deck-art { width: 96px; height: 96px; margin: 0 auto 8px; background-size: contain; background-repeat: no-repeat; background-position: center; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5)); }
-.tcg-deck-name { font-family: "Press Start 2P", monospace; font-size: 12px; color: var(--type); margin-bottom: 6px; }
-.tcg-deck-blurb { font-size: 11px; color: var(--muted, #8a8eaa); line-height: 1.4; }
-.tcg-picker-exit { margin-top: 6px; }
+.tcg-picker {
+  min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 22px; padding: 40px 16px; box-sizing: border-box;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(120, 70, 210, 0.22), transparent 45%),
+    radial-gradient(circle at 82% 78%, rgba(60, 150, 210, 0.2), transparent 45%),
+    radial-gradient(ellipse at 50% 120%, rgba(247, 208, 44, 0.12), transparent 55%),
+    linear-gradient(160deg, #0e0c1a, #171326);
+}
+.tcg-picker-head { text-align: center; }
+.tcg-picker-title {
+  font-family: "Press Start 2P", monospace; font-size: 22px; margin: 0 0 10px;
+  background: linear-gradient(90deg, #f7d02c, #ee8130, #f95587, #6390F0, #f7d02c);
+  background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 16px rgba(255, 200, 80, 0.3)); animation: tcgTitleShimmer 6s ease-in-out infinite;
+  line-height: 1.3; padding: 0.1em;
+}
+@keyframes tcgTitleShimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+.tcg-picker-sub { color: #a9adca; font-size: 13px; text-align: center; max-width: 500px; line-height: 1.6; margin: 0 auto; }
+
+.tcg-deck-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 780px; }
+
+/* Deck box — type-themed, holo shine, floating hero art, staggered entrance. */
+.tcg-deck-card {
+  position: relative; overflow: hidden; cursor: pointer; text-align: center;
+  border-radius: 16px; padding: 14px 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--type) 45%, rgba(255,255,255,0.12));
+  background:
+    radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--type) 34%, transparent), transparent 60%),
+    linear-gradient(180deg, rgba(28, 26, 48, 0.92), rgba(16, 15, 30, 0.96));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  animation: tcgDeckIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) backwards;
+  animation-delay: var(--pick-delay, 0ms);
+}
+@keyframes tcgDeckIn { 0% { opacity: 0; transform: translateY(24px) scale(0.94); } 100% { opacity: 1; transform: none; } }
+.tcg-deck-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--type);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.5), 0 0 24px color-mix(in srgb, var(--type) 55%, transparent);
+}
+.tcg-deck-shine {
+  position: absolute; inset: 0; pointer-events: none; border-radius: 16px;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.14) 48%, transparent 58%);
+  background-size: 250% 250%; opacity: 0; transition: opacity 0.2s ease;
+}
+.tcg-deck-card:hover .tcg-deck-shine { opacity: 1; animation: tcgFoil 1.6s ease-in-out infinite; }
+
+.tcg-deck-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.tcg-deck-type { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--type); }
+.tcg-deck-total { font-family: "Press Start 2P", monospace; font-size: 11px; color: rgba(255,255,255,0.4); }
+.tcg-deck-hero { height: 116px; display: grid; place-items: center; margin: 2px 0; }
+.tcg-deck-hero img {
+  max-width: 116px; max-height: 116px;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 16px color-mix(in srgb, var(--type) 40%, transparent));
+  animation: tcgHeroBob 3.4s ease-in-out infinite alternate;
+}
+@keyframes tcgHeroBob { from { transform: translateY(0); } to { transform: translateY(-8px); } }
+.tcg-deck-name { font-family: "Press Start 2P", monospace; font-size: 13px; color: #fff; margin: 4px 0 6px; text-shadow: 0 0 10px color-mix(in srgb, var(--type) 60%, transparent); }
+.tcg-deck-blurb { font-size: 11px; color: #b6b9d2; line-height: 1.45; min-height: 46px; }
+.tcg-deck-preview { display: flex; justify-content: center; gap: 4px; margin: 8px 0; }
+.tcg-deck-thumb {
+  width: 34px; height: 34px; border-radius: 8px; background-size: 30px; background-repeat: no-repeat; background-position: center;
+  image-rendering: pixelated;
+  background-color: rgba(255, 255, 255, 0.05); border: 1px solid color-mix(in srgb, var(--type) 35%, rgba(255,255,255,0.08));
+}
+.tcg-deck-stats { display: flex; justify-content: center; gap: 12px; font-size: 11px; font-weight: 700; color: #cdd0e6; margin-bottom: 10px; }
+.tcg-deck-stats span { display: inline-flex; align-items: center; gap: 4px; }
+.tcg-deck-stats svg { width: 15px; height: 15px; }
+.tcg-deck-stats .tcg-tsvg { color: #d6a13d; }
+.tcg-deck-play {
+  font-weight: 800; font-size: 13px; color: #12101c; border-radius: 9px; padding: 8px 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--type) 85%, #fff), var(--type));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--type) 45%, transparent);
+  transition: filter 0.15s ease;
+}
+.tcg-deck-card:hover .tcg-deck-play { filter: brightness(1.1); }
+.tcg-picker-exit { margin-top: 4px; }
 
 @media (max-width: 560px) {
   .tcg-full { width: 128px; }
