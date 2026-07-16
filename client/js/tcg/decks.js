@@ -62,6 +62,35 @@ export const STARTER_DECKS = [
       ...rep("energy-grass", 20),
     ],
   },
+  {
+    id: "lightning",
+    name: "Static Surge",
+    type: "lightning",
+    cover: 26, // Raichu
+    blurb: "Raichu's Thunderbolt hits fast and hard — shock Water decks before they set up.",
+    cards: [
+      ...rep("lightning-pikachu", 4), ...rep("lightning-raichu", 3),
+      ...rep("lightning-magnemite", 3), ...rep("lightning-magneton", 2),
+      ...rep("lightning-voltorb", 3), ...rep("lightning-electrode", 2),
+      ...rep("lightning-electabuzz", 1),
+      ...TRAINER_CORE, ...rep("trainer-stadium-arena", 2),
+      ...rep("energy-lightning", 20),
+    ],
+  },
+  {
+    id: "psychic",
+    name: "Mind Bender",
+    type: "psychic",
+    cover: 65, // Alakazam
+    blurb: "Alakazam and Gengar bend the battle — big Psychic hits from a deep evolution bench.",
+    cards: [
+      ...rep("psychic-abra", 4), ...rep("psychic-kadabra", 3), ...rep("psychic-alakazam", 2),
+      ...rep("psychic-gastly", 3), ...rep("psychic-haunter", 2), ...rep("psychic-gengar", 1),
+      ...rep("psychic-drowzee", 3),
+      ...TRAINER_CORE, ...rep("trainer-stadium-spa", 2),
+      ...rep("energy-psychic", 20),
+    ],
+  },
 ];
 
 export const deckById = (id) => STARTER_DECKS.find((d) => d.id === id) || null;

@@ -367,8 +367,8 @@ body.tcg-mode #site-footer { display: none; }
 
 /* ---- deck picker (pre-match) ---- */
 .tcg-picker {
-  min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 22px; padding: 40px 16px; box-sizing: border-box;
+  min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: safe center;
+  overflow-y: auto; gap: 22px; padding: 40px 16px; box-sizing: border-box;
   background:
     radial-gradient(circle at 20% 12%, rgba(120, 70, 210, 0.22), transparent 45%),
     radial-gradient(circle at 82% 78%, rgba(60, 150, 210, 0.2), transparent 45%),
@@ -386,7 +386,8 @@ body.tcg-mode #site-footer { display: none; }
 @keyframes tcgTitleShimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
 .tcg-picker-sub { color: #a9adca; font-size: 13px; text-align: center; max-width: 500px; line-height: 1.6; margin: 0 auto; }
 
-.tcg-deck-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 780px; }
+.tcg-deck-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; width: 100%; max-width: 800px; }
+.tcg-deck-card { flex: 0 1 232px; }
 
 /* Deck box — type-themed, holo shine, floating hero art, staggered entrance. */
 .tcg-deck-card {

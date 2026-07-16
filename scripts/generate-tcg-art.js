@@ -47,6 +47,10 @@ const CARDS = [
   { id: "trainer-hop", subject: "A cheerful energetic young Pokémon trainer boy in a sporty outfit joyfully tossing a Poké Ball, big grin, bright sunny outdoor background." },
   { id: "trainer-stadium-spa", subject: "A serene Pokémon hot-spring healing spa nestled in nature, several happy Pokémon relaxing in glowing warm water, drifting steam and soft light, wide scenic landscape." },
   { id: "trainer-stadium-arena", subject: "A grand roaring Pokémon battle stadium arena at night, bright spotlights, a huge cheering crowd in the stands and a glowing battlefield, epic wide scenic landscape." },
+  { id: "trainer-ultra-ball", subject: "A single Ultra Ball — black-and-yellow upper half with an H-shaped yellow mark, white lower half and centre button — resting on a rocky surface with dramatic sparkles." },
+  { id: "trainer-full-heal", subject: "A Pokémon Full Heal healing item: a small green-and-white aerosol medicine spray can glowing with soothing restorative light, centered." },
+  { id: "trainer-max-potion", subject: "A Pokémon Max Potion healing item: a tall glossy yellow-and-white medicine spray bottle radiating powerful restorative energy, centered." },
+  { id: "trainer-cynthia", subject: "A confident Pokémon Champion trainer woman with long pale hair in a black coat, standing heroically, dramatic wind and light, portrait." },
 ];
 
 const args = process.argv.slice(2);

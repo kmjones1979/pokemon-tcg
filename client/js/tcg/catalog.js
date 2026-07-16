@@ -88,6 +88,40 @@ const POKEMON = [
     attacks: [atk("Wing Attack", "CC", 30)] }),
   mon({ id: "colorless-eevee", name: "Eevee", dex: 133, stage: "basic", type: "colorless", hp: 60, weak: "fighting", retreat: 1,
     attacks: [atk("Tackle", "C", 10), atk("Quick Attack", "CC", 20, { type: "coinFlipBonus", damage: 10 }, "Flip a coin. If heads, +10 damage.")] }),
+
+  // ===== LIGHTNING =====
+  mon({ id: "lightning-pikachu", name: "Pikachu", dex: 25, stage: "basic", type: "lightning", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Quick Attack", "C", 10, { type: "coinFlipBonus", damage: 10 }, "Flip a coin. If heads, +10 damage."), atk("Thunder Shock", "L", 20)] }),
+  mon({ id: "lightning-raichu", name: "Raichu", dex: 26, stage: "stage1", from: "lightning-pikachu", type: "lightning", hp: 120, weak: "fighting", retreat: 1,
+    attacks: [atk("Agility", "CC", 30), atk("Thunderbolt", "LLC", 100, { type: "selfDiscardEnergy", amount: 2 }, "Discard 2 Energy attached to this Pokémon.")] }),
+  mon({ id: "lightning-magnemite", name: "Magnemite", dex: 81, stage: "basic", type: "lightning", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Tackle", "C", 10), atk("Thunder Wave", "L", 20)] }),
+  mon({ id: "lightning-magneton", name: "Magneton", dex: 82, stage: "stage1", from: "lightning-magnemite", type: "lightning", hp: 100, weak: "fighting", retreat: 1,
+    attacks: [atk("Sonic Boom", "LC", 40), atk("Thunderbolt", "LLC", 80)] }),
+  mon({ id: "lightning-voltorb", name: "Voltorb", dex: 100, stage: "basic", type: "lightning", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Tackle", "C", 10), atk("Spark", "L", 20)] }),
+  mon({ id: "lightning-electrode", name: "Electrode", dex: 101, stage: "stage1", from: "lightning-voltorb", type: "lightning", hp: 90, weak: "fighting", retreat: 1,
+    attacks: [atk("Electro Ball", "LC", 50), atk("Electro Blast", "LL", 70, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
+  mon({ id: "lightning-electabuzz", name: "Electabuzz", dex: 125, stage: "basic", type: "lightning", hp: 70, weak: "fighting", retreat: 2,
+    attacks: [atk("Thunder Punch", "LC", 40), atk("Thunderbolt", "LLC", 90, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Lightning Energy.")] }),
+
+  // ===== PSYCHIC =====
+  mon({ id: "psychic-abra", name: "Abra", dex: 63, stage: "basic", type: "psychic", hp: 50, weak: "psychic", retreat: 0,
+    attacks: [atk("Psyshock", "P", 10)] }),
+  mon({ id: "psychic-kadabra", name: "Kadabra", dex: 64, stage: "stage1", from: "psychic-abra", type: "psychic", hp: 80, weak: "psychic", retreat: 1,
+    attacks: [atk("Confuse Ray", "PC", 30), atk("Psybeam", "PPC", 50)] }),
+  mon({ id: "psychic-alakazam", name: "Alakazam", dex: 65, stage: "stage2", from: "psychic-kadabra", type: "psychic", hp: 140, weak: "psychic", retreat: 2,
+    attacks: [atk("Psychic", "PCC", 60), atk("Super Psy", "PPP", 110, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Psychic Energy.")] }),
+  mon({ id: "psychic-gastly", name: "Gastly", dex: 92, stage: "basic", type: "psychic", hp: 50, weak: "psychic", retreat: 0,
+    attacks: [atk("Lick", "C", 10), atk("Night Shade", "P", 20)] }),
+  mon({ id: "psychic-haunter", name: "Haunter", dex: 93, stage: "stage1", from: "psychic-gastly", type: "psychic", hp: 80, weak: "psychic", retreat: 1,
+    attacks: [atk("Shadow Punch", "PC", 40)] }),
+  mon({ id: "psychic-gengar", name: "Gengar", dex: 94, stage: "stage2", from: "psychic-haunter", type: "psychic", hp: 130, weak: "psychic", retreat: 1,
+    attacks: [atk("Night Shade", "PC", 40), atk("Shadow Ball", "PPC", 90)] }),
+  mon({ id: "psychic-drowzee", name: "Drowzee", dex: 96, stage: "basic", type: "psychic", hp: 70, weak: "psychic", retreat: 1,
+    attacks: [atk("Pound", "C", 10), atk("Confusion", "PC", 30)] }),
+  mon({ id: "psychic-hypno", name: "Hypno", dex: 97, stage: "stage1", from: "psychic-drowzee", type: "psychic", hp: 110, weak: "psychic", retreat: 2,
+    attacks: [atk("Psybeam", "PC", 50), atk("Nightmare", "PPC", 80)] }),
 ];
 
 // --- Energy ---------------------------------------------------------------
@@ -120,6 +154,10 @@ const TRAINERS = [
   { id: "trainer-hop", kind: "supporter", name: "Hop", text: "Draw 3 cards.", effect: { type: "draw", count: 3 }, art: TRAINER_ART("hop"), artStyle: "trainer" },
   { id: "trainer-stadium-spa", kind: "stadium", name: "Health Spa", text: "At the start of each player's turn, heal 10 damage from that player's Active Pokémon.", effect: { type: "startTurnHeal", amount: 10 }, art: ART(113), artStyle: "mon" },
   { id: "trainer-stadium-arena", kind: "stadium", name: "Battle Arena", text: "Attacks from both players' Active Pokémon do 10 more damage to the opposing Active.", effect: { type: "attackBonus", amount: 10 }, art: ART(68), artStyle: "mon" },
+  { id: "trainer-ultra-ball", kind: "item", name: "Ultra Ball", text: "Search your deck for any Pokémon and put it into your hand.", effect: { type: "search", filter: "pokemon", count: 1 } },
+  { id: "trainer-full-heal", kind: "item", name: "Full Heal", text: "Heal 50 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 50 } },
+  { id: "trainer-max-potion", kind: "item", name: "Max Potion", text: "Heal 90 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 90 } },
+  { id: "trainer-cynthia", kind: "supporter", name: "Cynthia", text: "Discard your hand and draw 6 cards.", effect: { type: "discardHandDraw", count: 6 } },
 ];
 
 // Prefer bespoke illustrator-style artwork (scripts/generate-tcg-art.js) when a
@@ -132,7 +170,7 @@ for (const t of TRAINERS) {
 // Rares (rainbow holo), Stage 2s are Rares (holo), Stage 1s Uncommon, Basics
 // Common. Bespoke Pokémon illustrations (generate-pokemon-art.js) fill the card
 // full-bleed as an "Illustration Rare"-style full art.
-const ACES = new Set(["fire-charizard", "water-blastoise", "grass-venusaur"]);
+const ACES = new Set(["fire-charizard", "water-blastoise", "grass-venusaur", "lightning-raichu", "psychic-alakazam", "psychic-gengar"]);
 for (const p of POKEMON) {
   p.rarity = ACES.has(p.id) ? "ultra"
     : p.stage === "stage2" ? "rare"
