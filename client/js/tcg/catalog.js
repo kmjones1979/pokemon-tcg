@@ -12,7 +12,7 @@ const ART = (dex) =>
 
 // Energy-cost shorthand: F fire, W water, G grass, L lightning, P psychic,
 // T fighting, C colorless. e.g. k("FFC") -> ["fire","fire","colorless"].
-const TYPE_LETTER = { F: "fire", W: "water", G: "grass", L: "lightning", P: "psychic", T: "fighting", C: "colorless" };
+const TYPE_LETTER = { F: "fire", W: "water", G: "grass", L: "lightning", P: "psychic", T: "fighting", C: "colorless", D: "darkness", M: "metal" };
 const k = (s) => [...s].map((c) => TYPE_LETTER[c]);
 
 const atk = (name, cost, damage, effect = null, text = "") => ({ name, cost: k(cost), damage, effect, text });
@@ -230,6 +230,98 @@ const POKEMON = [
     attacks: [atk("Body Slam", "CCC", 40, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed."), atk("Heavy Impact", "CCCC", 100)] }),
   mon({ id: "colorless-tauros", name: "Tauros", dex: 128, stage: "basic", type: "colorless", hp: 90, weak: "fighting", retreat: 1,
     attacks: [atk("Rampage", "CC", 20, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Take Down", "CCC", 60, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
+
+  // ===== DARKNESS =====
+  mon({ id: "darkness-houndour", name: "Houndour", dex: 228, stage: "basic", type: "darkness", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Bite", "C", 10), atk("Ember", "DC", 30, { type: "applyStatusCoin", kind: "burn" }, "Flip a coin. If heads, the Defending Pokémon is now Burned.")] }),
+  mon({ id: "darkness-houndoom", name: "Houndoom", dex: 229, stage: "stage1", from: "darkness-houndour", type: "darkness", hp: 110, weak: "fighting", retreat: 1,
+    attacks: [atk("Fire Fang", "DC", 40, { type: "applyStatusCoin", kind: "burn" }, "Flip a coin. If heads, the Defending Pokémon is now Burned."), atk("Dark Flame", "DDC", 90, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Darkness Energy.")] }),
+  mon({ id: "darkness-sneasel", name: "Sneasel", dex: 215, stage: "basic", type: "darkness", hp: 70, weak: "fighting", retreat: 1,
+    attacks: [atk("Scratch", "C", 10), atk("Slash", "DC", 30, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "darkness-murkrow", name: "Murkrow", dex: 198, stage: "basic", type: "darkness", hp: 60, weak: "lightning", retreat: 0,
+    attacks: [atk("Peck", "C", 10), atk("Mean Look", "DC", 20, { type: "draw", count: 1 }, "Draw a card.")] }),
+  mon({ id: "darkness-zubat", name: "Zubat", dex: 41, stage: "basic", type: "darkness", hp: 40, weak: "lightning", retreat: 0,
+    attacks: [atk("Leech Life", "D", 10, { type: "healSelf", amount: 10 }, "Heal 10 damage from this Pokémon.")] }),
+  mon({ id: "darkness-golbat", name: "Golbat", dex: 42, stage: "stage1", from: "darkness-zubat", type: "darkness", hp: 90, weak: "lightning", retreat: 1,
+    attacks: [atk("Wing Attack", "DC", 30), atk("Poison Fang", "DDC", 60, { type: "applyStatus", kind: "poison" }, "The Defending Pokémon is now Poisoned.")] }),
+  mon({ id: "darkness-ekans", name: "Ekans", dex: 23, stage: "basic", type: "darkness", hp: 50, weak: "fighting", retreat: 1,
+    attacks: [atk("Spit Poison", "D", 10, { type: "applyStatusCoin", kind: "poison" }, "Flip a coin. If heads, the Defending Pokémon is now Poisoned.")] }),
+  mon({ id: "darkness-arbok", name: "Arbok", dex: 24, stage: "stage1", from: "darkness-ekans", type: "darkness", hp: 110, weak: "fighting", retreat: 2,
+    attacks: [atk("Bite", "DC", 40), atk("Toxic Fang", "DDC", 70, { type: "applyStatus", kind: "poison" }, "The Defending Pokémon is now Poisoned.")] }),
+  mon({ id: "darkness-umbreon", name: "Umbreon", dex: 197, stage: "stage1", from: "colorless-eevee", type: "darkness", hp: 110, weak: "fighting", retreat: 1,
+    attacks: [atk("Confuse Ray", "DC", 30, { type: "applyStatus", kind: "confuse" }, "The Defending Pokémon is now Confused."), atk("Moonlight Blast", "DDC", 80)] }),
+
+  // ===== METAL =====
+  mon({ id: "metal-onix-steelix", name: "Steelix", dex: 208, stage: "stage1", from: "fighting-onix", type: "metal", hp: 150, weak: "fire", retreat: 4,
+    attacks: [atk("Iron Tail", "MC", 40, { type: "coinFlipBonus", damage: 30 }, "Flip a coin. If heads, +30 damage."), atk("Earthquake", "MMCC", 100, { type: "recoil", amount: 10 }, "This Pokémon does 10 damage to itself.")] }),
+  mon({ id: "metal-scyther-scizor", name: "Scizor", dex: 212, stage: "stage1", from: "grass-scyther", type: "metal", hp: 120, weak: "fire", retreat: 1,
+    attacks: [atk("Metal Claw", "MC", 40), atk("Steel Wing", "MMC", 70)] }),
+  mon({ id: "metal-skarmory", name: "Skarmory", dex: 227, stage: "basic", type: "metal", hp: 90, weak: "fire", retreat: 1,
+    attacks: [atk("Steel Wing", "MC", 30), atk("Sky Attack", "MMC", 70, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "metal-pineco", name: "Pineco", dex: 204, stage: "basic", type: "metal", hp: 60, weak: "fire", retreat: 2,
+    attacks: [atk("Tackle", "C", 10), atk("Rollout", "MC", 20)] }),
+  mon({ id: "metal-forretress", name: "Forretress", dex: 205, stage: "stage1", from: "metal-pineco", type: "metal", hp: 120, weak: "fire", retreat: 3,
+    attacks: [atk("Gyro Ball", "MC", 40), atk("Heavy Bomber", "MMC", 80, { type: "recoil", amount: 10 }, "This Pokémon does 10 damage to itself.")] }),
+  mon({ id: "metal-beldum", name: "Beldum", dex: 374, stage: "basic", type: "metal", hp: 60, weak: "fire", retreat: 1,
+    attacks: [atk("Take Down", "MC", 30, { type: "recoil", amount: 10 }, "This Pokémon does 10 damage to itself.")] }),
+
+  // ===== More WATER =====
+  mon({ id: "water-horsea", name: "Horsea", dex: 116, stage: "basic", type: "water", hp: 50, weak: "lightning", retreat: 1,
+    attacks: [atk("Smokescreen", "W", 10), atk("Water Gun", "WC", 20)] }),
+  mon({ id: "water-seadra", name: "Seadra", dex: 117, stage: "stage1", from: "water-horsea", type: "water", hp: 90, weak: "lightning", retreat: 1,
+    attacks: [atk("Waterfall", "WC", 40), atk("Agility", "WWC", 60, { type: "coinFlipBonus", damage: 10 }, "Flip a coin. If heads, +10 damage.")] }),
+  mon({ id: "water-shellder", name: "Shellder", dex: 90, stage: "basic", type: "water", hp: 60, weak: "lightning", retreat: 1,
+    attacks: [atk("Supersonic", "W", 10, { type: "applyStatusCoin", kind: "confuse" }, "Flip a coin. If heads, the Defending Pokémon is now Confused.")] }),
+  mon({ id: "water-cloyster", name: "Cloyster", dex: 91, stage: "stage1", from: "water-shellder", type: "water", hp: 120, weak: "lightning", retreat: 2,
+    attacks: [atk("Spike Cannon", "WC", 40, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Hydro Pump", "WWC", 60, { type: "plusPerEnergy", per: 20, energyType: "water", ignore: 2 }, "+20 for each extra Water Energy attached.")] }),
+  mon({ id: "water-krabby", name: "Krabby", dex: 98, stage: "basic", type: "water", hp: 50, weak: "lightning", retreat: 1,
+    attacks: [atk("Vice Grip", "WC", 20)] }),
+  mon({ id: "water-kingler", name: "Kingler", dex: 99, stage: "stage1", from: "water-krabby", type: "water", hp: 110, weak: "lightning", retreat: 2,
+    attacks: [atk("Crabhammer", "WC", 40), atk("Guillotine", "WWCC", 90)] }),
+  mon({ id: "water-tentacool", name: "Tentacool", dex: 72, stage: "basic", type: "water", hp: 50, weak: "lightning", retreat: 1,
+    attacks: [atk("Poison Sting", "W", 10, { type: "applyStatusCoin", kind: "poison" }, "Flip a coin. If heads, the Defending Pokémon is now Poisoned.")] }),
+  mon({ id: "water-tentacruel", name: "Tentacruel", dex: 73, stage: "stage1", from: "water-tentacool", type: "water", hp: 100, weak: "lightning", retreat: 1,
+    attacks: [atk("Tentacle Whip", "WC", 30), atk("Poison Ray", "WWC", 60, { type: "applyStatus", kind: "poison" }, "The Defending Pokémon is now Poisoned.")] }),
+
+  // ===== More FIRE / GRASS / PSYCHIC / COLORLESS =====
+  mon({ id: "fire-moltres", name: "Moltres", dex: 146, stage: "basic", type: "fire", hp: 130, weak: "water", retreat: 2,
+    attacks: [atk("Wing Attack", "FC", 40), atk("Sky Fire", "FFCC", 120, { type: "selfDiscardEnergy", amount: 2 }, "Discard 2 Fire Energy.")] }),
+  mon({ id: "grass-pinsir", name: "Pinsir", dex: 127, stage: "basic", type: "grass", hp: 90, weak: "fire", retreat: 1,
+    attacks: [atk("Vice Grip", "GC", 30), atk("Guillotine", "GGC", 70, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "grass-paras", name: "Paras", dex: 46, stage: "basic", type: "grass", hp: 50, weak: "fire", retreat: 1,
+    attacks: [atk("Spore", "G", 0, { type: "applyStatusCoin", kind: "sleep" }, "Flip a coin. If heads, the Defending Pokémon is now Asleep.")] }),
+  mon({ id: "grass-parasect", name: "Parasect", dex: 47, stage: "stage1", from: "grass-paras", type: "grass", hp: 100, weak: "fire", retreat: 2,
+    attacks: [atk("Slash", "GC", 30), atk("Spore Cloud", "GGC", 60, { type: "applyStatus", kind: "poison" }, "The Defending Pokémon is now Poisoned.")] }),
+  mon({ id: "psychic-mew", name: "Mew", dex: 151, stage: "basic", type: "psychic", hp: 90, weak: "psychic", retreat: 1,
+    attacks: [atk("Psywave", "P", 20), atk("Psyburst", "PPC", 70, { type: "coinFlipBonus", damage: 30 }, "Flip a coin. If heads, +30 damage.")] }),
+  mon({ id: "colorless-kangaskhan", name: "Kangaskhan", dex: 115, stage: "basic", type: "colorless", hp: 120, weak: "fighting", retreat: 3,
+    attacks: [atk("Fetch", "C", 0, { type: "draw", count: 2 }, "Draw 2 cards."), atk("Mega Punch", "CCC", 60)] }),
+  mon({ id: "fighting-aerodactyl", name: "Aerodactyl", dex: 142, stage: "basic", type: "fighting", hp: 100, weak: "grass", retreat: 0,
+    attacks: [atk("Wing Attack", "TC", 30), atk("Rock Slide", "TTC", 70)] }),
+  mon({ id: "colorless-clefairy", name: "Clefairy", dex: 35, stage: "basic", type: "colorless", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Sing", "C", 0, { type: "applyStatusCoin", kind: "sleep" }, "Flip a coin. If heads, the Defending Pokémon is now Asleep."), atk("Metronome", "CC", 30)] }),
+  mon({ id: "colorless-clefable", name: "Clefable", dex: 36, stage: "stage1", from: "colorless-clefairy", type: "colorless", hp: 100, weak: "fighting", retreat: 1,
+    attacks: [atk("Moonlight", "CC", 0, { type: "healSelf", amount: 40 }, "Heal 40 damage from this Pokémon."), atk("Comet Punch", "CCC", 60, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "colorless-chansey", name: "Chansey", dex: 113, stage: "basic", type: "colorless", hp: 130, weak: "fighting", retreat: 1,
+    attacks: [atk("Soft-Boiled", "CC", 0, { type: "healSelf", amount: 40 }, "Heal 40 damage from this Pokémon."), atk("Double-edge", "CCCC", 90, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
+
+  // ===== MEGA EVOLUTION EX — premium chase cards. Give up 2 Prizes when KO'd. =====
+  mon({ id: "mega-charizard-ex", name: "Mega Charizard EX", dex: 10034, stage: "mega", from: "fire-charizard", type: "fire", hp: 240, weak: "water", retreat: 3, ex: true, mega: true, prizeValue: 2,
+    attacks: [atk("Wing Blade", "FFC", 100), atk("Crimson Storm", "FFFCC", 200, { type: "selfDiscardEnergy", amount: 3 }, "Discard 3 Fire Energy.")] }),
+  mon({ id: "mega-blastoise-ex", name: "Mega Blastoise EX", dex: 10036, stage: "mega", from: "water-blastoise", type: "water", hp: 230, weak: "lightning", retreat: 4, ex: true, mega: true, prizeValue: 2,
+    attacks: [atk("Deluge Cannon", "WWC", 100), atk("Hydro Bombard", "WWWCC", 180, { type: "selfDiscardEnergy", amount: 2 }, "Discard 2 Water Energy.")] }),
+  mon({ id: "mega-venusaur-ex", name: "Mega Venusaur EX", dex: 10033, stage: "mega", from: "grass-venusaur", type: "grass", hp: 240, weak: "fire", retreat: 4, ex: true, mega: true, prizeValue: 2,
+    attacks: [atk("Vine Crush", "GGC", 90), atk("Crisis Bloom", "GGGCC", 170, { type: "healSelf", amount: 60 }, "Heal 60 damage from this Pokémon.")] }),
+  mon({ id: "mega-gengar-ex", name: "Mega Gengar EX", dex: 10038, stage: "mega", from: "psychic-gengar", type: "psychic", hp: 220, weak: "psychic", retreat: 1, ex: true, mega: true, prizeValue: 2,
+    attacks: [atk("Shadow Sneak", "PC", 60), atk("Void Ball", "PPPC", 170, { type: "applyStatus", kind: "sleep" }, "The Defending Pokémon is now Asleep.")] }),
+  mon({ id: "mega-alakazam-ex", name: "Mega Alakazam EX", dex: 10037, stage: "mega", from: "psychic-alakazam", type: "psychic", hp: 220, weak: "psychic", retreat: 2, ex: true, mega: true, prizeValue: 2,
+    attacks: [atk("Mind Shatter", "PPC", 90), atk("Psychic Nova", "PPPP", 190, { type: "selfDiscardEnergy", amount: 2 }, "Discard 2 Psychic Energy.")] }),
+  mon({ id: "mega-gyarados-ex", name: "Mega Gyarados EX", dex: 10041, stage: "mega", from: "water-gyarados", type: "water", hp: 230, weak: "lightning", retreat: 3, ex: true, mega: true, prizeValue: 2,
+    attacks: [atk("Aqua Fang", "WWC", 90), atk("Tidal Wrath", "WWWCC", 180, { type: "coinFlipBonus", damage: 40 }, "Flip a coin. If heads, +40 damage.")] }),
+  mon({ id: "mega-mewtwo-ex", name: "Mega Mewtwo EX", dex: 10043, stage: "mega", from: "psychic-mewtwo", type: "psychic", hp: 230, weak: "psychic", retreat: 2, ex: true, mega: true, prizeValue: 2,
+    attacks: [atk("Psystrike", "PPC", 110), atk("Genesis Wave", "PPPPC", 200, { type: "plusPerEnergy", per: 10, energyType: "psychic", ignore: 5 }, "+10 for each extra Psychic Energy attached.")] }),
+  mon({ id: "mega-kangaskhan-ex", name: "Mega Kangaskhan EX", dex: 10039, stage: "mega", from: "colorless-kangaskhan", type: "colorless", hp: 240, weak: "fighting", retreat: 3, ex: true, mega: true, prizeValue: 2,
+    attacks: [atk("Parental Bond", "CCC", 80, { type: "coinFlipBonus", damage: 40 }, "Flip a coin. If heads, +40 damage."), atk("Outrage", "CCCCC", 160)] }),
 ];
 
 // --- Energy ---------------------------------------------------------------
@@ -241,6 +333,8 @@ const ENERGY = [
   { id: "energy-lightning", kind: "energy", name: "Lightning Energy", energyType: "lightning" },
   { id: "energy-psychic", kind: "energy", name: "Psychic Energy", energyType: "psychic" },
   { id: "energy-fighting", kind: "energy", name: "Fighting Energy", energyType: "fighting" },
+  { id: "energy-darkness", kind: "energy", name: "Darkness Energy", energyType: "darkness" },
+  { id: "energy-metal", kind: "energy", name: "Metal Energy", energyType: "metal" },
 ];
 
 // --- Trainers (Item / Supporter / Stadium) --------------------------------
@@ -291,6 +385,9 @@ const ULTRA = new Set([
   // Legendary / marquee chase cards from the expansion.
   "psychic-mewtwo", "colorless-dragonite", "colorless-snorlax",
   "lightning-zapdos", "water-lapras",
+  // Darkness / Metal chase Ultras + the new legend Moltres & Mew.
+  "darkness-houndoom", "darkness-umbreon", "metal-onix-steelix", "metal-scyther-scizor",
+  "fire-moltres", "psychic-mew",
 ]);
 // Standout Stage 1s / strong Basics promoted to Rare (holo, no full-art).
 const RARE_PLUS = new Set([
@@ -301,6 +398,11 @@ const RARE_PLUS = new Set([
   "grass-exeggutor", "grass-scyther", "fighting-rhydon", "fighting-marowak",
   "fighting-hitmonlee", "fighting-hitmonchan", "psychic-slowbro", "colorless-dragonair",
   "colorless-persian", "colorless-wigglytuff",
+  // Darkness / Metal / expansion promotions.
+  "darkness-golbat", "darkness-arbok", "darkness-sneasel", "metal-forretress",
+  "metal-skarmory", "water-seadra", "water-cloyster", "water-kingler",
+  "water-tentacruel", "grass-parasect", "grass-pinsir", "colorless-clefable",
+  "colorless-chansey", "fighting-aerodactyl",
 ]);
 
 // Guest-Artist Ultra Rares — a celebrated illustrator lends their signature
@@ -316,9 +418,13 @@ const GUEST_ARTISTS = {
 };
 
 for (const p of POKEMON) {
-  p.rarity = ULTRA.has(p.id) ? "ultra"
+  // Mega EX / Pokémon-ex are always Ultra (full-art, premium) and hand the
+  // opponent extra Prizes when Knocked Out.
+  p.rarity = p.mega || p.ex ? "ultra"
+    : ULTRA.has(p.id) ? "ultra"
     : p.stage === "stage2" || RARE_PLUS.has(p.id) ? "rare"
     : p.stage === "stage1" ? "uncommon" : "common";
+  if ((p.mega || p.ex) && !p.prizeValue) p.prizeValue = 2;
   if (GENERATED_ART[p.id]) { p.art = GENERATED_ART[p.id]; p.genArt = true; }
   const guest = GUEST_ARTISTS[p.id];
   if (guest) { p.illus = guest.illus; p.guestStyle = guest.style; }

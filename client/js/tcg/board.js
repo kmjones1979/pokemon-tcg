@@ -81,12 +81,14 @@ export function openTcgMode({ onExit = () => {} } = {}) {
     grid.className = "tcg-deck-grid";
     STARTER_DECKS.forEach((d, i) => {
       const s = deckStats(d);
+      const hasMega = d.cards.some((id) => { try { return cardById(id).mega; } catch { return false; } });
       const c = document.createElement("div");
-      c.className = `tcg-deck-card type-${d.type}`;
+      c.className = `tcg-deck-card type-${d.type}${hasMega ? " has-mega" : ""}`;
       c.style.setProperty("--type", TCG_COLORS[d.type]);
       c.style.setProperty("--pick-delay", `${i * 90}ms`);
       c.innerHTML = `
         <div class="tcg-deck-shine"></div>
+        ${hasMega ? '<div class="tcg-deck-mega">MEGA EX</div>' : ""}
         <div class="tcg-deck-top">
           <span class="tcg-deck-type">${energyBadge(d.type, "pip-cost")}<b>${d.type}</b></span>
           <span class="tcg-deck-total">60</span>

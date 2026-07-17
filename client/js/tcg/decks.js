@@ -109,6 +109,96 @@ export const STARTER_DECKS = [
       ...rep("energy-fighting", 20),
     ],
   },
+  {
+    id: "darkness",
+    name: "Shadow Strike",
+    type: "darkness",
+    cover: 229, // Houndoom
+    blurb: "Poison, burn and confuse from the shadows — Houndoom and Golbat grind you down.",
+    cards: [
+      ...rep("darkness-houndour", 4), ...rep("darkness-houndoom", 3),
+      ...rep("darkness-ekans", 2), ...rep("darkness-arbok", 2),
+      ...rep("darkness-sneasel", 2), ...rep("darkness-murkrow", 2),
+      ...rep("darkness-zubat", 2), ...rep("darkness-golbat", 1),
+      ...TRAINER_CORE, ...rep("trainer-stadium-spa", 2),
+      ...rep("energy-darkness", 20),
+    ],
+  },
+  {
+    id: "metal",
+    name: "Steel Fortress",
+    type: "metal",
+    cover: 208, // Steelix
+    blurb: "Armor up. Steelix and Scizor wall out attackers, then hit back like a wrecking ball.",
+    cards: [
+      ...rep("fighting-onix", 3), ...rep("metal-onix-steelix", 2),
+      ...rep("grass-scyther", 2), ...rep("metal-scyther-scizor", 2),
+      ...rep("metal-skarmory", 3), ...rep("metal-pineco", 2),
+      ...rep("metal-forretress", 2), ...rep("metal-beldum", 2),
+      ...TRAINER_CORE, ...rep("trainer-stadium-arena", 2),
+      ...rep("energy-metal", 20),
+    ],
+  },
+  {
+    id: "dragon",
+    name: "Sky Kings",
+    type: "colorless",
+    cover: 149, // Dragonite
+    blurb: "Colorless titans — Dragonite, Snorlax and Mega Kangaskhan EX bulldoze any matchup.",
+    cards: [
+      ...rep("colorless-dratini", 4), ...rep("colorless-dragonair", 3), ...rep("colorless-dragonite", 2),
+      ...rep("colorless-snorlax", 2), ...rep("colorless-tauros", 2),
+      ...rep("colorless-kangaskhan", 2), ...rep("mega-kangaskhan-ex", 1),
+      ...rep("colorless-eevee", 2),
+      ...TRAINER_CORE, ...rep("trainer-stadium-arena", 2),
+      ...rep("energy-lightning", 20),
+    ],
+  },
+  {
+    id: "water-mega",
+    name: "Abyssal Tide",
+    type: "water",
+    cover: 10041, // Mega Gyarados
+    blurb: "Wash them away — Gyarados and Mega Gyarados EX crash down behind a wall of shellfish.",
+    cards: [
+      ...rep("water-magikarp", 3), ...rep("water-gyarados", 2), ...rep("mega-gyarados-ex", 1),
+      ...rep("water-lapras", 2), ...rep("water-shellder", 2), ...rep("water-cloyster", 2),
+      ...rep("water-krabby", 2), ...rep("water-kingler", 2),
+      ...rep("water-tentacool", 2), ...rep("water-tentacruel", 2),
+      ...TRAINER_CORE, ...rep("trainer-stadium-spa", 2),
+      ...rep("energy-water", 18),
+    ],
+  },
+  {
+    id: "fire-mega",
+    name: "Volcanic Fury",
+    type: "fire",
+    cover: 10034, // Mega Charizard X
+    blurb: "All-out aggression. Ramp into Mega Charizard EX and end games in a single Crimson Storm.",
+    cards: [
+      ...rep("fire-growlithe", 3), ...rep("fire-arcanine", 2),
+      ...rep("fire-vulpix", 2), ...rep("fire-ninetales", 2),
+      ...rep("fire-magmar", 2), ...rep("fire-moltres", 2),
+      ...rep("fire-charmander", 2), ...rep("fire-charmeleon", 1), ...rep("fire-charizard", 1), ...rep("mega-charizard-ex", 1),
+      ...TRAINER_CORE, ...rep("trainer-stadium-arena", 2),
+      ...rep("energy-fire", 20),
+    ],
+  },
+  {
+    id: "psychic-mega",
+    name: "Psy Storm",
+    type: "psychic",
+    cover: 10043, // Mega Mewtwo X
+    blurb: "Overwhelming psychic force — Mega Mewtwo EX and Mega Gengar EX from a deep bench.",
+    cards: [
+      ...rep("psychic-mewtwo", 2), ...rep("mega-mewtwo-ex", 1),
+      ...rep("psychic-gastly", 3), ...rep("psychic-haunter", 2), ...rep("psychic-gengar", 1), ...rep("mega-gengar-ex", 1),
+      ...rep("psychic-slowpoke", 2), ...rep("psychic-slowbro", 2),
+      ...rep("psychic-jynx", 2), ...rep("psychic-mew", 1),
+      ...TRAINER_CORE, ...rep("trainer-stadium-spa", 2),
+      ...rep("energy-psychic", 21),
+    ],
+  },
 ];
 
 export const deckById = (id) => STARTER_DECKS.find((d) => d.id === id) || null;

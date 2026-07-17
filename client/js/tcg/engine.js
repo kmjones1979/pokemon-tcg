@@ -128,7 +128,9 @@ function knockOut(state, ownerKey, inst, prizeTo) {
   s.discard.push(inst.card, ...inst.under, ...inst.attached);
   if (s.active === inst) s.active = null;
   else s.bench = s.bench.filter((i) => i !== inst);
-  takePrize(state, prizeTo);
+  // Pokémon-EX / Mega EX award extra Prizes when Knocked Out (real TCG rule).
+  const prizes = Math.max(1, inst.card.prizeValue || 1);
+  for (let i = 0; i < prizes; i++) takePrize(state, prizeTo);
   if (!s.active) promoteBest(state, ownerKey);
 }
 

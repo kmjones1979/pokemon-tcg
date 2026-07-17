@@ -13,7 +13,7 @@ const el = (tag, cls, html) => {
   return n;
 };
 
-const STAGE = { basic: "Basic", stage1: "Stage 1", stage2: "Stage 2" };
+const STAGE = { basic: "Basic", stage1: "Stage 1", stage2: "Stage 2", mega: "Mega Evolution" };
 const RARITY_MARK = { common: "●", uncommon: "◆", rare: "★", ultra: "✦" };
 const STATUS_ABBR = { poison: "PSN", burn: "BRN", paralyze: "PAR", sleep: "SLP", confuse: "CNF" };
 
@@ -30,7 +30,7 @@ export function renderTcgCard(card, opts = {}) {
   // Ultra Rares with bespoke art render "full-art": the illustration fills the
   // whole card and the text is overlaid, like a real Illustration Rare.
   const fullArt = card.genArt && rarity === "ultra";
-  const wrap = el("div", `tcg-card tcg-pokemon tcg-${size} type-${type} rarity-${rarity}${card.genArt ? " gen-art" : ""}${fullArt ? " full-art" : ""}`);
+  const wrap = el("div", `tcg-card tcg-pokemon tcg-${size} type-${type} rarity-${rarity}${card.genArt ? " gen-art" : ""}${fullArt ? " full-art" : ""}${card.mega ? " mega-ex" : ""}${card.ex ? " is-ex" : ""}`);
   wrap.style.setProperty("--type", TCG_COLORS[type] || "#888");
   wrap.dataset.cardId = card.id;
   if (inst) wrap.dataset.uid = inst.uid;
@@ -96,6 +96,11 @@ export function renderTcgCard(card, opts = {}) {
   // Holographic sheen for Rare/Ultra, plus a rarity mark like real cards.
   if (rarity === "rare" || rarity === "ultra") wrap.appendChild(el("div", "tcg-holo"));
   if (size === "full") wrap.appendChild(el("div", `tcg-rarity-mark rm-${rarity}`, RARITY_MARK[rarity] || ""));
+  // Mega EX ribbon + "gives up 2 Prizes" marker, like real Mega EX cards.
+  if (card.mega || card.ex) {
+    wrap.appendChild(el("div", "tcg-ex-ribbon", card.mega ? "MEGA EX" : "ex"));
+    if ((card.prizeValue || 1) > 1 && size === "full") wrap.appendChild(el("div", "tcg-ex-prizes", `▸ ${card.prizeValue} Prizes`));
+  }
   return wrap;
 }
 
