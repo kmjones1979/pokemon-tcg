@@ -51,6 +51,8 @@ const CARDS = [
   { id: "trainer-full-heal", subject: "A Pokémon Full Heal healing item: a small green-and-white aerosol medicine spray can glowing with soothing restorative light, centered." },
   { id: "trainer-max-potion", subject: "A Pokémon Max Potion healing item: a tall glossy yellow-and-white medicine spray bottle radiating powerful restorative energy, centered." },
   { id: "trainer-cynthia", subject: "A confident Pokémon Champion trainer woman with long pale hair in a black coat, standing heroically, dramatic wind and light, portrait." },
+  { id: "trainer-hyper-potion", subject: "A Pokémon Hyper Potion healing item: a large glossy pink-and-white medicine spray bottle radiating a powerful restorative aura, centered." },
+  { id: "trainer-pokemon-catcher", subject: "A Pokémon Catcher device: a high-tech handheld gadget with a glowing targeting reticle and a Poké Ball being launched, dynamic action, centered." },
 ];
 
 const args = process.argv.slice(2);

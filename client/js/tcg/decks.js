@@ -91,6 +91,24 @@ export const STARTER_DECKS = [
       ...rep("energy-psychic", 20),
     ],
   },
+  {
+    id: "fighting",
+    name: "Rock Crusher",
+    type: "fighting",
+    cover: 68, // Machamp
+    blurb: "Machamp and Golem crush with raw Fighting power — Catcher a Benched threat, then hit like a landslide.",
+    cards: [
+      ...rep("fighting-machop", 4), ...rep("fighting-machoke", 3), ...rep("fighting-machamp", 2),
+      ...rep("fighting-geodude", 3), ...rep("fighting-graveler", 2), ...rep("fighting-golem", 1),
+      ...rep("fighting-mankey", 3),
+      // 22 Trainers, showcasing the new Items.
+      ...rep("trainer-research", 2), ...rep("trainer-hop", 2), ...rep("trainer-poke-ball", 4),
+      ...rep("trainer-ultra-ball", 2), ...rep("trainer-potion", 2), ...rep("trainer-hyper-potion", 2),
+      ...rep("trainer-pokemon-catcher", 2), ...rep("trainer-switch", 2), ...rep("trainer-max-potion", 2),
+      ...rep("trainer-stadium-arena", 2),
+      ...rep("energy-fighting", 20),
+    ],
+  },
 ];
 
 export const deckById = (id) => STARTER_DECKS.find((d) => d.id === id) || null;

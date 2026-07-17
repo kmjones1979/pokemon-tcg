@@ -59,5 +59,15 @@ export default {
   "trainer-ultra-ball": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-ultra-ball.png",
   "trainer-full-heal": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-full-heal.png",
   "trainer-max-potion": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-max-potion.png",
-  "trainer-cynthia": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-cynthia.png"
+  "trainer-cynthia": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-cynthia.png",
+  "fighting-machop": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-machop.png",
+  "fighting-machoke": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-machoke.png",
+  "fighting-machamp": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-machamp.png",
+  "fighting-geodude": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-geodude.png",
+  "fighting-graveler": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-graveler.png",
+  "fighting-golem": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-golem.png",
+  "fighting-mankey": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-mankey.png",
+  "fighting-primeape": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-primeape.png",
+  "trainer-hyper-potion": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-hyper-potion.png",
+  "trainer-pokemon-catcher": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-pokemon-catcher.png"
 };

@@ -122,6 +122,24 @@ const POKEMON = [
     attacks: [atk("Pound", "C", 10), atk("Confusion", "PC", 30)] }),
   mon({ id: "psychic-hypno", name: "Hypno", dex: 97, stage: "stage1", from: "psychic-drowzee", type: "psychic", hp: 110, weak: "psychic", retreat: 2,
     attacks: [atk("Psybeam", "PC", 50), atk("Nightmare", "PPC", 80)] }),
+
+  // ===== FIGHTING =====
+  mon({ id: "fighting-machop", name: "Machop", dex: 66, stage: "basic", type: "fighting", hp: 70, weak: "psychic", retreat: 1,
+    attacks: [atk("Low Kick", "T", 20), atk("Karate Chop", "TC", 40)] }),
+  mon({ id: "fighting-machoke", name: "Machoke", dex: 67, stage: "stage1", from: "fighting-machop", type: "fighting", hp: 100, weak: "psychic", retreat: 2,
+    attacks: [atk("Submission", "TTC", 60, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
+  mon({ id: "fighting-machamp", name: "Machamp", dex: 68, stage: "stage2", from: "fighting-machoke", type: "fighting", hp: 160, weak: "psychic", retreat: 3,
+    attacks: [atk("Cross Chop", "TTC", 80), atk("Seismic Toss", "TTCC", 120, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
+  mon({ id: "fighting-geodude", name: "Geodude", dex: 74, stage: "basic", type: "fighting", hp: 70, weak: "psychic", retreat: 1,
+    attacks: [atk("Tackle", "C", 10), atk("Rock Throw", "TC", 30)] }),
+  mon({ id: "fighting-graveler", name: "Graveler", dex: 75, stage: "stage1", from: "fighting-geodude", type: "fighting", hp: 100, weak: "psychic", retreat: 3,
+    attacks: [atk("Rock Slide", "TC", 40), atk("Rollout", "TTC", 70)] }),
+  mon({ id: "fighting-golem", name: "Golem", dex: 76, stage: "stage2", from: "fighting-graveler", type: "fighting", hp: 150, weak: "psychic", retreat: 4,
+    attacks: [atk("Mega Punch", "TCC", 60), atk("Earthquake", "TTCC", 110, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
+  mon({ id: "fighting-mankey", name: "Mankey", dex: 56, stage: "basic", type: "fighting", hp: 60, weak: "psychic", retreat: 1,
+    attacks: [atk("Scratch", "C", 10), atk("Low Kick", "T", 20)] }),
+  mon({ id: "fighting-primeape", name: "Primeape", dex: 57, stage: "stage1", from: "fighting-mankey", type: "fighting", hp: 100, weak: "psychic", retreat: 1,
+    attacks: [atk("Rage", "TC", 40), atk("Thrash", "TTC", 70, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
 ];
 
 // --- Energy ---------------------------------------------------------------
@@ -158,6 +176,8 @@ const TRAINERS = [
   { id: "trainer-full-heal", kind: "item", name: "Full Heal", text: "Heal 50 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 50 } },
   { id: "trainer-max-potion", kind: "item", name: "Max Potion", text: "Heal 90 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 90 } },
   { id: "trainer-cynthia", kind: "supporter", name: "Cynthia", text: "Discard your hand and draw 6 cards.", effect: { type: "discardHandDraw", count: 6 } },
+  { id: "trainer-hyper-potion", kind: "item", name: "Hyper Potion", text: "Heal 120 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 120 } },
+  { id: "trainer-pokemon-catcher", kind: "item", name: "Pokémon Catcher", text: "Switch your opponent's Active Pokémon with 1 of their Benched Pokémon.", effect: { type: "switchOpponent" } },
 ];
 
 // Prefer bespoke illustrator-style artwork (scripts/generate-tcg-art.js) when a
@@ -170,7 +190,7 @@ for (const t of TRAINERS) {
 // Rares (rainbow holo), Stage 2s are Rares (holo), Stage 1s Uncommon, Basics
 // Common. Bespoke Pokémon illustrations (generate-pokemon-art.js) fill the card
 // full-bleed as an "Illustration Rare"-style full art.
-const ACES = new Set(["fire-charizard", "water-blastoise", "grass-venusaur", "lightning-raichu", "psychic-alakazam", "psychic-gengar"]);
+const ACES = new Set(["fire-charizard", "water-blastoise", "grass-venusaur", "lightning-raichu", "psychic-alakazam", "psychic-gengar", "fighting-machamp", "fighting-golem"]);
 for (const p of POKEMON) {
   p.rarity = ACES.has(p.id) ? "ultra"
     : p.stage === "stage2" ? "rare"
