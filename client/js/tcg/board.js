@@ -391,8 +391,10 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     const dock = eln("div", "tcg-dock");
     dock.appendChild(renderHand(p));
     dock.appendChild(renderActionBar(p));
-    dock.appendChild(renderLog());
     board.appendChild(dock);
+    // Play log floats at the right-middle of the screen (out of the way of the
+    // hand and controls at the bottom).
+    board.appendChild(renderLog());
 
     // NOTE: the click handler is a single delegated listener on #arena added
     // once in startTcgMatch — NOT re-added per board here.

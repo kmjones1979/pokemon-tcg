@@ -134,11 +134,14 @@ body.tcg-mode #site-footer { display: none; }
   border-radius: 9px; overflow: hidden; cursor: default; user-select: none;
   transition: transform 0.12s ease, box-shadow 0.12s ease, outline-color 0.12s ease;
 }
-.tcg-full { width: 146px; }
-.tcg-mini { width: 74px; }
+/* Every card keeps the real Pokémon-card proportion (63×88mm ≈ 0.716). */
+.tcg-full { width: 146px; aspect-ratio: 63 / 88; }
+.tcg-mini { width: 74px; aspect-ratio: 63 / 88; }
 
-/* Pokémon: cream interior inside a thick type-colored frame. */
+/* Pokémon: cream interior inside a thick type-colored frame. Flex column so
+   the art window grows to fill the fixed-ratio card. */
 .tcg-pokemon {
+  display: flex; flex-direction: column;
   background: linear-gradient(180deg, #fbf7ea, #ece5d1);
   border: 3px solid var(--type, #888);
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
@@ -153,18 +156,18 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-hp i { font-style: normal; font-size: 7px; margin-right: 1px; opacity: 0.8; }
 .tcg-type-badge { width: 15px; height: 15px; }
 
-.tcg-art { position: relative; margin: 0 1px; border-radius: 4px; }
+.tcg-art { position: relative; margin: 0 1px; border-radius: 4px; flex: 1 1 auto; min-height: 0; display: flex; }
 .tcg-art-frame {
-  height: 78px; display: grid; place-items: center; overflow: hidden;
+  flex: 1; min-height: 0; width: 100%; display: grid; place-items: center; overflow: hidden;
   border: 1.5px solid color-mix(in srgb, var(--type) 65%, #6f6033); border-radius: 4px;
   background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--type) 34%, #fff), #cbc5b4 92%);
 }
-.tcg-mini .tcg-art-frame { height: 56px; }
 .tcg-art img { max-width: 96%; max-height: 96%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
 .tcg-attached { position: absolute; left: 3px; bottom: 3px; display: flex; gap: 2px; flex-wrap: wrap; max-width: 64%; }
 .tcg-damage { position: absolute; right: 3px; top: 3px; background: #d3202f; color: #fff; font-weight: 800; font-size: 10px; padding: 1px 4px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
-/* Special Condition badge. */
-.tcg-status { position: absolute; left: 3px; top: 3px; z-index: 4; font-family: "Press Start 2P", monospace; font-size: 7px; color: #fff; padding: 2px 4px; border-radius: 4px; letter-spacing: 0.5px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); animation: tcgStatusPulse 1.4s ease-in-out infinite; }
+/* Special Condition badge (renamed from .tcg-status to avoid clashing with the
+   action-bar status prompt, which shares no styling with this). */
+.tcg-cond { position: absolute; left: 3px; top: 3px; z-index: 4; font-family: "Press Start 2P", monospace; font-size: 7px; color: #fff; padding: 2px 4px; border-radius: 4px; letter-spacing: 0.5px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); animation: tcgStatusPulse 1.4s ease-in-out infinite; }
 @keyframes tcgStatusPulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
 .st-poison { background: #a040d0; }
 .st-burn { background: #e0562e; }
@@ -238,8 +241,8 @@ body.tcg-mode #site-footer { display: none; }
 /* Energy card — big glowing Energy symbol on a type field with a sunburst. */
 .tcg-energy {
   position: relative; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  width: 72px; padding: 12px 4px; border: 3px solid #f4efdd;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 4px; border: 3px solid #f4efdd;
   background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--type) 52%, #fff), color-mix(in srgb, var(--type) 90%, #000));
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
@@ -247,14 +250,14 @@ body.tcg-mode #site-footer { display: none; }
   content: ""; position: absolute; inset: -25%; pointer-events: none; opacity: 0.6;
   background: repeating-conic-gradient(from 0deg at 50% 42%, rgba(255, 255, 255, 0.12) 0 7deg, transparent 7deg 19deg);
 }
-.tcg-full.tcg-energy { width: 96px; padding: 18px 6px; }
 .tcg-energy-symbol {
-  position: relative; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  position: relative; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center;
   background: radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.12));
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.65), 0 0 14px rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.65), 0 0 16px rgba(255, 255, 255, 0.4);
 }
+.tcg-full .tcg-energy-symbol { width: 70px; height: 70px; }
 .tcg-energy-symbol .tcg-esvg { width: 62%; height: 62%; fill: #fff; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35)); }
-.tcg-energy-name { position: relative; font-size: 9px; font-weight: 800; letter-spacing: 0.3px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.tcg-energy-name { position: relative; font-size: 10.5px; font-weight: 800; letter-spacing: 0.3px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
 
 /* Trainer card — light with a colored category banner + faint tint. */
 .tcg-trainer {
@@ -271,12 +274,11 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-trainer-banner { width: 100%; background: var(--tk); color: #fff; font-size: 7px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; text-align: center; padding: 2px 0; }
 /* Framed illustration window, mirroring the Pokémon card art window. */
 .tcg-trainer-art {
-  width: calc(100% - 10px); margin: 4px 5px 0; height: 78px; border-radius: 4px; overflow: hidden;
+  width: calc(100% - 10px); margin: 4px 5px 0; flex: 1; min-height: 0; border-radius: 4px; overflow: hidden;
   display: grid; place-items: center;
   border: 1.5px solid color-mix(in srgb, var(--tk) 55%, #6f6033);
   background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--tk) 24%, #fff), #cbc5b4 92%);
 }
-.tcg-mini .tcg-trainer-art { height: 54px; }
 .tcg-trainer-art img { max-width: 92%; max-height: 92%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
 /* Item sprites are small pixel art — upscale crisply and centre. */
 .art-item .tcg-trainer-art img { image-rendering: pixelated; max-width: 60%; max-height: 60%; }
@@ -312,9 +314,9 @@ body.tcg-mode #site-footer { display: none; }
 /* ---- hand (fans + overlaps as it grows) ---- */
 .tcg-hand-wrap { margin-top: auto; }
 .tcg-hand-label { text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #8a8eaa; padding: 2px 0; }
-/* Hand cards are a touch shorter than in-play cards so the dock stays compact;
-   selecting/hovering lifts them clear and readable. */
-.tcg-hand .tcg-art-frame { height: 60px; }
+/* Hand cards keep the standard proportion; a slightly smaller width keeps the
+   dock from getting too tall. */
+.tcg-hand .tcg-full { width: 120px; }
 .tcg-hand {
   display: flex; justify-content: center; align-items: flex-end;
   gap: 6px; padding: 6px 8px 4px; overflow-x: auto; overflow-y: visible; scrollbar-width: thin;
@@ -359,9 +361,21 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-atk-btn-name { font-weight: 600; }
 .tcg-atk-btn-dmg { font-family: "Press Start 2P", monospace; font-size: 11px; }
 
-/* ---- log ---- */
-.tcg-log { display: flex; flex-direction: column; gap: 1px; padding: 4px 6px 10px; font-size: 10.5px; color: var(--muted, #8a8eaa); text-align: center; }
+/* ---- log: a floating panel pinned to the right-middle of the screen ---- */
+.tcg-log {
+  position: fixed; right: 8px; top: 50%; transform: translateY(-50%); z-index: 4;
+  width: 150px; max-height: 40vh; overflow: hidden;
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+  font-size: 10.5px; color: var(--muted, #8a8eaa); text-align: right;
+  background: rgba(10, 9, 20, 0.55); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px; backdrop-filter: blur(4px); pointer-events: none;
+}
+.tcg-log-line { line-height: 1.35; }
 .tcg-log-line:last-child { color: var(--ink, #f0eee2); }
+/* On narrow screens tuck it to a thin strip so it never crowds the board. */
+@media (max-width: 640px) {
+  .tcg-log { width: 108px; right: 4px; font-size: 9px; padding: 6px 7px; opacity: 0.9; }
+}
 
 /* ---- game over ---- */
 .tcg-gameover { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; background: rgba(6, 6, 14, 0.72); backdrop-filter: blur(4px); }

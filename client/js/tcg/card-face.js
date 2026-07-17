@@ -52,7 +52,7 @@ export function renderTcgCard(card, opts = {}) {
         `<div class="tcg-attached">${inst.attached.map((e) => energyBadge(e.energyType, "pip-mini")).join("")}</div>`);
     }
     if (inst.damage > 0) art.insertAdjacentHTML("beforeend", `<div class="tcg-damage">−${inst.damage}</div>`);
-    if (inst.status) art.insertAdjacentHTML("beforeend", `<div class="tcg-status st-${inst.status.kind}">${STATUS_ABBR[inst.status.kind] || ""}</div>`);
+    if (inst.status) art.insertAdjacentHTML("beforeend", `<div class="tcg-cond st-${inst.status.kind}">${STATUS_ABBR[inst.status.kind] || ""}</div>`);
   }
   wrap.appendChild(art);
 
