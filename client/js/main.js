@@ -278,12 +278,65 @@ window.addEventListener("DOMContentLoaded", async () => {
     }, 300);
     history.replaceState({}, "", location.pathname);
   }
+
+  // First-load "choose your game" splash — skipped when a deep-link (room
+  // code, spectate, shared/versus deck) is steering the player somewhere.
+  if (!incomingCode && !spectateId && !sharedDeck && !versusDeck) {
+    showModeChooser();
+  }
 });
 
 function refreshMuteIcon() {
   const btn = $("#mute-toggle");
   btn.textContent = isMuted() ? "🔇" : "🔊";
   btn.setAttribute("aria-label", isMuted() ? "Unmute" : "Mute");
+}
+
+// --- First-load mode chooser ----------------------------------------------
+// New players land on a "choose your game" splash so the TCG mode is a real
+// choice, not a buried button. Shown once (remembered in localStorage); the
+// menu's "Switch game mode" button re-opens it with { force: true }.
+const MODE_CHOSEN_KEY = "pokemon-mode-chosen-v1";
+
+function showModeChooser({ force = false } = {}) {
+  if (!force && localStorage.getItem(MODE_CHOSEN_KEY)) return;
+  document.querySelector(".mode-chooser")?.remove();
+  const ov = document.createElement("div");
+  ov.className = "mode-chooser";
+  ov.innerHTML = `
+    <div class="mc-inner">
+      <div class="mc-kicker">Welcome, Trainer</div>
+      <h1 class="mc-title">Choose how you want to play</h1>
+      <p class="mc-sub">Two complete games in one. Pick one to start — you can switch anytime.</p>
+      <div class="mc-cards">
+        <button class="mc-card mc-battle" data-mode="battle">
+          <div class="mc-emoji">⚔️</div>
+          <div class="mc-name">Battle</div>
+          <div class="mc-desc">The deck-battler. Build a 30-card deck, wield Legendary signature moves, and duel the AI, a Champion, or friends online.</div>
+          <div class="mc-cta">Play Battle ▸</div>
+        </button>
+        <button class="mc-card mc-tcg" data-mode="tcg">
+          <div class="mc-badge">150+ cards</div>
+          <div class="mc-emoji">🃏</div>
+          <div class="mc-name">Pokémon TCG</div>
+          <div class="mc-desc">The real Trading Card Game — attach Energy, evolve, work the Bench, take Prizes. Collect booster packs, chase Mega EX &amp; Illustration Rares, and play online.</div>
+          <div class="mc-cta">Play TCG ▸</div>
+        </button>
+      </div>
+      <button class="mc-close" aria-label="Close">Maybe later</button>
+    </div>`;
+  const choose = (mode) => {
+    localStorage.setItem(MODE_CHOSEN_KEY, mode);
+    ov.remove();
+    if (mode === "tcg") openTcgMode({ onExit: renderMenu });
+  };
+  ov.addEventListener("click", (e) => {
+    const card = e.target.closest("[data-mode]");
+    if (card) return choose(card.dataset.mode);
+    // "Maybe later" or backdrop → default to the Battle menu already behind it.
+    if (e.target.closest(".mc-close") || e.target === ov) { localStorage.setItem(MODE_CHOSEN_KEY, "battle"); ov.remove(); }
+  });
+  document.body.appendChild(ov);
 }
 
 // --- Main menu -------------------------------------------------------------
@@ -323,6 +376,7 @@ function renderMenu() {
     <div class="menu-stage">
       <h1 class="game-title">Pokémon Battle</h1>
       <div class="menu-tagline">Build a 30-card deck. Wield Legendary signature moves. Out-strategize your rival.</div>
+      <button class="switch-mode-btn" id="switch-mode-btn" title="Switch between the Battle game and the Pokémon TCG">⇄ Switch game mode · try the <b>Pokémon TCG</b></button>
       ${renderFeatureStrip()}
       <div id="daily-card-slot"></div>
       <div id="challenges-inbox"></div>
@@ -554,6 +608,7 @@ function renderMenu() {
   $("#mode-mp-friend").addEventListener("click", () => startMultiplayer({ mode: "friend" }));
   $("#mode-champion").addEventListener("click", () => openChampionPicker());
   $("#mode-tcg")?.addEventListener("click", () => openTcgMode({ onExit: renderMenu }));
+  $("#switch-mode-btn")?.addEventListener("click", () => showModeChooser({ force: true }));
   $("#mode-story")?.addEventListener("click", () => story.openStoryHub({ currentUser }));
   $("#mode-trade")?.addEventListener("click", () => trading.openTradeMarket({ currentUser }));
   $("#mode-puzzle")?.addEventListener("click", () => puzzle.openPuzzle({ currentUser }));
