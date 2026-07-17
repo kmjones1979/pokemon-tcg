@@ -199,6 +199,36 @@ export const STARTER_DECKS = [
       ...rep("energy-psychic", 21),
     ],
   },
+  {
+    id: "dragon-type",
+    name: "Dragon's Den",
+    type: "dragon",
+    cover: 445, // Garchomp
+    blurb: "Raw power. Garchomp, Salamence and Flygon hit for enormous damage once they land.",
+    cards: [
+      ...rep("dragon-gible", 3), ...rep("dragon-gabite", 2), ...rep("dragon-garchomp", 2),
+      ...rep("dragon-bagon", 3), ...rep("dragon-shelgon", 2), ...rep("dragon-salamence", 1),
+      ...rep("dragon-trapinch", 2), ...rep("dragon-vibrava", 1), ...rep("dragon-flygon", 1),
+      ...TRAINER_CORE, ...rep("trainer-stadium-plant", 2),
+      ...rep("energy-dragon", 21),
+    ],
+  },
+  {
+    id: "fairy-type",
+    name: "Fairy Tale",
+    type: "fairy",
+    cover: 282, // Gardevoir
+    blurb: "Grace under fire — Gardevoir and Togekiss heal and hit while you draw ahead.",
+    cards: [
+      ...rep("fairy-ralts", 3), ...rep("fairy-kirlia", 2), ...rep("fairy-gardevoir", 2),
+      ...rep("fairy-togepi", 3), ...rep("fairy-togetic", 2), ...rep("fairy-togekiss", 1),
+      ...rep("fairy-snubbull", 2), ...rep("fairy-granbull", 1), ...rep("fairy-mawile", 2),
+      ...rep("trainer-research", 3), ...rep("trainer-bill", 2), ...rep("trainer-nest-ball", 3),
+      ...rep("trainer-poke-ball", 2), ...rep("trainer-potion", 2), ...rep("trainer-full-restore", 2),
+      ...rep("trainer-switch", 2), ...rep("trainer-erika", 2), ...rep("trainer-stadium-seas", 2),
+      ...rep("energy-fairy", 22),
+    ],
+  },
 ];
 
 export const deckById = (id) => STARTER_DECKS.find((d) => d.id === id) || null;

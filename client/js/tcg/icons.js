@@ -5,7 +5,7 @@
 export const TCG_COLORS = {
   fire: "#f0662e", water: "#3aa0e6", grass: "#5bbf5b", lightning: "#f2c216",
   psychic: "#b45fd6", fighting: "#c86a3a", colorless: "#c9c6bb",
-  darkness: "#4b5168", metal: "#8b9bb0",
+  darkness: "#4b5168", metal: "#8b9bb0", dragon: "#c9a13a", fairy: "#e874b8",
 };
 
 // White glyph inner-content per energy type, drawn on a 24×24 viewBox. Placed
@@ -29,6 +29,10 @@ const ENERGY = {
     '<path d="M14.8 3.2A8 8 0 1 0 20.8 15 6.4 6.4 0 0 1 14.8 3.2z"/>',
   metal:
     '<path d="M12 2.3l8.3 4.8v9.8L12 21.7 3.7 16.9V7.1z"/><circle cx="12" cy="12" r="3.2" fill="rgba(0,0,0,.34)"/>',
+  dragon:
+    '<path d="M12 2l8 6-3 3 3 3-8 8-8-8 3-3-3-3z"/><path d="M12 7.5l3.2 2.4L12 16.5 8.8 9.9z" fill="rgba(0,0,0,.3)"/>',
+  fairy:
+    '<path d="M12 2c.9 4.6 3.4 7.1 8 8-4.6.9-7.1 3.4-8 8-.9-4.6-3.4-7.1-8-8 4.6-.9 7.1-3.4 8-8z"/>',
 };
 
 export function energySVG(type) {

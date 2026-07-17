@@ -12,7 +12,7 @@ const ART = (dex) =>
 
 // Energy-cost shorthand: F fire, W water, G grass, L lightning, P psychic,
 // T fighting, C colorless. e.g. k("FFC") -> ["fire","fire","colorless"].
-const TYPE_LETTER = { F: "fire", W: "water", G: "grass", L: "lightning", P: "psychic", T: "fighting", C: "colorless", D: "darkness", M: "metal" };
+const TYPE_LETTER = { F: "fire", W: "water", G: "grass", L: "lightning", P: "psychic", T: "fighting", C: "colorless", D: "darkness", M: "metal", N: "dragon", Y: "fairy" };
 const k = (s) => [...s].map((c) => TYPE_LETTER[c]);
 
 const atk = (name, cost, damage, effect = null, text = "") => ({ name, cost: k(cost), damage, effect, text });
@@ -322,6 +322,54 @@ const POKEMON = [
     attacks: [atk("Psystrike", "PPC", 110), atk("Genesis Wave", "PPPPC", 200, { type: "plusPerEnergy", per: 10, energyType: "psychic", ignore: 5 }, "+10 for each extra Psychic Energy attached.")] }),
   mon({ id: "mega-kangaskhan-ex", name: "Mega Kangaskhan EX", dex: 10039, stage: "mega", from: "colorless-kangaskhan", type: "colorless", hp: 240, weak: "fighting", retreat: 3, ex: true, mega: true, prizeValue: 2,
     attacks: [atk("Parental Bond", "CCC", 80, { type: "coinFlipBonus", damage: 40 }, "Flip a coin. If heads, +40 damage."), atk("Outrage", "CCCCC", 160)] }),
+
+  // ===== DRAGON =====
+  mon({ id: "dragon-gible", name: "Gible", dex: 443, stage: "basic", type: "dragon", hp: 60, weak: "fairy", retreat: 1,
+    attacks: [atk("Tackle", "C", 10), atk("Dragon Rage", "NC", 30)] }),
+  mon({ id: "dragon-gabite", name: "Gabite", dex: 444, stage: "stage1", from: "dragon-gible", type: "dragon", hp: 90, weak: "fairy", retreat: 1,
+    attacks: [atk("Dragon Claw", "NC", 40), atk("Sand Tomb", "NNC", 60)] }),
+  mon({ id: "dragon-garchomp", name: "Garchomp", dex: 445, stage: "stage2", from: "dragon-gabite", type: "dragon", hp: 160, weak: "fairy", retreat: 2,
+    attacks: [atk("Dragon Rush", "NCC", 70), atk("Sky Onslaught", "NNCC", 140, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Dragon Energy.")] }),
+  mon({ id: "dragon-bagon", name: "Bagon", dex: 371, stage: "basic", type: "dragon", hp: 60, weak: "fairy", retreat: 1,
+    attacks: [atk("Headbutt", "C", 10), atk("Ember", "NC", 30)] }),
+  mon({ id: "dragon-shelgon", name: "Shelgon", dex: 372, stage: "stage1", from: "dragon-bagon", type: "dragon", hp: 100, weak: "fairy", retreat: 2,
+    attacks: [atk("Protect", "NC", 30, { type: "healSelf", amount: 20 }, "Heal 20 damage from this Pokémon."), atk("Double-edge", "NNC", 60, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
+  mon({ id: "dragon-salamence", name: "Salamence", dex: 373, stage: "stage2", from: "dragon-shelgon", type: "dragon", hp: 160, weak: "fairy", retreat: 2,
+    attacks: [atk("Dragon Wing", "NCC", 70), atk("Draco Meteor", "NNCC", 150, { type: "selfDiscardEnergy", amount: 2 }, "Discard 2 Dragon Energy.")] }),
+  mon({ id: "dragon-swablu", name: "Swablu", dex: 333, stage: "basic", type: "dragon", hp: 60, weak: "fairy", retreat: 1,
+    attacks: [atk("Peck", "C", 10), atk("Sing", "N", 0, { type: "applyStatusCoin", kind: "sleep" }, "Flip a coin. If heads, the Defending Pokémon is now Asleep.")] }),
+  mon({ id: "dragon-altaria", name: "Altaria", dex: 334, stage: "stage1", from: "dragon-swablu", type: "dragon", hp: 110, weak: "fairy", retreat: 1,
+    attacks: [atk("Cotton Guard", "NC", 30, { type: "healSelf", amount: 30 }, "Heal 30 damage from this Pokémon."), atk("Dragon Pulse", "NNC", 70)] }),
+  mon({ id: "dragon-trapinch", name: "Trapinch", dex: 328, stage: "basic", type: "dragon", hp: 60, weak: "fairy", retreat: 2,
+    attacks: [atk("Bite", "C", 10), atk("Sand Attack", "NC", 20)] }),
+  mon({ id: "dragon-vibrava", name: "Vibrava", dex: 329, stage: "stage1", from: "dragon-trapinch", type: "dragon", hp: 90, weak: "fairy", retreat: 1,
+    attacks: [atk("Sonic Boom", "NC", 40), atk("Bug Buzz", "NNC", 60)] }),
+  mon({ id: "dragon-flygon", name: "Flygon", dex: 330, stage: "stage2", from: "dragon-vibrava", type: "dragon", hp: 140, weak: "fairy", retreat: 1,
+    attacks: [atk("Dragon Dance", "NC", 40, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Sandstorm Wing", "NNCC", 110)] }),
+  mon({ id: "dragon-kingdra", name: "Kingdra", dex: 230, stage: "stage1", from: "water-seadra", type: "dragon", hp: 130, weak: "fairy", retreat: 2,
+    attacks: [atk("Twister", "NC", 40), atk("Dragon Vortex", "NNC", 90, { type: "plusPerEnergy", per: 10, energyType: "dragon", ignore: 2 }, "+10 for each extra Dragon Energy attached.")] }),
+
+  // ===== FAIRY =====
+  mon({ id: "fairy-ralts", name: "Ralts", dex: 280, stage: "basic", type: "fairy", hp: 50, weak: "metal", retreat: 1,
+    attacks: [atk("Confusion", "Y", 10, { type: "applyStatusCoin", kind: "confuse" }, "Flip a coin. If heads, the Defending Pokémon is now Confused.")] }),
+  mon({ id: "fairy-kirlia", name: "Kirlia", dex: 281, stage: "stage1", from: "fairy-ralts", type: "fairy", hp: 80, weak: "metal", retreat: 1,
+    attacks: [atk("Draining Kiss", "YC", 30, { type: "healSelf", amount: 20 }, "Heal 20 damage from this Pokémon.")] }),
+  mon({ id: "fairy-gardevoir", name: "Gardevoir", dex: 282, stage: "stage2", from: "fairy-kirlia", type: "fairy", hp: 140, weak: "metal", retreat: 2,
+    attacks: [atk("Fairy Wind", "YC", 40), atk("Brilliant Light", "YYC", 90, { type: "healSelf", amount: 30 }, "Heal 30 damage from this Pokémon.")] }),
+  mon({ id: "fairy-togepi", name: "Togepi", dex: 175, stage: "basic", type: "fairy", hp: 50, weak: "metal", retreat: 1,
+    attacks: [atk("Metronome", "Y", 10, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "fairy-togetic", name: "Togetic", dex: 176, stage: "stage1", from: "fairy-togepi", type: "fairy", hp: 80, weak: "metal", retreat: 1,
+    attacks: [atk("Wish", "YC", 0, { type: "healSelf", amount: 40 }, "Heal 40 damage from this Pokémon."), atk("Gust", "YC", 30)] }),
+  mon({ id: "fairy-togekiss", name: "Togekiss", dex: 468, stage: "stage2", from: "fairy-togetic", type: "fairy", hp: 140, weak: "metal", retreat: 1,
+    attacks: [atk("Air Slash", "YC", 50, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Energy."), atk("Sky Blessing", "YYC", 90)] }),
+  mon({ id: "fairy-snubbull", name: "Snubbull", dex: 209, stage: "basic", type: "fairy", hp: 70, weak: "metal", retreat: 1,
+    attacks: [atk("Tackle", "C", 10), atk("Bite", "YC", 30)] }),
+  mon({ id: "fairy-granbull", name: "Granbull", dex: 210, stage: "stage1", from: "fairy-snubbull", type: "fairy", hp: 120, weak: "metal", retreat: 2,
+    attacks: [atk("Play Rough", "YC", 40, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Fairy Fang", "YYC", 80)] }),
+  mon({ id: "fairy-sylveon", name: "Sylveon", dex: 700, stage: "stage1", from: "colorless-eevee", type: "fairy", hp: 110, weak: "metal", retreat: 1,
+    attacks: [atk("Draining Kiss", "YC", 40, { type: "healSelf", amount: 30 }, "Heal 30 damage from this Pokémon."), atk("Fairy Ribbon", "YYC", 80)] }),
+  mon({ id: "fairy-mawile", name: "Mawile", dex: 303, stage: "basic", type: "fairy", hp: 80, weak: "metal", retreat: 1,
+    attacks: [atk("Bite", "C", 10), atk("Vice Crunch", "YC", 40)] }),
 ];
 
 // --- Energy ---------------------------------------------------------------
@@ -335,6 +383,8 @@ const ENERGY = [
   { id: "energy-fighting", kind: "energy", name: "Fighting Energy", energyType: "fighting" },
   { id: "energy-darkness", kind: "energy", name: "Darkness Energy", energyType: "darkness" },
   { id: "energy-metal", kind: "energy", name: "Metal Energy", energyType: "metal" },
+  { id: "energy-dragon", kind: "energy", name: "Dragon Energy", energyType: "dragon" },
+  { id: "energy-fairy", kind: "energy", name: "Fairy Energy", energyType: "fairy" },
 ];
 
 // --- Trainers (Item / Supporter / Stadium) --------------------------------
@@ -362,6 +412,16 @@ const TRAINERS = [
   { id: "trainer-cynthia", kind: "supporter", name: "Cynthia", text: "Discard your hand and draw 6 cards.", effect: { type: "discardHandDraw", count: 6 } },
   { id: "trainer-hyper-potion", kind: "item", name: "Hyper Potion", text: "Heal 120 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 120 } },
   { id: "trainer-pokemon-catcher", kind: "item", name: "Pokémon Catcher", text: "Switch your opponent's Active Pokémon with 1 of their Benched Pokémon.", effect: { type: "switchOpponent" } },
+  // Expansion Trainers.
+  { id: "trainer-nest-ball", kind: "item", name: "Nest Ball", text: "Search your deck for a Basic Pokémon and put it into your hand.", effect: { type: "search", filter: "basic", count: 1 }, art: ITEM_ART("nest-ball"), artStyle: "item" },
+  { id: "trainer-level-ball", kind: "item", name: "Level Ball", text: "Search your deck for a Pokémon and put it into your hand.", effect: { type: "search", filter: "pokemon", count: 1 }, art: ITEM_ART("level-ball"), artStyle: "item" },
+  { id: "trainer-full-restore", kind: "item", name: "Full Restore", text: "Heal 80 damage from 1 of your Pokémon.", effect: { type: "heal", amount: 80 }, art: ITEM_ART("full-restore"), artStyle: "item" },
+  { id: "trainer-bill", kind: "supporter", name: "Bill", text: "Draw 2 cards.", effect: { type: "draw", count: 2 }, art: TRAINER_ART("bill"), artStyle: "trainer" },
+  { id: "trainer-erika", kind: "supporter", name: "Erika", text: "Draw 3 cards.", effect: { type: "draw", count: 3 }, art: TRAINER_ART("erika"), artStyle: "trainer" },
+  { id: "trainer-blue", kind: "supporter", name: "Blue", text: "Discard your hand and draw 6 cards.", effect: { type: "discardHandDraw", count: 6 }, art: TRAINER_ART("blue"), artStyle: "trainer" },
+  { id: "trainer-sabrina", kind: "supporter", name: "Sabrina", text: "Switch your opponent's Active Pokémon with 1 of their Benched Pokémon.", effect: { type: "switchOpponent" }, art: TRAINER_ART("sabrina"), artStyle: "trainer" },
+  { id: "trainer-stadium-seas", kind: "stadium", name: "Rough Seas", text: "At the start of each player's turn, heal 20 damage from that player's Active Pokémon.", effect: { type: "startTurnHeal", amount: 20 }, art: ART(131), artStyle: "mon" },
+  { id: "trainer-stadium-plant", kind: "stadium", name: "Power Plant", text: "Attacks from both players' Active Pokémon do 20 more damage to the opposing Active.", effect: { type: "attackBonus", amount: 20 }, art: ART(145), artStyle: "mon" },
 ];
 
 // Prefer bespoke illustrator-style artwork (scripts/generate-tcg-art.js) when a
@@ -388,11 +448,16 @@ const ULTRA = new Set([
   // Darkness / Metal chase Ultras + the new legend Moltres & Mew.
   "darkness-houndoom", "darkness-umbreon", "metal-onix-steelix", "metal-scyther-scizor",
   "fire-moltres", "psychic-mew",
+  // Dragon / Fairy Illustration-Rare finishers.
+  "dragon-garchomp", "dragon-salamence", "dragon-flygon", "dragon-kingdra",
+  "fairy-gardevoir", "fairy-togekiss",
+  // Killer Acid guest-art set (promoted to full-art Ultra).
+  "psychic-hypno", "water-tentacruel",
 ]);
 // Standout Stage 1s / strong Basics promoted to Rare (holo, no full-art).
 const RARE_PLUS = new Set([
   "fire-ninetales", "fire-rapidash", "water-starmie", "water-golduck",
-  "lightning-magneton", "psychic-hypno", "colorless-pidgeotto", "lightning-electrode",
+  "lightning-magneton", "colorless-pidgeotto", "lightning-electrode",
   // Expansion promotions.
   "fire-flareon", "water-vaporeon", "water-dewgong", "lightning-jolteon",
   "grass-exeggutor", "grass-scyther", "fighting-rhydon", "fighting-marowak",
@@ -401,19 +466,25 @@ const RARE_PLUS = new Set([
   // Darkness / Metal / expansion promotions.
   "darkness-golbat", "darkness-arbok", "darkness-sneasel", "metal-forretress",
   "metal-skarmory", "water-seadra", "water-cloyster", "water-kingler",
-  "water-tentacruel", "grass-parasect", "grass-pinsir", "colorless-clefable",
+  "grass-parasect", "grass-pinsir", "colorless-clefable",
   "colorless-chansey", "fighting-aerodactyl",
+  // Dragon / Fairy promotions.
+  "dragon-gabite", "dragon-shelgon", "dragon-altaria", "dragon-vibrava",
+  "fairy-kirlia", "fairy-togetic", "fairy-granbull", "fairy-sylveon", "fairy-mawile",
 ]);
 
 // Guest-Artist Ultra Rares — a celebrated illustrator lends their signature
 // style to a marquee card, credited on the face like real Pokémon TCG guest
 // cards. Each is generated full-art in that style (see generate-pokemon-art.js).
+// Killer Acid (Rob Corradetti) house style — used across a small themed set.
+const KILLER_ACID = "the psychedelic zine art style of Killer Acid by Rob Corradetti — bold thick hand-inked black outlines, flat screen-printed day-glo acid colours (hot pink, lime green, electric orange, deep purple, turquoise), trippy melting surreal forms, cosmic counterculture imagery with grinning cartoon suns, disembodied floating eyeballs, rainbows, mushrooms, wavy op-art gradients and lava-lamp blobs, 1960s blacklight-poster vibe, halftone screenprint texture, irreverent and weird";
+
 const GUEST_ARTISTS = {
   "fire-charizard":   { illus: "Akira Toriyama",   style: "classic Akira Toriyama Dragon Ball manga art — bold confident ink linework, rounded muscular anatomy, cross-hatch shading, retro Shonen Jump colour palette, an explosive ki-blast aura crackling around it" },
   "water-blastoise":  { illus: "Eiichiro Oda",     style: "Eiichiro Oda One Piece manga style — exaggerated expressive proportions, playful adventurous spirit, bold varied line weights, bright saturated seafaring colour and cartoon dynamism" },
   "grass-venusaur":   { illus: "Hayao Miyazaki",   style: "Hayao Miyazaki Studio Ghibli hand-painted watercolour anime — lush verdant scenery, soft gouache clouds, gentle painterly sunlight, a wholesome sense of natural wonder" },
   "psychic-alakazam": { illus: "Roy Lichtenstein", style: "Roy Lichtenstein pop-art comic — thick black outlines, flat primary red/yellow/blue, bold Ben-Day dot halftone shading, graphic comic-panel composition" },
-  "psychic-gengar":   { illus: "Killer Acid",      style: "Killer Acid psychedelic poster art — trippy neon acid colours, melting surreal shapes, swirling hypnotic patterns, glowing eyes, 1960s blacklight counterculture vibe" },
+  "psychic-gengar":   { illus: "Killer Acid",      style: KILLER_ACID },
   "lightning-raichu": { illus: "Osamu Tezuka",     style: "Osamu Tezuka golden-age manga — clean rounded retro linework, big sparkling expressive eyes, mid-century Astro Boy cartoon charm, cheerful vintage ink-and-colour" },
   // Second wave of pop-culture guest artists.
   "psychic-mewtwo":    { illus: "Yoshitaka Amano",  style: "Yoshitaka Amano ethereal Art Nouveau illustration — delicate flowing linework, ornate decorative detail, pale washed watercolour with shimmering gold accents, dreamlike Final Fantasy fantasy elegance" },
@@ -421,6 +492,10 @@ const GUEST_ARTISTS = {
   "fighting-machamp":  { illus: "Yusuke Murata",    style: "Yusuke Murata hyper-detailed action manga — cinematic dynamic composition, explosive motion and impact, hyper-realistic muscular anatomy and insanely detailed rendering, One Punch Man aesthetic" },
   "darkness-umbreon":  { illus: "CLAMP",            style: "CLAMP shojo manga art — elegant elongated graceful figures, elaborate flowing ribbons and ornament, delicate ornate linework and soft ethereal moonlit beauty, Cardcaptor Sakura aesthetic" },
   "lightning-zapdos":  { illus: "Mika Pikazo",      style: "Mika Pikazo bold neon digital illustration — vibrant saturated neon colour palette, glowing rim light and electric sparks, playful modern pop character design, high-energy contemporary anime" },
+  // A full Killer Acid (Rob Corradetti) mini-set — leaning hard into the style.
+  "psychic-hypno":     { illus: "Killer Acid",      style: KILLER_ACID },
+  "grass-vileplume":   { illus: "Killer Acid",      style: KILLER_ACID },
+  "water-tentacruel":  { illus: "Killer Acid",      style: KILLER_ACID },
 };
 
 for (const p of POKEMON) {
