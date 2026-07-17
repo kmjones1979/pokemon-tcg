@@ -5,6 +5,9 @@
 // the engine passes in, which keeps the dependency one-directional
 // (engine → effects) and makes every effect unit-testable in isolation.
 
+// Special Condition display labels.
+export const STATUS_LABEL = { poison: "Poisoned", burn: "Burned", paralyze: "Paralyzed", sleep: "Asleep", confuse: "Confused" };
+
 // --- Energy-cost matching -------------------------------------------------
 
 // Tally an array of attached energy cards into { fire: 2, colorless: 1, ... }.
@@ -93,6 +96,17 @@ export function applyCardEffect(effect, api, ctx = {}) {
     case "switchOpponent":
       api.switchActive(api.opponentOf(ctx.side));
       return {};
+
+    // ---- Special Conditions inflicted on the Defending Pokémon ----
+    case "applyStatus":
+      if (ctx.defender) { api.setStatus(ctx.defender, effect.kind); api.log(`The Defending Pokémon is now ${STATUS_LABEL[effect.kind] || effect.kind}.`); }
+      return {};
+    case "applyStatusCoin": {
+      if (flipCoin() === "heads") {
+        if (ctx.defender) { api.setStatus(ctx.defender, effect.kind); api.log(`Heads — the Defending Pokémon is now ${STATUS_LABEL[effect.kind] || effect.kind}.`); }
+      } else { api.log("Tails — no effect."); }
+      return {};
+    }
 
     // ---- trainer effects ----
     case "heal":

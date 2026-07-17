@@ -15,6 +15,7 @@ const el = (tag, cls, html) => {
 
 const STAGE = { basic: "Basic", stage1: "Stage 1", stage2: "Stage 2" };
 const RARITY_MARK = { common: "●", uncommon: "◆", rare: "★", ultra: "✦" };
+const STATUS_ABBR = { poison: "PSN", burn: "BRN", paralyze: "PAR", sleep: "SLP", confuse: "CNF" };
 
 // Render a Pokémon / Energy / Trainer card. `inst` overlays in-play state
 // (current HP, attached Energy, damage). `opts.affordable` is a Set of attack
@@ -51,6 +52,7 @@ export function renderTcgCard(card, opts = {}) {
         `<div class="tcg-attached">${inst.attached.map((e) => energyBadge(e.energyType, "pip-mini")).join("")}</div>`);
     }
     if (inst.damage > 0) art.insertAdjacentHTML("beforeend", `<div class="tcg-damage">−${inst.damage}</div>`);
+    if (inst.status) art.insertAdjacentHTML("beforeend", `<div class="tcg-status st-${inst.status.kind}">${STATUS_ABBR[inst.status.kind] || ""}</div>`);
   }
   wrap.appendChild(art);
 

@@ -163,6 +163,14 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-art img { max-width: 96%; max-height: 96%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
 .tcg-attached { position: absolute; left: 3px; bottom: 3px; display: flex; gap: 2px; flex-wrap: wrap; max-width: 64%; }
 .tcg-damage { position: absolute; right: 3px; top: 3px; background: #d3202f; color: #fff; font-weight: 800; font-size: 10px; padding: 1px 4px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
+/* Special Condition badge. */
+.tcg-status { position: absolute; left: 3px; top: 3px; z-index: 4; font-family: "Press Start 2P", monospace; font-size: 7px; color: #fff; padding: 2px 4px; border-radius: 4px; letter-spacing: 0.5px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); animation: tcgStatusPulse 1.4s ease-in-out infinite; }
+@keyframes tcgStatusPulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
+.st-poison { background: #a040d0; }
+.st-burn { background: #e0562e; }
+.st-paralyze { background: #d6a10c; color: #1a1400; }
+.st-sleep { background: #5a6ea8; }
+.st-confuse { background: #d64f9e; }
 
 /* Energy pips — colored disc + white glyph, like real Energy symbols. */
 .tcg-pip {

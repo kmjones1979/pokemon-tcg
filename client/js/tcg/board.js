@@ -483,8 +483,9 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
       if (mode === "attack" && p.active) {
         // Attack chooser.
         const list = eln("div", "tcg-attack-choose");
+        const acts = engine.canAct(p.active);
         p.active.card.attacks.forEach((atk, i) => {
-          const can = engine.affordableAttacks(p.active).includes(atk) && !state.noAttack;
+          const can = acts && engine.affordableAttacks(p.active).includes(atk) && !state.noAttack;
           const cost = (atk.cost || []).map((t) => energyBadge(t, "pip-cost")).join("");
           const b = eln("button", `tcg-atk-btn${can ? "" : " disabled"}`,
             `<span class="tcg-cost">${cost}</span> <span class="tcg-atk-btn-name">${atk.name}</span>${atk.damage ? `<span class="tcg-atk-btn-dmg">${atk.damage}</span>` : ""}`);
@@ -493,7 +494,8 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
         });
         bar.appendChild(list);
         if (state.noAttack) bar.appendChild(eln("div", "tcg-note", "The player going first can't attack on turn 1."));
-        const canRetreat = p.active && p.bench.length && !p.retreatedThisTurn && p.active.attached.length >= (p.active.card.retreat || 0);
+        else if (!acts) bar.appendChild(eln("div", "tcg-note", `${p.active.card.name} is ${p.active.status.kind} and can't attack — end your turn.`));
+        const canRetreat = acts && p.active && p.bench.length && !p.retreatedThisTurn && p.active.attached.length >= (p.active.card.retreat || 0);
         if (canRetreat) btns.appendChild(button("Retreat", "retreat-start"));
         btns.appendChild(button("Back", "cancel", "ghost"));
       } else if (mode === "place") {

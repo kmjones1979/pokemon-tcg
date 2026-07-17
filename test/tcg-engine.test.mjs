@@ -151,6 +151,49 @@ test("taking the last Prize wins", () => {
   assert.equal(st.winner, "player");
 });
 
+test("Special Conditions: poison ticks, sleep/paralyze gate, confusion, clears on switch", () => {
+  seed(11);
+  const st = E.createTcgGame({ playerDeckIds: deckById("fire").cards, aiDeckIds: deckById("water").cards, firstPlayer: "player" });
+  const p = st.players.player, a = st.players.ai;
+  a.active = inst("water-squirtle", { uid: "aa" });
+  a.bench = [inst("water-staryu", { uid: "ab" })];
+
+  // Poison deals 10 at the between-turns checkup.
+  st.turn = 5; st.activePlayer = "player"; st.phase = "main"; st.noAttack = false;
+  p.active = inst("fire-charmander", { uid: "pa", status: { kind: "poison" } });
+  E.endTurn(st, "player");
+  assert.equal(p.active.damage, 10, "poison dealt 10 at checkup");
+
+  // Asleep can't attack.
+  st.turn = 7; st.activePlayer = "player"; st.phase = "main"; st.noAttack = false;
+  p.active = inst("fire-charmander", { uid: "pa2", attached: [energy("fire", "f1")], status: { kind: "sleep" } });
+  assert.equal(E.canAct(p.active), false);
+  assert.throws(() => E.attack(st, "player", 0), /asleep|can't attack/i);
+
+  // Paralysis blocks retreat, then wears off at the player's own checkup.
+  p.active = inst("fire-charmander", { uid: "pa3", attached: [energy("fire", "f2")], status: { kind: "paralyze" } });
+  p.bench = [inst("fire-vulpix", { uid: "pb" })]; p.retreatedThisTurn = false;
+  assert.throws(() => E.retreat(st, "player", 0), /paralyz|can't retreat/i);
+  E.endTurn(st, "player");
+  assert.equal(p.active.status, null, "paralysis wore off after the player's turn");
+
+  // Status clears when a Pokémon leaves the Active spot (retreat).
+  st.turn = 9; st.activePlayer = "player"; st.phase = "main"; st.noAttack = false;
+  const poisoned = inst("fire-charmander", { uid: "pa4", attached: [energy("fire", "f3")], status: { kind: "poison" } });
+  p.active = poisoned; p.bench = [inst("fire-vulpix", { uid: "pb2" })]; p.retreatedThisTurn = false;
+  E.retreat(st, "player", 0);
+  assert.equal(poisoned.status, null, "condition cleared on leaving Active");
+  assert.equal(p.active.card.id, "fire-vulpix");
+
+  // Confusion: forced tails deals 30 to self and ends the turn.
+  E.setRng(() => 0.9); // always tails
+  st.turn = 11; st.activePlayer = "player"; st.phase = "main"; st.noAttack = false;
+  const conf = inst("fire-charmander", { uid: "pa5", attached: [energy("fire", "f4")], status: { kind: "confuse" } });
+  p.active = conf; a.active = inst("water-squirtle", { uid: "aa2" });
+  E.attack(st, "player", 0);
+  assert.equal(conf.damage, 30, "confusion tails deals 30 self-damage");
+});
+
 test("200-game self-play: conservation holds every ply, all terminate", () => {
   const decks = STARTER_DECKS.map((d) => d.cards);
   let games = 0, longest = 0;
@@ -185,7 +228,7 @@ function greedyTurn(st, side) {
     const hi = s.hand.findIndex((c) => E.canEvolve(st, side, c, i));
     if (hi >= 0) { try { E.evolve(st, side, hi, i.uid); } catch {} }
   }
-  const atks = st.noAttack || !s.active ? [] : E.affordableAttacks(s.active).map((a) => s.active.card.attacks.indexOf(a));
+  const atks = st.noAttack || !s.active || !E.canAct(s.active) ? [] : E.affordableAttacks(s.active).map((a) => s.active.card.attacks.indexOf(a));
   if (atks.length) E.attack(st, side, atks[atks.length - 1]);
   else if (!st.winner) E.endTurn(st, side);
 }

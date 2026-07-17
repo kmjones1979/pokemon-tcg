@@ -3,7 +3,7 @@
 // Randomness goes through effects.js's module-level RNG (setRng for tests).
 
 import { cardById, isBasic, isPokemon, isEnergy } from "./catalog.js";
-import { canPayCost, applyCardEffect, shuffle, setRng } from "./effects.js";
+import { canPayCost, applyCardEffect, shuffle, setRng, flipCoin } from "./effects.js";
 
 export { setRng };
 
@@ -108,6 +108,7 @@ function makeApi(state, sideKey, ctx) {
     damageInst: (inst, amount) => dealDamage(state, owner(inst), inst, amount, opponentOf(owner(inst))),
     discardEnergyFromInst: (inst, amount) => discardEnergyFromInst(state, owner(inst), inst, amount),
     switchActive: (sd, benchIndex) => doSwitch(state, sd, benchIndex),
+    setStatus: (inst, kind) => { if (inst) inst.status = { kind }; },
   };
 }
 
@@ -158,6 +159,7 @@ function doSwitch(state, sideKey, benchIndex) {
       (arr[n].card.hp - arr[n].damage) > (arr[best].card.hp - arr[best].damage) ? n : best, 0);
   }
   const incoming = s.bench.splice(idx, 1)[0];
+  s.active.status = null; // Special Conditions clear when a Pokémon leaves the Active spot
   s.bench.push(s.active);
   s.active = incoming;
   return true;
@@ -340,11 +342,18 @@ export function playTrainer(state, sideKey, handIndex, opts = {}) {
   return true;
 }
 
+// A Pokémon can attack/retreat unless it is Asleep or Paralyzed.
+export function canAct(inst) {
+  const k = inst?.status?.kind;
+  return !(k === "sleep" || k === "paralyze");
+}
+
 export function retreat(state, sideKey, benchIndex) {
   assertActive(state, sideKey);
   const s = state.players[sideKey];
   if (s.retreatedThisTurn) throw new Error("Already retreated this turn");
   if (!s.active) throw new Error("No Active Pokémon");
+  if (!canAct(s.active)) throw new Error(`${s.active.card.name} can't retreat (${s.active.status.kind}).`);
   const cost = s.active.card.retreat || 0;
   if (s.active.attached.length < cost) throw new Error("Not enough Energy to retreat");
   if (!s.bench[benchIndex]) throw new Error("No such Benched Pokémon");
@@ -371,9 +380,23 @@ export function attack(state, sideKey, attackIndex) {
   const move = s.active.card.attacks[attackIndex];
   if (!move) throw new Error("No such attack");
   if (!canPayCost(s.active.attached, move.cost)) throw new Error("Not enough Energy for that attack");
+  if (!canAct(s.active)) throw new Error(`${s.active.card.name} is ${s.active.status.kind} and can't attack.`);
 
   const ctx = { side: sideKey, attacker: s.active, defender: o.active, attackName: move.name };
   const api = makeApi(state, sideKey, ctx);
+
+  // Confusion: flip before attacking. Tails hurts the confused Pokémon and the
+  // attack fails, but the turn still ends.
+  if (s.active.status?.kind === "confuse") {
+    if (flipCoin() === "tails") {
+      log(state, `${s.active.card.name} is confused — it hurt itself!`);
+      dealDamage(state, sideKey, s.active, 30, opponentOf(sideKey));
+      checkWinner(state);
+      endTurn(state, sideKey);
+      return true;
+    }
+    log(state, `${s.active.card.name} pushed through its confusion.`);
+  }
 
   // A damage-modifier effect is read BEFORE dealing damage (and must not run
   // again afterwards); every other effect is an after-effect run once post-KO.
@@ -401,9 +424,32 @@ export function attack(state, sideKey, attackIndex) {
   return true;
 }
 
+// Pokémon Checkup, run between turns: Poison and Burn damage the Active,
+// Sleep/Burn may end on a coin flip, and Paralysis wears off the ending
+// player's Active (so it lasts through exactly one of their turns).
+function checkup(state, endingSide) {
+  for (const side of ["player", "ai"]) {
+    const a = state.players[side].active;
+    if (!a || !a.status) continue;
+    const k = a.status.kind;
+    if (k === "poison") { log(state, `${a.card.name} is hurt by poison.`); dealDamage(state, side, a, 10, opponentOf(side)); }
+    else if (k === "burn") {
+      log(state, `${a.card.name} is hurt by its burn.`);
+      dealDamage(state, side, a, 20, opponentOf(side));
+      if (a.status && flipCoin() === "heads") { a.status = null; log(state, `${a.card.name}'s burn healed.`); }
+    } else if (k === "sleep") {
+      if (flipCoin() === "heads") { a.status = null; log(state, `${a.card.name} woke up.`); }
+    }
+  }
+  const ea = state.players[endingSide].active;
+  if (ea && ea.status?.kind === "paralyze") { ea.status = null; log(state, `${ea.card.name} is no longer paralyzed.`); }
+}
+
 export function endTurn(state, sideKey) {
   if (state.winner) return;
   if (state.activePlayer !== sideKey) return;
+  checkup(state, sideKey);
+  if (checkWinner(state)) return;
   beginTurn(state, opponentOf(sideKey));
 }
 

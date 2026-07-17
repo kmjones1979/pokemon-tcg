@@ -27,7 +27,7 @@ export function estimateDamage(state, attacker, move, defender) {
 function bestAttackIndex(state, side) {
   const s = state.players[side];
   const def = state.players[engine.opponentOf(side)].active;
-  if (!s.active) return -1;
+  if (!s.active || !engine.canAct(s.active)) return -1; // Asleep/Paralyzed can't attack
   const affordable = engine.affordableAttacks(s.active);
   let bestI = -1, bestD = -1;
   s.active.card.attacks.forEach((move, i) => {
