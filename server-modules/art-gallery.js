@@ -206,7 +206,7 @@ const grid=document.getElementById('grid'),filters=document.getElementById('filt
 const lb=document.getElementById('lightbox');
 let cur=-1,view=CARDS.slice();
 const FILTERS=[['all','All'],['mega','Mega EX'],['guest','Guest Artists'],['ultra','Ultra'],['rare','Rare'],
- ['fire','Fire'],['water','Water'],['grass','Grass'],['lightning','Lightning'],['psychic','Psychic'],['fighting','Fighting'],['darkness','Darkness'],['metal','Metal'],['colorless','Colorless']];
+ ['fire','Fire'],['water','Water'],['grass','Grass'],['lightning','Lightning'],['psychic','Psychic'],['fighting','Fighting'],['darkness','Darkness'],['metal','Metal'],['dragon','Dragon'],['fairy','Fairy'],['colorless','Colorless']];
 const ARTISTS=[...new Set(CARDS.filter(c=>c.illus).map(c=>c.illus))].sort();
 let active='all';
 function match(c){
