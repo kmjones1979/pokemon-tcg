@@ -194,13 +194,56 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     if (inst === s.active) { mode = "attack"; return render(); }
   }
 
-  function doAttack(i) {
-    try { engine.attack(state, "player", i); } catch (err) { flash(err.message); return; }
+  async function doAttack(i) {
+    const o = state.players.ai;
+    const defUid = o.active?.uid;
+    const atkEl = document.querySelector(".tcg-active-player .tcg-card[data-uid]");
+    const defEl = document.querySelector(".tcg-active-ai .tcg-card[data-uid]");
+    let err = null;
+    try { engine.attack(state, "player", i); } catch (e) { err = e; }
+    if (err) return flash(err.message);
     clearSel();
+    const ko = !o.active || o.active.uid !== defUid;
+    const dmg = lastDamageFromLog();
+    await animateAttack(atkEl, defEl, "up", ko ? "KO!" : (dmg != null ? `−${dmg}` : null), ko);
     afterPlayerAction();
   }
 
   function flash(msg) { message = msg; render(); }
+
+  // ---- combat animation -------------------------------------------------
+
+  function lastDamageFromLog() {
+    for (let i = state.log.length - 1; i >= Math.max(0, state.log.length - 5); i--) {
+      const m = /for (\d+)/.exec(state.log[i].text || "");
+      if (m) return Number(m[1]);
+    }
+    return null;
+  }
+
+  function floatDamage(el, text, ko) {
+    if (!el || !text) return;
+    const r = el.getBoundingClientRect();
+    const d = document.createElement("div");
+    d.className = `tcg-dmg-float${ko ? " ko" : ""}`;
+    d.textContent = text;
+    d.style.left = `${r.left + r.width / 2}px`;
+    d.style.top = `${r.top + r.height / 2}px`;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 1000);
+  }
+
+  // Lunge the attacker toward the defender, shake + flash the defender, and
+  // float the damage. Runs on the pre-render DOM, so the elements are the ones
+  // currently on screen; the next render() then reflects the new state.
+  function animateAttack(atkEl, defEl, dir, floatText, ko) {
+    return new Promise((resolve) => {
+      if (!atkEl || !defEl) return resolve();
+      atkEl.classList.add(dir === "up" ? "tcg-lunge-up" : "tcg-lunge-down");
+      setTimeout(() => { defEl.classList.add("tcg-hit"); floatDamage(defEl, floatText, ko); }, 170);
+      setTimeout(resolve, 620);
+    });
+  }
 
   // ---- turn handoff -----------------------------------------------------
 
@@ -224,8 +267,18 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     while (state.activePlayer === "ai" && !state.winner && guard++ < 3) {
       // Delay only WHILE it's still the AI's turn. Once the AI's final action
       // hands control back to the player, render immediately with no trailing
-      // delay so the player's turn is live the instant it begins.
-      await aiTakeTurn(state, "ai", async () => { render(); if (state.activePlayer === "ai") await delay(720); });
+      // delay so the player's turn is live the instant it begins. On an attack,
+      // animate the AI's strike on the current (pre-render) DOM first.
+      await aiTakeTurn(state, "ai", async ({ text } = {}) => {
+        if (text === "attacks") {
+          const atkEl = document.querySelector(".tcg-active-ai .tcg-card[data-uid]");
+          const defEl = document.querySelector(".tcg-active-player .tcg-card[data-uid]");
+          const dmg = lastDamageFromLog();
+          await animateAttack(atkEl, defEl, "down", dmg != null ? `−${dmg}` : null, false);
+        }
+        render();
+        if (state.activePlayer === "ai") await delay(620);
+      });
     }
     aiRunning = false;
     if (state.winner) return finish();
