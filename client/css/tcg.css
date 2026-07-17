@@ -633,6 +633,31 @@ body.tcg-mode #site-footer { display: none; }
   .tcg-season-feat { justify-content: center; }
 }
 
+/* ---- online lobby ---- */
+.tcg-lobby { max-width: 560px; margin: 0 auto; }
+.tcg-lobby-decks { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 14px 0; }
+.tcg-lobby-deck {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 10px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255, 255, 255, 0.12); color: #cdd0e6; font-size: 13px;
+}
+.tcg-lobby-deck svg { width: 15px; height: 15px; }
+.tcg-lobby-deck.sel { border-color: var(--type); background: color-mix(in srgb, var(--type) 22%, transparent); color: #fff; box-shadow: 0 0 12px color-mix(in srgb, var(--type) 40%, transparent); }
+.tcg-lobby-actions { display: flex; flex-direction: column; gap: 10px; align-items: center; margin: 6px auto 12px; max-width: 320px; }
+.tcg-lobby-actions .tcg-btn { width: 100%; }
+.tcg-lobby-join { display: flex; gap: 8px; width: 100%; }
+.tcg-lobby-code {
+  flex: 1; text-align: center; letter-spacing: 4px; font-weight: 800; font-size: 18px; text-transform: uppercase;
+  padding: 8px; border-radius: 10px; border: 1.5px solid rgba(255, 255, 255, 0.16); background: rgba(0, 0, 0, 0.35); color: #fff;
+}
+.tcg-lobby-join .tcg-btn { width: auto; padding: 8px 18px; }
+.tcg-lobby-status { text-align: center; min-height: 22px; color: #c7cbe6; font-size: 14px; margin: 6px 0; }
+.tcg-roomcode { letter-spacing: 3px; color: #ffd76b; font-size: 18px; }
+.tcg-spin {
+  display: inline-block; width: 13px; height: 13px; margin-right: 8px; vertical-align: -2px;
+  border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: #fff; border-radius: 50%; animation: tcgSpin 0.7s linear infinite;
+}
+@keyframes tcgSpin { to { transform: rotate(360deg); } }
+
 .tcg-shelf { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
 .tcg-shelf .tcg-btn svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 2px; }
 .tcg-pack-cta { animation: tcgUltraGlow 2s ease-in-out infinite; }

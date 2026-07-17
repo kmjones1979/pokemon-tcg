@@ -14,6 +14,7 @@ const auth = require("./server-modules/auth");
 const collection = require("./server-modules/collection");
 const multiplayer = require("./server-modules/multiplayer");
 const multiplayerHttp = require("./server-modules/multiplayer-http");
+const multiplayerTcg = require("./server-modules/multiplayer-tcg");
 const rewards = require("./server-modules/rewards");
 const achievements = require("./server-modules/achievements");
 const dailyStreak = require("./server-modules/daily-streak");
@@ -312,6 +313,10 @@ app.get("/api/pokedex/all", async (_req, res) => {
 // shared links work for anyone, signed-in or not. Lives next to the other
 // public Pokédex routes since it shares the same data source.
 landingPages.mount(app, ensurePokedex);
+
+// TCG card-game multiplayer. Self-contained (its own engine + client-side
+// collection), so it mounts regardless of Supabase — guests can play PvP.
+multiplayerTcg.mount(app);
 
 app.get("/api/pokedex/search", async (req, res) => {
   await ensurePokedex();

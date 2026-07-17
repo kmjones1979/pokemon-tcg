@@ -33,6 +33,10 @@
 
 const REDIS_URL = process.env.REDIS_URL || process.env.KV_URL;
 const QUEUE_KEY = "ptcg:queue";
+// The TCG card-game mode has its own matchmaking namespace so its players never
+// pair with the main battler's queue (different engine, different match shape).
+const TCG_QUEUE_KEY = "ptcg:tcgqueue";
+const TCG_PRIVATE_KEY = (code) => `ptcg:tcgpriv:${code}`;
 const ROOM_KEY = (id) => `ptcg:room:${id}`;
 const ROOM_LOCK_KEY = (id) => `ptcg:room:${id}:lock`;
 const SOCKET_KEY = (id) => `ptcg:socket:${id}`;
@@ -61,10 +65,12 @@ function client() {
 // --- In-memory fallback (when no REDIS_URL) -------------------------------
 const _mem = {
   queue: [],
+  tcgQueue: [],
   rooms: new Map(),
   sockets: new Map(),
   players: new Map(),
   privateRooms: new Map(),
+  tcgPrivateRooms: new Map(),
   kv: new Map(),       // generic value + expiry, used by rewards offers
 };
 
@@ -179,6 +185,52 @@ async function queueLength() {
   const r = client();
   if (r) return r.llen(QUEUE_KEY);
   return _mem.queue.length;
+}
+
+// --- TCG queue (separate matchmaking pool for the card-game mode) ----------
+async function tcgQueuePush(seat) {
+  const r = client();
+  if (r) return r.rpush(TCG_QUEUE_KEY, JSON.stringify(seat));
+  _mem.tcgQueue.push(seat);
+}
+async function tcgQueuePopFifo() {
+  const r = client();
+  if (r) { const v = await r.lpop(TCG_QUEUE_KEY); return v ? JSON.parse(v) : null; }
+  return _mem.tcgQueue.shift() || null;
+}
+async function tcgQueueRemove(id) {
+  const matches = (s) => { try { const v = JSON.parse(s); return v.playerId === id; } catch { return false; } };
+  const r = client();
+  if (r) {
+    const all = await r.lrange(TCG_QUEUE_KEY, 0, -1);
+    const keep = all.filter((s) => !matches(s));
+    const pipeline = r.multi().del(TCG_QUEUE_KEY);
+    for (const s of keep) pipeline.rpush(TCG_QUEUE_KEY, s);
+    await pipeline.exec();
+    return;
+  }
+  const i = _mem.tcgQueue.findIndex((s) => s.playerId === id);
+  if (i >= 0) _mem.tcgQueue.splice(i, 1);
+}
+
+// --- TCG private rooms -----------------------------------------------------
+async function tcgPrivateRoomSet(code, seat) {
+  const r = client();
+  if (r) return r.set(TCG_PRIVATE_KEY(code), JSON.stringify(seat), "EX", PRIVATE_TTL_SEC);
+  _mem.tcgPrivateRooms.set(code, seat);
+}
+async function tcgPrivateRoomTake(code) {
+  const r = client();
+  if (r) {
+    const v = await r.get(TCG_PRIVATE_KEY(code));
+    if (!v) return null;
+    await r.del(TCG_PRIVATE_KEY(code));
+    return JSON.parse(v);
+  }
+  const seat = _mem.tcgPrivateRooms.get(code);
+  if (!seat) return null;
+  _mem.tcgPrivateRooms.delete(code);
+  return seat;
 }
 
 // --- Rooms ---------------------------------------------------------------
@@ -322,6 +374,8 @@ function makeSocketIoAdapter(io) {
 module.exports = {
   isRedis,
   queuePush, queuePopFifo, queueRemove, queueLength,
+  tcgQueuePush, tcgQueuePopFifo, tcgQueueRemove,
+  tcgPrivateRoomSet, tcgPrivateRoomTake,
   roomSet, roomGet, roomDelete, roomExists, roomWithLock,
   socketBind, socketRoom, socketUnbind,
   playerBind, playerLastRoom, playerUnbind,

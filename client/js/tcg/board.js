@@ -12,6 +12,7 @@ import * as collection from "./collection.js";
 import { openPack } from "./pack-open.js";
 import { cardById, POKEMON, TRAINERS } from "./catalog.js";
 import * as seasons from "./seasons.js";
+import * as net from "./net.js";
 
 const ART = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`;
 const SPRITE = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`;
@@ -110,6 +111,11 @@ export function openTcgMode({ onExit = () => {} } = {}) {
     const shelf = document.createElement("div");
     shelf.className = "tcg-shelf";
     const packs = collection.getPacks();
+    const onlineBtn = document.createElement("button");
+    onlineBtn.className = "tcg-btn primary";
+    onlineBtn.innerHTML = `⚔️ Play Online`;
+    onlineBtn.onclick = renderLobby;
+    shelf.appendChild(onlineBtn);
     const binderBtn = document.createElement("button");
     binderBtn.className = "tcg-btn";
     binderBtn.innerHTML = `🎴 Binder · ${collection.uniqueCards()}/${POKEMON.length + TRAINERS.length}`;
@@ -173,6 +179,107 @@ export function openTcgMode({ onExit = () => {} } = {}) {
     arena.appendChild(wrap);
   }
 
+  // Online lobby: pick a deck, then Quick Match / Host / Join a friend. On
+  // pairing, hand off to a server-authoritative match (startTcgMatch + net).
+  function renderLobby() {
+    enter();
+    net.disconnect(); // clear any stale listeners/polls from a prior visit
+    arena.innerHTML = "";
+    let deckId = STARTER_DECKS[0].id;
+    const displayName = (localStorage.getItem("displayName") || "Trainer").slice(0, 20);
+    const unsub = [];
+    const cleanup = () => { while (unsub.length) unsub.pop()(); };
+
+    const wrap = document.createElement("div");
+    wrap.className = "tcg-picker tcg-lobby";
+    wrap.innerHTML = `
+      <div class="tcg-picker-head">
+        <h2 class="tcg-picker-title">Play Online</h2>
+        <div class="tcg-picker-sub">Battle a friend with a room code, or Quick Match a random trainer.</div>
+      </div>`;
+
+    const deckRow = document.createElement("div");
+    deckRow.className = "tcg-lobby-decks";
+    STARTER_DECKS.forEach((d, i) => {
+      const chip = document.createElement("button");
+      chip.className = `tcg-lobby-deck type-${d.type}${i === 0 ? " sel" : ""}`;
+      chip.style.setProperty("--type", TCG_COLORS[d.type]);
+      chip.innerHTML = `${energyBadge(d.type, "pip-cost")}<b>${d.name}</b>`;
+      chip.onclick = () => {
+        deckId = d.id;
+        deckRow.querySelectorAll(".tcg-lobby-deck").forEach((c) => c.classList.remove("sel"));
+        chip.classList.add("sel");
+      };
+      deckRow.appendChild(chip);
+    });
+    wrap.appendChild(deckRow);
+
+    const status = document.createElement("div");
+    status.className = "tcg-lobby-status";
+    const setStatus = (msg, spin = false) => { status.innerHTML = `${spin ? '<span class="tcg-spin"></span>' : ""}${msg}`; };
+
+    const actions = document.createElement("div");
+    actions.className = "tcg-lobby-actions";
+
+    const quickBtn = document.createElement("button");
+    quickBtn.className = "tcg-btn primary";
+    quickBtn.innerHTML = "⚡ Quick Match";
+    quickBtn.onclick = () => { setStatus("Finding an opponent…", true); disableAll(); net.findMatch({ deckId, displayName }); };
+
+    const hostBtn = document.createElement("button");
+    hostBtn.className = "tcg-btn";
+    hostBtn.textContent = "🏠 Host a Game";
+    hostBtn.onclick = async () => {
+      disableAll();
+      setStatus("Creating room…", true);
+      const code = await net.createRoom({ deckId, displayName });
+      if (code) setStatus(`Room code: <b class="tcg-roomcode">${code}</b> — share it, waiting for your friend…`, true);
+    };
+
+    const joinWrap = document.createElement("div");
+    joinWrap.className = "tcg-lobby-join";
+    const codeInput = document.createElement("input");
+    codeInput.className = "tcg-lobby-code";
+    codeInput.placeholder = "CODE";
+    codeInput.maxLength = 4;
+    codeInput.oninput = () => { codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, ""); };
+    const joinBtn = document.createElement("button");
+    joinBtn.className = "tcg-btn";
+    joinBtn.textContent = "Join";
+    joinBtn.onclick = async () => {
+      const code = codeInput.value.trim();
+      if (code.length < 4) return setStatus("Enter the 4-character room code.");
+      disableAll();
+      setStatus("Joining…", true);
+      const ok = await net.joinRoom(code, { deckId, displayName });
+      if (!ok) enableAll();
+    };
+    joinWrap.append(codeInput, joinBtn);
+
+    actions.append(quickBtn, hostBtn, joinWrap);
+    wrap.appendChild(actions);
+    wrap.appendChild(status);
+
+    const back = document.createElement("button");
+    back.className = "tcg-btn ghost tcg-picker-exit";
+    back.textContent = "← Back";
+    back.onclick = () => { cleanup(); net.cancelMatch(); net.disconnect(); renderPicker(); };
+    wrap.appendChild(back);
+    arena.appendChild(wrap);
+
+    function disableAll() { [quickBtn, hostBtn, joinBtn, codeInput].forEach((b) => (b.disabled = true)); }
+    function enableAll() { [quickBtn, hostBtn, joinBtn, codeInput].forEach((b) => (b.disabled = false)); }
+
+    unsub.push(net.onError((msg) => { setStatus(`⚠ ${msg}`); enableAll(); }));
+    unsub.push(net.onMatchFound((view) => {
+      cleanup();
+      startTcgMatch({
+        net, initialView: view, playerName: displayName,
+        onExit: (again) => { net.disconnect(); if (again) renderLobby(); else leave(); },
+      });
+    }));
+  }
+
   function chooseDeck(playerDeck) {
     const others = STARTER_DECKS.filter((d) => d.id !== playerDeck.id);
     const aiDeck = others[Math.floor(Math.random() * others.length)];
@@ -189,7 +296,7 @@ const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const $ = (sel, root = document) => root.querySelector(sel);
 const eln = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
 
-export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName = "Rival", onExit = () => {} }) {
+export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName = "Rival", onExit = () => {}, net = null, initialView = null }) {
   const arena = document.getElementById("arena");
   const menu = document.getElementById("menu");
   menu?.classList.add("hidden");
@@ -197,9 +304,18 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   document.body.classList.add("in-arena");
   document.body.classList.add("tcg-mode");
 
-  const state = engine.createTcgGame({
-    playerDeckIds: playerDeck.cards, aiDeckIds: aiDeck.cards, playerName, aiName,
-  });
+  // In multiplayer, the server is authoritative: `state` is the latest scrubbed
+  // view (reassigned as views arrive) and there is no local AI. Single-player
+  // keeps the pure local engine + AI exactly as before.
+  const isNet = !!net;
+  let state = isNet
+    ? initialView
+    : engine.createTcgGame({ playerDeckIds: playerDeck.cards, aiDeckIds: aiDeck.cards, playerName, aiName });
+
+  if (isNet) {
+    net.onState((v) => { state = v; if (!v.winner) render(); else finish(); });
+    net.onGameOver((v) => { state = v; finish(); });
+  }
 
   // UI selection state.
   let mode = "idle";            // idle | attach | evolve | heal | retreat | attack
@@ -245,10 +361,12 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
       case "end-turn": return endPlayerTurn();
       case "cancel": clearSel(); return render();
       case "play-basic": {
+        if (isNet) return netMove(net.playBasic(selHand));
         try { engine.playBasic(state, "player", selHand); } catch (err) { flash(err.message); }
         clearSel(); return render();
       }
       case "play-trainer": {
+        if (isNet) return netMove(net.playTrainer(selHand));
         try { engine.playTrainer(state, "player", selHand); } catch (err) { flash(err.message); }
         clearSel(); return afterPlayerAction();
       }
@@ -287,23 +405,32 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     // On success clear the selection; on failure KEEP the error visible (don't
     // clearSel, which would wipe the message and make the tap look inert).
     const attempt = (fn) => { try { fn(); clearSel(); } catch (err) { message = err.message; } render(); };
-    if (mode === "attach") return attempt(() => engine.attachEnergy(state, "player", selHand, uid));
-    if (mode === "evolve") return attempt(() => engine.evolve(state, "player", selHand, uid));
-    if (mode === "heal") return attempt(() => engine.playTrainer(state, "player", selHand, { targetUid: uid }));
+    if (mode === "attach") return isNet ? netMove(net.attachEnergy(selHand, uid)) : attempt(() => engine.attachEnergy(state, "player", selHand, uid));
+    if (mode === "evolve") return isNet ? netMove(net.evolve(selHand, uid)) : attempt(() => engine.evolve(state, "player", selHand, uid));
+    if (mode === "heal") return isNet ? netMove(net.playTrainer(selHand, uid)) : attempt(() => engine.playTrainer(state, "player", selHand, { targetUid: uid }));
     if (mode === "retreat") {
       const benchIdx = s.bench.indexOf(inst);
       if (benchIdx < 0) { message = "Pick a Benched Pokémon."; return render(); }
-      return attempt(() => engine.retreat(state, "player", benchIdx));
+      return isNet ? netMove(net.retreat(benchIdx)) : attempt(() => engine.retreat(state, "player", benchIdx));
     }
     // idle: tapping the Active opens its attack panel.
     if (inst === s.active) { mode = "attack"; return render(); }
   }
 
   async function doAttack(i) {
-    const o = state.players.ai;
-    const defUid = o.active?.uid;
+    const defUid = state.players.ai.active?.uid;
     const atkEl = document.querySelector(".tcg-active-player .tcg-card[data-uid]");
     const defEl = document.querySelector(".tcg-active-ai .tcg-card[data-uid]");
+    if (isNet) {
+      const r = await net.attack(i);
+      if (!r.ok) return flash(r.error);
+      clearSel();
+      // net.onState already applied the new view; animate from it.
+      const ko = !state.players.ai.active || state.players.ai.active.uid !== defUid;
+      const dmg = lastDamageFromLog();
+      return animateAttack(atkEl, defEl, "up", ko ? "KO!" : (dmg != null ? `−${dmg}` : null), ko);
+    }
+    const o = state.players.ai;
     let err = null;
     try { engine.attack(state, "player", i); } catch (e) { err = e; }
     if (err) return flash(err.message);
@@ -315,6 +442,15 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   }
 
   function flash(msg) { message = msg; render(); }
+
+  // Send a multiplayer move. The server validates and returns the new view,
+  // which net.onState applies + renders; on rejection we surface the reason.
+  async function netMove(promise) {
+    const r = await promise;
+    if (!r || !r.ok) { message = r?.error || "Move rejected."; return render(); }
+    clearSel();
+    render();
+  }
 
   // ---- combat animation -------------------------------------------------
 
@@ -360,6 +496,7 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
 
   function endPlayerTurn() {
     clearSel();
+    if (isNet) return netMove(net.endTurn());
     engine.endTurn(state, "player");
     if (state.winner) return finish();
     runAiTurn();
@@ -394,6 +531,7 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     // Remove this match's delegated listener so matches don't stack handlers
     // on the reused #arena element across "Play again".
     arena.removeEventListener("click", onBoardClick);
+    if (isNet) { try { if (!state.winner) net.concede(); } catch {} net.disconnect(); }
     // Screen/class cleanup is owned by the caller (openTcgMode) so "Play again"
     // can re-enter the picker without flicker.
     onExit(again);
@@ -600,7 +738,7 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     const yours = state.activePlayer === "player" && !state.winner;
     const status = eln("div", "tcg-status");
     if (state.winner) status.textContent = "";
-    else if (!yours) status.textContent = `${p === state.players.player ? state.players.ai.name : ""} is thinking…`;
+    else if (!yours) status.textContent = isNet ? `Waiting for ${state.players.ai.name}…` : `${p === state.players.player ? state.players.ai.name : ""} is thinking…`;
     else if (message) status.textContent = message;
     else if (mode === "place") status.textContent = "Play this Basic Pokémon to your Bench.";
     else status.textContent = "Your turn — attach Energy, evolve, play cards, then attack.";
@@ -706,5 +844,5 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   // match regardless of how often the board re-renders.
   arena.addEventListener("click", onBoardClick);
   render();
-  if (state.activePlayer === "ai") runAiTurn();
+  if (!isNet && state.activePlayer === "ai") runAiTurn();
 }
