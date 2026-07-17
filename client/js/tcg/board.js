@@ -8,6 +8,9 @@ import { aiTakeTurn } from "./ai.js";
 import { renderTcgCard, renderCardBack, TCG_COLORS } from "./card-face.js";
 import { energyBadge, pileSVG, trainerSVG, trophySVG, pokeballSVG } from "./icons.js";
 import { STARTER_DECKS, deckStats } from "./decks.js";
+import * as collection from "./collection.js";
+import { openPack } from "./pack-open.js";
+import { cardById, POKEMON, TRAINERS } from "./catalog.js";
 
 const ART = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`;
 const SPRITE = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`;
@@ -66,11 +69,71 @@ export function openTcgMode({ onExit = () => {} } = {}) {
       grid.appendChild(c);
     });
     wrap.appendChild(grid);
+
+    // Binder + booster-pack shelf.
+    const shelf = document.createElement("div");
+    shelf.className = "tcg-shelf";
+    const packs = collection.getPacks();
+    const binderBtn = document.createElement("button");
+    binderBtn.className = "tcg-btn";
+    binderBtn.innerHTML = `🎴 Binder · ${collection.uniqueCards()}/${POKEMON.length + TRAINERS.length}`;
+    binderBtn.onclick = renderBinder;
+    const packBtn = document.createElement("button");
+    packBtn.className = `tcg-btn ${packs > 0 ? "primary tcg-pack-cta" : "disabled"}`;
+    packBtn.innerHTML = `${pokeballSVG()} Open Packs · ${packs}`;
+    if (packs > 0) packBtn.onclick = () => openPacksFlow();
+    shelf.appendChild(binderBtn);
+    shelf.appendChild(packBtn);
+    wrap.appendChild(shelf);
+
     const exitBtn = document.createElement("button");
     exitBtn.className = "tcg-btn ghost tcg-picker-exit";
     exitBtn.textContent = "← Back to menu";
     exitBtn.onclick = leave;
     wrap.appendChild(exitBtn);
+    arena.appendChild(wrap);
+  }
+
+  // Open one booster pack, then return to the picker (refreshes counts).
+  function openPacksFlow() {
+    if (!collection.takePack()) return renderPicker();
+    openPack({ onDone: () => renderPicker() });
+  }
+
+  // The Binder: every card, owned ones in colour with a count, unseen ones
+  // dimmed — grouped by type, sorted by rarity.
+  function renderBinder() {
+    enter();
+    arena.innerHTML = "";
+    const owned = collection.getCards();
+    const wrap = document.createElement("div");
+    wrap.className = "tcg-binder";
+    wrap.innerHTML = `<div class="tcg-binder-head">
+        <h2 class="tcg-picker-title">Your Binder</h2>
+        <div class="tcg-picker-sub">${collection.uniqueCards()} of ${POKEMON.length + TRAINERS.length} cards collected · ${collection.totalCards()} total</div>
+      </div>`;
+    const RANK = { ultra: 0, rare: 1, uncommon: 2, common: 3 };
+    const all = [...POKEMON, ...TRAINERS].slice().sort((a, b) => {
+      const ra = RANK[a.rarity] ?? (a.kind === "stadium" ? 1 : a.kind === "supporter" ? 2 : 3);
+      const rb = RANK[b.rarity] ?? (b.kind === "stadium" ? 1 : b.kind === "supporter" ? 2 : 3);
+      return ra - rb;
+    });
+    const grid = document.createElement("div");
+    grid.className = "tcg-binder-grid";
+    for (const card of all) {
+      const n = owned[card.id] || 0;
+      const cell = document.createElement("div");
+      cell.className = `tcg-binder-cell${n ? "" : " unowned"}`;
+      cell.appendChild(renderTcgCard(card, { size: "mini" }));
+      cell.insertAdjacentHTML("beforeend", n ? `<div class="tcg-binder-count">×${n}</div>` : `<div class="tcg-binder-count locked">—</div>`);
+      grid.appendChild(cell);
+    }
+    wrap.appendChild(grid);
+    const back = document.createElement("button");
+    back.className = "tcg-btn ghost tcg-picker-exit";
+    back.textContent = "← Back";
+    back.onclick = renderPicker;
+    wrap.appendChild(back);
     arena.appendChild(wrap);
   }
 
@@ -106,6 +169,7 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   let mode = "idle";            // idle | attach | evolve | heal | retreat | attack
   let selHand = -1;             // selected hand index
   let aiRunning = false;        // re-entrancy guard for the AI turn loop
+  let rewarded = false;         // grant the win reward exactly once
   let message = "";
 
   function clearSel() { mode = "idle"; selHand = -1; message = ""; }
@@ -294,7 +358,10 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     onExit(again);
   }
 
-  function finish() { render(); }
+  function finish() {
+    if (state.winner === "player" && !rewarded) { rewarded = true; collection.addPacks(1); }
+    render();
+  }
 
   // ---- rendering --------------------------------------------------------
 
@@ -536,8 +603,19 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     card.appendChild(eln("div", "tcg-go-sub", won
       ? "You knocked out your rival's team."
       : "Your rival cleared the field. Try another deck!"));
+    if (won) {
+      const reward = eln("div", "tcg-go-reward", `${pokeballSVG()} You earned a Booster Pack!`);
+      card.appendChild(reward);
+    }
     const row = eln("div", "tcg-go-btns");
-    row.appendChild(button("Play again", "again", "primary"));
+    if (won) {
+      const open = button("Open Pack", "open-reward-pack", "primary");
+      open.onclick = () => openPack({ onDone: () => render() });
+      row.appendChild(open);
+      row.appendChild(button("Play again", "again", "ghost"));
+    } else {
+      row.appendChild(button("Play again", "again", "primary"));
+    }
     row.appendChild(button("Exit to menu", "exit", "ghost"));
     card.appendChild(row);
     ov.appendChild(card);

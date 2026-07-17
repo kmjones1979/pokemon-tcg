@@ -184,6 +184,7 @@ const TRAINERS = [
 // card has it; it fills the whole art window (artStyle "art").
 for (const t of TRAINERS) {
   if (GENERATED_ART[t.id]) { t.art = GENERATED_ART[t.id]; t.artStyle = "art"; }
+  t.rarity = t.kind === "stadium" ? "rare" : t.kind === "supporter" ? "uncommon" : "common";
 }
 
 // Rarity tiers (visual treatment, like real TCG): the three deck aces are Ultra

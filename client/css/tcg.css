@@ -541,3 +541,53 @@ body.tcg-mode #site-footer { display: none; }
   22% { opacity: 1; transform: translate(-50%, -70%) scale(1.2); }
   100% { opacity: 0; transform: translate(-50%, -170%) scale(1); }
 }
+
+/* ============ booster packs & binder ============ */
+.tcg-btn.disabled { opacity: 0.45; cursor: not-allowed; }
+.tcg-go-reward { display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; color: #f7d02c; margin: 4px 0 14px; }
+.tcg-go-reward svg { width: 22px; height: 22px; }
+
+.tcg-shelf { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
+.tcg-shelf .tcg-btn svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 2px; }
+.tcg-pack-cta { animation: tcgUltraGlow 2s ease-in-out infinite; }
+
+.tcg-pack-overlay {
+  position: fixed; inset: 0; z-index: 4000; display: grid; place-items: center; padding: 20px; box-sizing: border-box; overflow: auto;
+  background: radial-gradient(circle at 50% 28%, rgba(90, 60, 160, 0.5), rgba(6, 6, 14, 0.92)); backdrop-filter: blur(8px);
+}
+.tcg-pack-stage { text-align: center; max-width: 840px; }
+.tcg-pack-title { font-family: "Press Start 2P", monospace; font-size: 18px; color: #f7d02c; margin-bottom: 6px; line-height: 1.4; }
+.tcg-pack-title.hit-ultra { background: linear-gradient(90deg, #ff5f6d, #ffc371, #47e0a0, #6a9bff, #c86bff); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: tcgTitleShimmer 3s linear infinite; }
+.tcg-pack-title.hit-rare { color: #ffd23f; }
+.tcg-pack-sub { color: #b6b9d2; font-size: 12px; margin-bottom: 16px; }
+.tcg-pack-cards { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px; }
+.tcg-pack-slot { position: relative; width: 146px; min-height: 198px; display: grid; place-items: center; cursor: pointer; animation: packIn 0.4s backwards; animation-delay: calc(var(--i) * 0.07s); }
+.tcg-pack-back { width: 146px; height: 198px; border-radius: 9px; display: grid; place-items: center; background: linear-gradient(150deg, #2f61bd, #16357a); border: 3px solid #e9e6d8; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); transition: transform 0.12s ease; }
+.tcg-pack-slot:hover .tcg-pack-back { transform: translateY(-4px) scale(1.02); }
+.tcg-pack-back .tcg-ball { width: 54%; }
+.tcg-pack-reveal { animation: cardPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.5); }
+@keyframes cardPop { 0% { transform: scale(0.4) rotate(-8deg); opacity: 0; } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes packIn { 0% { transform: translateY(18px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.tcg-pack-slot.rar-rare::before, .tcg-pack-slot.rar-ultra::before {
+  content: ""; position: absolute; inset: -16px; border-radius: 18px; pointer-events: none; z-index: -1;
+  background: radial-gradient(circle, rgba(247, 208, 44, 0.55), transparent 70%); animation: tcgBurst 0.7s ease forwards;
+}
+.tcg-pack-slot.rar-ultra::before {
+  background: conic-gradient(from 0deg, #ff5f6d, #ffc371, #47e0a0, #6a9bff, #c86bff, #ff5f6d); filter: blur(7px);
+  animation: tcgBurst 0.7s ease forwards, spin 6s linear infinite;
+}
+@keyframes tcgBurst { 0% { transform: scale(0.4); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(1); opacity: 0.6; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tcg-pack-rlabel { margin-top: 6px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #b6b9d2; }
+.tcg-pack-slot.rar-rare .tcg-pack-rlabel { color: #ffd23f; }
+.tcg-pack-slot.rar-ultra .tcg-pack-rlabel { color: #d59bff; }
+.tcg-pack-actions { display: flex; gap: 10px; justify-content: center; }
+
+.tcg-binder { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 30px 14px; box-sizing: border-box; overflow-y: auto;
+  background: radial-gradient(circle at 50% 0%, rgba(90, 60, 160, 0.2), transparent 55%), linear-gradient(160deg, #0e0c1a, #171326); }
+.tcg-binder-head { text-align: center; }
+.tcg-binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 10px; width: 100%; max-width: 860px; }
+.tcg-binder-cell { position: relative; display: flex; flex-direction: column; align-items: center; }
+.tcg-binder-cell.unowned { filter: grayscale(1) brightness(0.35); opacity: 0.55; }
+.tcg-binder-count { font-size: 10px; font-weight: 800; color: #d7daff; margin-top: 3px; }
+.tcg-binder-count.locked { color: #6a6e88; }
