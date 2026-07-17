@@ -69,5 +69,6 @@ export default {
   "fighting-mankey": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-mankey.png",
   "fighting-primeape": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fighting-primeape.png",
   "trainer-hyper-potion": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-hyper-potion.png",
-  "trainer-pokemon-catcher": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-pokemon-catcher.png"
+  "trainer-pokemon-catcher": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/trainer-pokemon-catcher.png",
+  "fire-magmar": "https://bphnyyiwwcetryafgjof.supabase.co/storage/v1/object/public/tcg-art/fire-magmar.png"
 };

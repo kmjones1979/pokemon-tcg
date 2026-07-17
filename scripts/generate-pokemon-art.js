@@ -124,7 +124,8 @@ async function main() {
   const cards = POKEMON.filter((c) => (ULTRA_ONLY ? c.rarity === "ultra" : onlyId ? c.id === onlyId : true));
   let i = 0;
   for (const card of cards) {
-    const style = STYLES[i++ % STYLES.length];
+    // Guest-Artist Ultra Rares are always rendered in their signature style.
+    const style = card.guestStyle || STYLES[i++ % STYLES.length];
     if (art[card.id] && !FORCE && !ULTRA_ONLY) { console.log(`[pkmn-art] skip ${card.id}`); continue; }
     console.log(`[pkmn-art] ${card.id} — ${style.split(",")[0]}…`);
     try {

@@ -140,6 +140,96 @@ const POKEMON = [
     attacks: [atk("Scratch", "C", 10), atk("Low Kick", "T", 20)] }),
   mon({ id: "fighting-primeape", name: "Primeape", dex: 57, stage: "stage1", from: "fighting-mankey", type: "fighting", hp: 100, weak: "psychic", retreat: 1,
     attacks: [atk("Rage", "TC", 40), atk("Thrash", "TTC", 70, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+
+  // ===== EXPANSION: more Fire =====
+  mon({ id: "fire-magmar", name: "Magmar", dex: 126, stage: "basic", type: "fire", hp: 70, weak: "water", retreat: 2,
+    attacks: [atk("Fire Punch", "FC", 30), atk("Smokescreen", "FFC", 60, { type: "applyStatusCoin", kind: "burn" }, "Flip a coin. If heads, the Defending Pokémon is now Burned.")] }),
+  mon({ id: "fire-flareon", name: "Flareon", dex: 136, stage: "stage1", from: "colorless-eevee", type: "fire", hp: 110, weak: "water", retreat: 1,
+    attacks: [atk("Flame Tail", "FC", 40), atk("Firestorm", "FFC", 90, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Fire Energy.")] }),
+
+  // ===== EXPANSION: more Water =====
+  mon({ id: "water-poliwag", name: "Poliwag", dex: 60, stage: "basic", type: "water", hp: 50, weak: "lightning", retreat: 1,
+    attacks: [atk("Bubble", "W", 10, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed.")] }),
+  mon({ id: "water-poliwhirl", name: "Poliwhirl", dex: 61, stage: "stage1", from: "water-poliwag", type: "water", hp: 90, weak: "lightning", retreat: 1,
+    attacks: [atk("Doubleslap", "WC", 30, { type: "coinFlipBonus", damage: 10 }, "Flip a coin. If heads, +10 damage."), atk("Water Gun", "WWC", 50)] }),
+  mon({ id: "water-poliwrath", name: "Poliwrath", dex: 62, stage: "stage2", from: "water-poliwhirl", type: "water", hp: 150, weak: "lightning", retreat: 3,
+    attacks: [atk("Dynamic Punch", "WCC", 60), atk("Whirlpool", "WWCC", 100, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Water Energy.")] }),
+  mon({ id: "water-seel", name: "Seel", dex: 86, stage: "basic", type: "water", hp: 70, weak: "lightning", retreat: 1,
+    attacks: [atk("Headbutt", "WC", 20)] }),
+  mon({ id: "water-dewgong", name: "Dewgong", dex: 87, stage: "stage1", from: "water-seel", type: "water", hp: 110, weak: "lightning", retreat: 2,
+    attacks: [atk("Aurora Beam", "WC", 40), atk("Ice Beam", "WWC", 70, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed.")] }),
+  mon({ id: "water-vaporeon", name: "Vaporeon", dex: 134, stage: "stage1", from: "colorless-eevee", type: "water", hp: 110, weak: "lightning", retreat: 1,
+    attacks: [atk("Aqua Jet", "WC", 40), atk("Hydro Pump", "WWC", 60, { type: "plusPerEnergy", per: 20, energyType: "water", ignore: 2 }, "+20 for each extra Water Energy attached.")] }),
+  mon({ id: "water-lapras", name: "Lapras", dex: 131, stage: "basic", type: "water", hp: 130, weak: "lightning", retreat: 3,
+    attacks: [atk("Water Gun", "WC", 30), atk("Blizzard", "WWCC", 100, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed.")] }),
+
+  // ===== EXPANSION: more Grass =====
+  mon({ id: "grass-exeggcute", name: "Exeggcute", dex: 102, stage: "basic", type: "grass", hp: 50, weak: "fire", retreat: 1,
+    attacks: [atk("Hypnosis", "P", 10, { type: "applyStatus", kind: "sleep" }, "The Defending Pokémon is now Asleep.")] }),
+  mon({ id: "grass-exeggutor", name: "Exeggutor", dex: 103, stage: "stage1", from: "grass-exeggcute", type: "grass", hp: 130, weak: "fire", retreat: 3,
+    attacks: [atk("Stomp", "GCC", 40, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Egg Bomb", "GGCC", 90)] }),
+  mon({ id: "grass-tangela", name: "Tangela", dex: 114, stage: "basic", type: "grass", hp: 80, weak: "fire", retreat: 2,
+    attacks: [atk("Bind", "GC", 20, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed."), atk("Vine Whip", "GGC", 50)] }),
+  mon({ id: "grass-scyther", name: "Scyther", dex: 123, stage: "basic", type: "grass", hp: 90, weak: "fire", retreat: 0,
+    attacks: [atk("Quick Slash", "GC", 30), atk("Slash", "GCC", 60)] }),
+
+  // ===== EXPANSION: more Lightning =====
+  mon({ id: "lightning-jolteon", name: "Jolteon", dex: 135, stage: "stage1", from: "colorless-eevee", type: "lightning", hp: 100, weak: "fighting", retreat: 0,
+    attacks: [atk("Pin Missile", "LC", 20, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Thunder", "LLC", 90, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Lightning Energy.")] }),
+  mon({ id: "lightning-zapdos", name: "Zapdos", dex: 145, stage: "basic", type: "lightning", hp: 130, weak: "fighting", retreat: 2,
+    attacks: [atk("Thunder Spear", "LL", 50), atk("Thunderstorm", "LLLC", 120, { type: "recoil", amount: 30 }, "This Pokémon does 30 damage to itself.")] }),
+
+  // ===== EXPANSION: more Psychic =====
+  mon({ id: "psychic-slowpoke", name: "Slowpoke", dex: 79, stage: "basic", type: "psychic", hp: 70, weak: "psychic", retreat: 1,
+    attacks: [atk("Yawn", "C", 0, { type: "applyStatus", kind: "sleep" }, "The Defending Pokémon is now Asleep."), atk("Headbutt", "PC", 30)] }),
+  mon({ id: "psychic-slowbro", name: "Slowbro", dex: 80, stage: "stage1", from: "psychic-slowpoke", type: "psychic", hp: 120, weak: "psychic", retreat: 2,
+    attacks: [atk("Psyshock", "PC", 40), atk("Psychic", "PPC", 70)] }),
+  mon({ id: "psychic-jynx", name: "Jynx", dex: 124, stage: "basic", type: "psychic", hp: 80, weak: "psychic", retreat: 1,
+    attacks: [atk("Lovely Kiss", "P", 10, { type: "applyStatusCoin", kind: "sleep" }, "Flip a coin. If heads, the Defending Pokémon is now Asleep."), atk("Psywave", "PPC", 50)] }),
+  mon({ id: "psychic-mrmime", name: "Mr. Mime", dex: 122, stage: "basic", type: "psychic", hp: 70, weak: "psychic", retreat: 1,
+    attacks: [atk("Confuse Ray", "PC", 20, { type: "applyStatus", kind: "confuse" }, "The Defending Pokémon is now Confused."), atk("Psybeam", "PPC", 50)] }),
+  mon({ id: "psychic-mewtwo", name: "Mewtwo", dex: 150, stage: "basic", type: "psychic", hp: 140, weak: "psychic", retreat: 2,
+    attacks: [atk("Psychic", "PCC", 50, { type: "plusPerEnergy", per: 10, energyType: "psychic", ignore: 3 }, "+10 for each extra Psychic Energy attached."), atk("Psyburn", "PPPC", 120, { type: "selfDiscardEnergy", amount: 2 }, "Discard 2 Energy attached to this Pokémon.")] }),
+
+  // ===== EXPANSION: more Fighting =====
+  mon({ id: "fighting-hitmonlee", name: "Hitmonlee", dex: 106, stage: "basic", type: "fighting", hp: 90, weak: "psychic", retreat: 2,
+    attacks: [atk("Low Kick", "TC", 30), atk("High Jump Kick", "TTC", 80)] }),
+  mon({ id: "fighting-hitmonchan", name: "Hitmonchan", dex: 107, stage: "basic", type: "fighting", hp: 90, weak: "psychic", retreat: 2,
+    attacks: [atk("Jab", "TC", 30), atk("Special Punch", "TTC", 70)] }),
+  mon({ id: "fighting-onix", name: "Onix", dex: 95, stage: "basic", type: "fighting", hp: 110, weak: "grass", retreat: 3,
+    attacks: [atk("Rock Throw", "TC", 20), atk("Harden", "TT", 0, { type: "healSelf", amount: 20 }, "Heal 20 damage from this Pokémon.")] }),
+  mon({ id: "fighting-cubone", name: "Cubone", dex: 104, stage: "basic", type: "fighting", hp: 60, weak: "grass", retreat: 1,
+    attacks: [atk("Bonemerang", "TC", 30, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "fighting-marowak", name: "Marowak", dex: 105, stage: "stage1", from: "fighting-cubone", type: "fighting", hp: 100, weak: "grass", retreat: 1,
+    attacks: [atk("Bone Club", "TC", 40), atk("Bonemerang", "TTC", 80, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "fighting-rhyhorn", name: "Rhyhorn", dex: 111, stage: "basic", type: "fighting", hp: 90, weak: "grass", retreat: 2,
+    attacks: [atk("Horn Attack", "TC", 30), atk("Stomp", "TTC", 50, { type: "coinFlipBonus", damage: 10 }, "Flip a coin. If heads, +10 damage.")] }),
+  mon({ id: "fighting-rhydon", name: "Rhydon", dex: 112, stage: "stage1", from: "fighting-rhyhorn", type: "fighting", hp: 140, weak: "grass", retreat: 3,
+    attacks: [atk("Horn Drill", "TCC", 60), atk("Earthquake", "TTCC", 100, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
+
+  // ===== EXPANSION: more Colorless =====
+  mon({ id: "colorless-rattata", name: "Rattata", dex: 19, stage: "basic", type: "colorless", hp: 40, weak: "fighting", retreat: 0,
+    attacks: [atk("Bite", "C", 10), atk("Quick Attack", "CC", 20, { type: "coinFlipBonus", damage: 10 }, "Flip a coin. If heads, +10 damage.")] }),
+  mon({ id: "colorless-raticate", name: "Raticate", dex: 20, stage: "stage1", from: "colorless-rattata", type: "colorless", hp: 80, weak: "fighting", retreat: 1,
+    attacks: [atk("Super Fang", "CC", 40), atk("Hyper Fang", "CCC", 60, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "colorless-meowth", name: "Meowth", dex: 52, stage: "basic", type: "colorless", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Scratch", "C", 10), atk("Pay Day", "CC", 20, { type: "draw", count: 1 }, "Draw a card.")] }),
+  mon({ id: "colorless-persian", name: "Persian", dex: 53, stage: "stage1", from: "colorless-meowth", type: "colorless", hp: 90, weak: "fighting", retreat: 0,
+    attacks: [atk("Slash", "CC", 40), atk("Fury Swipes", "CCC", 60, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
+  mon({ id: "colorless-jigglypuff", name: "Jigglypuff", dex: 39, stage: "basic", type: "colorless", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Sing", "C", 0, { type: "applyStatusCoin", kind: "sleep" }, "Flip a coin. If heads, the Defending Pokémon is now Asleep."), atk("Pound", "CC", 20)] }),
+  mon({ id: "colorless-wigglytuff", name: "Wigglytuff", dex: 40, stage: "stage1", from: "colorless-jigglypuff", type: "colorless", hp: 110, weak: "fighting", retreat: 2,
+    attacks: [atk("Double Slap", "CC", 30, { type: "coinFlipBonus", damage: 10 }, "Flip a coin. If heads, +10 damage."), atk("Do the Wave", "CCC", 70)] }),
+  mon({ id: "colorless-dratini", name: "Dratini", dex: 147, stage: "basic", type: "colorless", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Wrap", "C", 10, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed.")] }),
+  mon({ id: "colorless-dragonair", name: "Dragonair", dex: 148, stage: "stage1", from: "colorless-dratini", type: "colorless", hp: 100, weak: "fighting", retreat: 2,
+    attacks: [atk("Slam", "CC", 30, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Hyper Beam", "CCC", 50)] }),
+  mon({ id: "colorless-dragonite", name: "Dragonite", dex: 149, stage: "stage2", from: "colorless-dragonair", type: "colorless", hp: 160, weak: "fighting", retreat: 2,
+    attacks: [atk("Wing Attack", "CCC", 50), atk("Hyper Beam", "CCCC", 110, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Energy attached to this Pokémon.")] }),
+  mon({ id: "colorless-snorlax", name: "Snorlax", dex: 143, stage: "basic", type: "colorless", hp: 150, weak: "fighting", retreat: 4,
+    attacks: [atk("Body Slam", "CCC", 40, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed."), atk("Heavy Impact", "CCCC", 100)] }),
+  mon({ id: "colorless-tauros", name: "Tauros", dex: 128, stage: "basic", type: "colorless", hp: 90, weak: "fighting", retreat: 1,
+    attacks: [atk("Rampage", "CC", 20, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Take Down", "CCC", 60, { type: "recoil", amount: 20 }, "This Pokémon does 20 damage to itself.")] }),
 ];
 
 // --- Energy ---------------------------------------------------------------
@@ -187,16 +277,51 @@ for (const t of TRAINERS) {
   t.rarity = t.kind === "stadium" ? "rare" : t.kind === "supporter" ? "uncommon" : "common";
 }
 
-// Rarity tiers (visual treatment, like real TCG): the three deck aces are Ultra
-// Rares (rainbow holo), Stage 2s are Rares (holo), Stage 1s Uncommon, Basics
-// Common. Bespoke Pokémon illustrations (generate-pokemon-art.js) fill the card
-// full-bleed as an "Illustration Rare"-style full art.
-const ACES = new Set(["fire-charizard", "water-blastoise", "grass-venusaur", "lightning-raichu", "psychic-alakazam", "psychic-gengar", "fighting-machamp", "fighting-golem"]);
+// Rarity tiers (visual treatment, like real TCG): marquee Pokémon are Ultra
+// Rares (rainbow holo, full-art), Stage 2s + a set of standout Stage 1s are
+// Rares (holo), other Stage 1s Uncommon, Basics Common. Bespoke Pokémon
+// illustrations (generate-pokemon-art.js) fill the card full-bleed as an
+// "Illustration Rare"-style full art.
+const ULTRA = new Set([
+  "fire-charizard", "water-blastoise", "grass-venusaur", "lightning-raichu",
+  "psychic-alakazam", "psychic-gengar", "fighting-machamp", "fighting-golem",
+  // Chase Ultra Rares — iconic evolution-line finishers & fan favourites.
+  "water-gyarados", "fire-arcanine", "grass-vileplume", "colorless-eevee",
+  "lightning-electabuzz", "fighting-primeape",
+  // Legendary / marquee chase cards from the expansion.
+  "psychic-mewtwo", "colorless-dragonite", "colorless-snorlax",
+  "lightning-zapdos", "water-lapras",
+]);
+// Standout Stage 1s / strong Basics promoted to Rare (holo, no full-art).
+const RARE_PLUS = new Set([
+  "fire-ninetales", "fire-rapidash", "water-starmie", "water-golduck",
+  "lightning-magneton", "psychic-hypno", "colorless-pidgeotto", "lightning-electrode",
+  // Expansion promotions.
+  "fire-flareon", "water-vaporeon", "water-dewgong", "lightning-jolteon",
+  "grass-exeggutor", "grass-scyther", "fighting-rhydon", "fighting-marowak",
+  "fighting-hitmonlee", "fighting-hitmonchan", "psychic-slowbro", "colorless-dragonair",
+  "colorless-persian", "colorless-wigglytuff",
+]);
+
+// Guest-Artist Ultra Rares — a celebrated illustrator lends their signature
+// style to a marquee card, credited on the face like real Pokémon TCG guest
+// cards. Each is generated full-art in that style (see generate-pokemon-art.js).
+const GUEST_ARTISTS = {
+  "fire-charizard":   { illus: "Akira Toriyama",   style: "classic Akira Toriyama Dragon Ball manga art — bold confident ink linework, rounded muscular anatomy, cross-hatch shading, retro Shonen Jump colour palette, an explosive ki-blast aura crackling around it" },
+  "water-blastoise":  { illus: "Eiichiro Oda",     style: "Eiichiro Oda One Piece manga style — exaggerated expressive proportions, playful adventurous spirit, bold varied line weights, bright saturated seafaring colour and cartoon dynamism" },
+  "grass-venusaur":   { illus: "Hayao Miyazaki",   style: "Hayao Miyazaki Studio Ghibli hand-painted watercolour anime — lush verdant scenery, soft gouache clouds, gentle painterly sunlight, a wholesome sense of natural wonder" },
+  "psychic-alakazam": { illus: "Roy Lichtenstein", style: "Roy Lichtenstein pop-art comic — thick black outlines, flat primary red/yellow/blue, bold Ben-Day dot halftone shading, graphic comic-panel composition" },
+  "psychic-gengar":   { illus: "Killer Acid",      style: "Killer Acid psychedelic poster art — trippy neon acid colours, melting surreal shapes, swirling hypnotic patterns, glowing eyes, 1960s blacklight counterculture vibe" },
+  "lightning-raichu": { illus: "Osamu Tezuka",     style: "Osamu Tezuka golden-age manga — clean rounded retro linework, big sparkling expressive eyes, mid-century Astro Boy cartoon charm, cheerful vintage ink-and-colour" },
+};
+
 for (const p of POKEMON) {
-  p.rarity = ACES.has(p.id) ? "ultra"
-    : p.stage === "stage2" ? "rare"
+  p.rarity = ULTRA.has(p.id) ? "ultra"
+    : p.stage === "stage2" || RARE_PLUS.has(p.id) ? "rare"
     : p.stage === "stage1" ? "uncommon" : "common";
   if (GENERATED_ART[p.id]) { p.art = GENERATED_ART[p.id]; p.genArt = true; }
+  const guest = GUEST_ARTISTS[p.id];
+  if (guest) { p.illus = guest.illus; p.guestStyle = guest.style; }
 }
 
 // --- Lookup ---------------------------------------------------------------

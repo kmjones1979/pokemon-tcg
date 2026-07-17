@@ -73,6 +73,13 @@ export function renderTcgCard(card, opts = {}) {
     });
     wrap.appendChild(atks);
 
+    // Illustrator credit sits in its own thin strip above the stats footer,
+    // like the fine print on a real card. Guest-Artist Ultras carry a badge.
+    if (card.illus) {
+      wrap.appendChild(el("div", "tcg-illus",
+        `<span class="tcg-illus-badge">Guest Artist</span><span class="tcg-illus-name">Illus. ${card.illus}</span>`));
+    }
+
     const weak = card.weak
       ? `${energyBadge(card.weak, "pip-mini")}<span class="tcg-x2">×2</span>`
       : `<span class="tcg-dash">—</span>`;

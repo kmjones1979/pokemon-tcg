@@ -11,6 +11,7 @@ import { STARTER_DECKS, deckStats } from "./decks.js";
 import * as collection from "./collection.js";
 import { openPack } from "./pack-open.js";
 import { cardById, POKEMON, TRAINERS } from "./catalog.js";
+import * as seasons from "./seasons.js";
 
 const ART = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`;
 const SPRITE = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`;
@@ -29,6 +30,40 @@ export function openTcgMode({ onExit = () => {} } = {}) {
   function leave() {
     document.body.classList.remove("tcg-mode");
     onExit();
+  }
+
+  function seasonBanner() {
+    const s = seasons.currentSeason();
+    const prog = seasons.getProgress();
+    const tier = seasons.tierFor(prog.points);
+    const next = seasons.nextTier(prog.points);
+    const into = prog.points - tier.min;
+    const span = next ? next.min - tier.min : 1;
+    const pct = next ? Math.min(100, Math.round((into / span) * 100)) : 100;
+    const feat = s.featuredUltras.map((id) => {
+      let art = ""; try { art = cardById(id).art; } catch {}
+      return `<span class="tcg-season-ultra" style="background-image:url('${art}')"></span>`;
+    }).join("");
+    const el = document.createElement("div");
+    el.className = `tcg-season type-${s.theme}`;
+    el.style.setProperty("--type", TCG_COLORS[s.theme] || "#888");
+    el.innerHTML = `
+      <div class="tcg-season-main">
+        <div class="tcg-season-top">
+          <span class="tcg-season-emoji">${s.emoji}</span>
+          <span class="tcg-season-label">Season · </span>
+          <span class="tcg-season-name">${s.name}</span>
+          <span class="tcg-season-days">${seasons.daysLeft(s)}d left</span>
+        </div>
+        <div class="tcg-season-blurb">${s.blurb}</div>
+        <div class="tcg-season-ladder">
+          <span class="tcg-season-tier" style="color:${tier.color}">${tier.name}</span>
+          <div class="tcg-season-bar"><div class="tcg-season-fill" style="width:${pct}%"></div></div>
+          <span class="tcg-season-next">${next ? `${prog.points} / ${next.min} SP → ${next.name}` : `${prog.points} SP · MAX RANK`}</span>
+        </div>
+      </div>
+      <div class="tcg-season-feat" title="Featured Ultra Rares this season">${feat}</div>`;
+    return el;
   }
 
   function renderPicker() {
@@ -68,6 +103,7 @@ export function openTcgMode({ onExit = () => {} } = {}) {
       c.onclick = () => chooseDeck(d);
       grid.appendChild(c);
     });
+    wrap.appendChild(seasonBanner());
     wrap.appendChild(grid);
 
     // Binder + booster-pack shelf.
@@ -171,6 +207,7 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   let aiRunning = false;        // re-entrancy guard for the AI turn loop
   let rewarded = false;         // grant the win reward exactly once
   let rewardClaimed = false;    // reward pack opened — don't let it be re-opened
+  let seasonResult = null;      // { points, tier, newTier, rewardPacks } from the season ladder
   let handHidden = false;       // collapse the hand to reveal the bench
   let message = "";
 
@@ -363,7 +400,12 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   }
 
   function finish() {
-    if (state.winner === "player" && !rewarded) { rewarded = true; collection.addPacks(1); }
+    if (state.winner && !rewarded) {
+      rewarded = true;
+      const won = state.winner === "player";
+      if (won) collection.addPacks(1);
+      seasonResult = seasons.recordResult(won);
+    }
     render();
   }
 
@@ -626,6 +668,16 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
       const reward = eln("div", "tcg-go-reward",
         rewardClaimed ? `${pokeballSVG()} Booster added to your binder!` : `${pokeballSVG()} You earned a Booster Pack!`);
       card.appendChild(reward);
+    }
+    if (seasonResult) {
+      const sp = won ? seasons.WIN_SP : seasons.LOSS_SP;
+      const line = eln("div", "tcg-go-season",
+        `<span class="tcg-go-sp">+${sp} SP</span> · ${seasonResult.tier.name} · ${seasonResult.points} this season`);
+      card.appendChild(line);
+      if (seasonResult.newTier) {
+        card.appendChild(eln("div", "tcg-go-rankup",
+          `⭐ Ranked up to ${seasonResult.newTier.name}! +${seasonResult.rewardPacks} booster${seasonResult.rewardPacks > 1 ? "s" : ""}`));
+      }
     }
     const row = eln("div", "tcg-go-btns");
     if (won && !rewardClaimed) {
