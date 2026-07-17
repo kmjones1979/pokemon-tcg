@@ -329,7 +329,9 @@ body.tcg-mode #site-footer { display: none; }
 
 /* ---- hand (fans + overlaps as it grows) ---- */
 .tcg-hand-wrap { margin-top: auto; }
-.tcg-hand-label { text-align: center; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #8a8eaa; padding: 2px 0; }
+.tcg-hand-label { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #8a8eaa; padding: 3px 0 2px; }
+.tcg-hand-toggle { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); color: #cdd0e6; border-radius: 7px; padding: 3px 10px; font-size: 10px; font-weight: 700; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.tcg-hand-toggle:hover { background: rgba(255, 255, 255, 0.16); }
 /* Hand cards keep the standard proportion; a slightly smaller width keeps the
    dock from getting too tall. */
 .tcg-hand .tcg-full { width: 120px; }

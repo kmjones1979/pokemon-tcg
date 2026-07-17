@@ -170,6 +170,8 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
   let selHand = -1;             // selected hand index
   let aiRunning = false;        // re-entrancy guard for the AI turn loop
   let rewarded = false;         // grant the win reward exactly once
+  let rewardClaimed = false;    // reward pack opened — don't let it be re-opened
+  let handHidden = false;       // collapse the hand to reveal the bench
   let message = "";
 
   function clearSel() { mode = "idle"; selHand = -1; message = ""; }
@@ -182,6 +184,8 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     // ended its turn, its final cosmetic render showed "your turn" while the
     // flag was still set for another ~720ms, so the first taps of your turn
     // were silently dropped — which read as "can't attach Energy".
+    // The hand toggle works any time (even on the rival's turn, to peek).
+    if (e.target.closest('[data-action="toggle-hand"]')) { handHidden = !handHidden; return render(); }
     if (state.winner) {
       const go = e.target.closest('[data-action="again"], [data-action="exit"]');
       if (go) return handleAction(go.dataset.action, go.dataset);
@@ -367,8 +371,12 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
 
   function render() {
     const p = state.players.player, a = state.players.ai;
+    // Preserve the board's scroll position across re-renders (each render
+    // rebuilds the board node, which would otherwise reset the view to the top).
+    const prevScroll = arena.querySelector(".tcg-board")?.scrollTop || 0;
     arena.innerHTML = "";
     const board = eln("div", "tcg-board");
+    if (handHidden) board.classList.add("hand-hidden");
     const mat = eln("div", "tcg-mat");
 
     // Left rail: prizes + deck + discard for both players, freeing vertical
@@ -399,6 +407,7 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     // NOTE: the click handler is a single delegated listener on #arena added
     // once in startTcgMatch — NOT re-added per board here.
     arena.appendChild(board);
+    board.scrollTop = prevScroll; // keep the view where the player left it
     if (state.winner) arena.appendChild(renderGameOver());
   }
 
@@ -519,7 +528,15 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
     // of a long scroll; hovering/selecting a card lifts it clear of the stack.
     const n = p.hand.length;
     hand.dataset.size = String(Math.min(n, 14));
-    if (n) wrap.appendChild(eln("div", "tcg-hand-label", `Your hand · ${n}`));
+    // Label row with a Hide/Show toggle so the hand can collapse to reveal the
+    // bench behind it.
+    const label = eln("div", "tcg-hand-label");
+    label.innerHTML = `<span>Your hand · ${n}</span>`;
+    const toggle = eln("button", "tcg-hand-toggle", handHidden ? "▲ Show hand" : "▼ Hide hand");
+    toggle.dataset.action = "toggle-hand";
+    label.appendChild(toggle);
+    wrap.appendChild(label);
+    if (handHidden) { wrap.classList.add("collapsed"); return wrap; }
     p.hand.forEach((card, i) => {
       const c = renderTcgCard(card, { size: "full" });
       c.dataset.zone = "hand"; c.dataset.handIndex = i;
@@ -606,15 +623,23 @@ export function startTcgMatch({ playerDeck, aiDeck, playerName = "You", aiName =
       ? "You knocked out your rival's team."
       : "Your rival cleared the field. Try another deck!"));
     if (won) {
-      const reward = eln("div", "tcg-go-reward", `${pokeballSVG()} You earned a Booster Pack!`);
+      const reward = eln("div", "tcg-go-reward",
+        rewardClaimed ? `${pokeballSVG()} Booster added to your binder!` : `${pokeballSVG()} You earned a Booster Pack!`);
       card.appendChild(reward);
     }
     const row = eln("div", "tcg-go-btns");
-    if (won) {
+    if (won && !rewardClaimed) {
       const open = button("Open Pack", "open-reward-pack", "primary");
-      open.onclick = () => openPack({ onDone: () => render() });
+      open.onclick = () => {
+        if (rewardClaimed) return;
+        rewardClaimed = true;
+        collection.takePack();
+        openPack({ onDone: () => render() });
+      };
       row.appendChild(open);
       row.appendChild(button("Play again", "again", "ghost"));
+    } else if (won) {
+      row.appendChild(button("Play again", "again", "primary"));
     } else {
       row.appendChild(button("Play again", "again", "primary"));
     }
