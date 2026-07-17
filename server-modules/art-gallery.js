@@ -83,6 +83,7 @@ function page(cards, origin, focus) {
   <h1>Art Gallery</h1>
   <p class="sub">Every card in the TCG mode is illustrated with bespoke AI art — Mega&nbsp;EX full-arts, guest-artist Illustration Rares, and a whole Pokédex of styles. Tap any piece to enlarge and share.</p>
   <div class="filters" id="filters"></div>
+  <div class="artistbar" id="artistbar"></div>
 </header>
 <main id="grid" class="grid"></main>
 <footer class="credits">
@@ -144,6 +145,12 @@ h1{font-size:clamp(38px,8vw,76px);font-weight:900;letter-spacing:-1px;line-heigh
 .chip{padding:7px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#cdd0e6;font-size:13px;font-weight:600;cursor:pointer;text-transform:capitalize;transition:.15s}
 .chip:hover{background:rgba(255,255,255,.12)}
 .chip.on{background:#fff;color:#111;border-color:#fff}
+.artistbar{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;align-items:center;margin:14px auto 0;max-width:760px}
+.artistbar .albl{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#8a8daf;margin-right:2px}
+.achip{padding:6px 12px;border-radius:999px;border:1px solid transparent;font-size:12.5px;font-weight:700;cursor:pointer;
+ background:linear-gradient(90deg,rgba(200,107,255,.16),rgba(106,155,255,.16));color:#dcd6ff;transition:.15s}
+.achip:hover{background:linear-gradient(90deg,rgba(200,107,255,.3),rgba(106,155,255,.3))}
+.achip.on{background:linear-gradient(90deg,#c86bff,#6a9bff);color:#fff}
 .grid{position:relative;z-index:1;column-count:4;column-gap:14px;padding:24px clamp(12px,3vw,40px) 40px;max-width:1500px;margin:0 auto}
 @media(max-width:1200px){.grid{column-count:3}}
 @media(max-width:820px){.grid{column-count:2}}
@@ -195,15 +202,23 @@ h1{font-size:clamp(38px,8vw,76px);font-weight:900;letter-spacing:-1px;line-heigh
 `;
 
 const JS = `
-const grid=document.getElementById('grid'),filters=document.getElementById('filters');
+const grid=document.getElementById('grid'),filters=document.getElementById('filters'),artistbar=document.getElementById('artistbar');
 const lb=document.getElementById('lightbox');
 let cur=-1,view=CARDS.slice();
-const typeOf=c=>c.type;
 const FILTERS=[['all','All'],['mega','Mega EX'],['guest','Guest Artists'],['ultra','Ultra'],['rare','Rare'],
  ['fire','Fire'],['water','Water'],['grass','Grass'],['lightning','Lightning'],['psychic','Psychic'],['fighting','Fighting'],['darkness','Darkness'],['metal','Metal'],['colorless','Colorless']];
+const ARTISTS=[...new Set(CARDS.filter(c=>c.illus).map(c=>c.illus))].sort();
 let active='all';
-function match(c){switch(active){case 'all':return true;case 'mega':return c.mega;case 'guest':return !!c.illus;case 'ultra':return c.rarity==='ultra';case 'rare':return c.rarity==='rare';default:return c.type===active;}}
-function renderChips(){filters.innerHTML='';FILTERS.forEach(([k,label])=>{const b=document.createElement('button');b.className='chip'+(k===active?' on':'');b.textContent=label;b.onclick=()=>{active=k;renderChips();renderGrid();};filters.appendChild(b);});}
+function match(c){
+  if(active.slice(0,7)==='artist:')return c.illus===active.slice(7);
+  switch(active){case 'all':return true;case 'mega':return c.mega;case 'guest':return !!c.illus;case 'ultra':return c.rarity==='ultra';case 'rare':return c.rarity==='rare';default:return c.type===active;}
+}
+function setFilter(k){active=k;renderChips();renderGrid();}
+function renderChips(){
+  filters.innerHTML='';FILTERS.forEach(([k,label])=>{const b=document.createElement('button');b.className='chip'+(k===active?' on':'');b.textContent=label;b.onclick=()=>setFilter(k);filters.appendChild(b);});
+  artistbar.innerHTML='<span class="albl">Guest artists</span>';
+  ARTISTS.forEach(name=>{const b=document.createElement('button');b.className='achip'+(active==='artist:'+name?' on':'');b.textContent=name;b.onclick=()=>setFilter('artist:'+name);artistbar.appendChild(b);});
+}
 function tag(c){if(c.mega)return '<span class="tag">MEGA EX</span>';if(c.illus)return '<span class="tag guest">GUEST</span>';if(c.rarity==='ultra')return '<span class="tag ultra">ULTRA</span>';return '';}
 function renderGrid(){view=CARDS.filter(match);grid.innerHTML='';view.forEach((c,i)=>{const t=document.createElement('div');t.className='tile';t.innerHTML=tag(c)+'<img loading="lazy" decoding="async" src="'+(c.thumb||c.art)+'" alt="'+c.name+'"><div class="cap">'+c.name+(c.illus?'<small>Illus. '+c.illus+'</small>':'')+'</div>';t.onclick=()=>open(i);grid.appendChild(t);});}
 function open(i){cur=i;const c=view[i];const img=document.getElementById('lbImg');
