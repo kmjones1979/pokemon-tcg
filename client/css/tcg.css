@@ -215,6 +215,22 @@ body.tcg-mode #site-footer { display: none; }
 .tcg-pokemon.gen-art .tcg-art-frame { background: #1a1712; }
 .tcg-pokemon.gen-art .tcg-art img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; filter: none; }
 
+/* Full-art (Illustration Rare): the illustration fills the whole card and the
+   text is overlaid on scrims for readability. */
+.tcg-pokemon.full-art { padding: 0; }
+.tcg-pokemon.full-art .tcg-art { position: absolute; inset: 0; margin: 0; z-index: 0; }
+.tcg-pokemon.full-art .tcg-art-frame { border: none; border-radius: 0; background: #16130f; }
+.tcg-pokemon.full-art .tcg-card-head { position: relative; z-index: 2; padding: 4px 7px 10px; background: linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent); }
+.tcg-pokemon.full-art .tcg-name { color: #fff; text-shadow: 0 1px 4px #000, 0 0 8px rgba(0, 0, 0, 0.7); }
+.tcg-pokemon.full-art .tcg-stage { color: #f0ead2; text-shadow: 0 1px 3px #000; }
+.tcg-pokemon.full-art .tcg-hp { color: #ff6b6b; text-shadow: 0 1px 4px #000; }
+.tcg-pokemon.full-art .tcg-attacks { position: relative; z-index: 2; margin-top: auto; padding: 14px 5px 2px; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.72) 34%); }
+.tcg-pokemon.full-art .tcg-attack { border-top-color: rgba(255, 255, 255, 0.15); }
+.tcg-pokemon.full-art .tcg-atk-name, .tcg-pokemon.full-art .tcg-atk-dmg { color: #fff; text-shadow: 0 1px 3px #000; }
+.tcg-pokemon.full-art .tcg-card-foot { position: relative; z-index: 2; margin-top: 0; border-top: none; background: rgba(0, 0, 0, 0.6); }
+.tcg-pokemon.full-art .tcg-foot-cell { color: #d6cfb8; }
+.tcg-pokemon.full-art .tcg-mini-foot { position: relative; z-index: 2; color: #fff; text-shadow: 0 1px 3px #000; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.7)); }
+
 /* ---- rarity ---- */
 .tcg-rarity-mark {
   position: absolute; right: 4px; bottom: 3px; z-index: 4;

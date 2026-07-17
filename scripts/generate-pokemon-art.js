@@ -31,7 +31,8 @@ const MODEL = process.env.TCG_ART_MODEL || "gemini-2.5-flash-image";
 const BUCKET = "tcg-art";
 const OUT_JS = path.join(__dirname, "..", "client", "js", "tcg", "tcg-art.js");
 
-// A spread of distinct Pokémon-illustrator styles, rotated across the roster.
+// A wide spread of distinct Pokémon-illustrator styles, rotated across the
+// roster so the set has the variety of cards drawn by many different artists.
 const STYLES = [
   "soft watercolour wash with gentle pastel tones and visible paper texture",
   "bold cel-shaded anime with crisp clean linework and flat vibrant colour",
@@ -45,10 +46,19 @@ const STYLES = [
   "vibrant pop-art with bold outlines and halftone shading",
   "delicate ink-and-brush sumi-e with expressive negative space",
   "sparkling pastel kawaii style, cute bright and cheerful",
+  "gouache painting with matte textured colour and soft blended edges",
+  "stained-glass mosaic with bold black leading and luminous jewel colour",
+  "soft chalk-pastel illustration with grainy blended texture",
+  "crayon and coloured-pencil children's-book texture with hand-drawn charm",
+  "dreamy airbrushed synthwave with neon gradients and glow",
+  "ornate classic fantasy trading-card oil illustration with fine detail",
+  "cut-paper collage with layered textured shapes and soft shadows",
+  "loose expressive gestural ink sketch with splashes of watercolour",
 ];
 
 const args = process.argv.slice(2);
 const FORCE = args.includes("--force");
+const ULTRA_ONLY = args.includes("--ultra"); // regenerate only Ultra Rares (as full-art)
 const onlyId = args.find((a) => !a.startsWith("--"));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -75,11 +85,17 @@ async function fetchSeed(url) {
 
 async function restyle(card, style) {
   const seed = await fetchSeed(card.art);
-  const prompt =
-    `Redraw this Pokémon, ${card.name}, keeping its design, colours and proportions accurate and instantly recognizable, ` +
-    `as a premium Pokémon Trading Card Game illustration in the style of ${style}. ` +
-    `Give it a dynamic heroic pose in a full scene with a fitting ${(card.type || "nature")} environment background and dramatic lighting, highly detailed. ` +
-    `No text, no typography, no card frame, no borders, no watermark, no logo.`;
+  const isUltra = card.rarity === "ultra";
+  const prompt = isUltra
+    ? `Redraw this Pokémon, ${card.name}, keeping its design, colours and proportions accurate and instantly recognizable, ` +
+      `as a premium FULL-ART Pokémon Trading Card Game "Illustration Rare" in the style of ${style}. ` +
+      `Vertical portrait composition where ${card.name} dramatically fills the entire frame from top to bottom, epic dynamic hero pose, ` +
+      `sweeping atmospheric ${(card.type || "nature")} environment, cinematic god-ray lighting, ultra detailed, poster-quality. ` +
+      `No text, no typography, no card frame, no borders, no watermark, no logo.`
+    : `Redraw this Pokémon, ${card.name}, keeping its design, colours and proportions accurate and instantly recognizable, ` +
+      `as a premium Pokémon Trading Card Game illustration in the style of ${style}. ` +
+      `Give it a dynamic heroic pose in a full scene with a fitting ${(card.type || "nature")} environment background and dramatic lighting, highly detailed. ` +
+      `No text, no typography, no card frame, no borders, no watermark, no logo.`;
   const res = await fetch(`${GLA}/models/${MODEL}:generateContent?key=${VEO_API_KEY}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, seed] }], generationConfig: { responseModalities: ["IMAGE"] } }),
@@ -105,11 +121,11 @@ async function upload(id, buf) {
 async function main() {
   const { POKEMON } = await import("../client/js/tcg/catalog.js");
   const art = readArt();
-  const cards = POKEMON.filter((c) => (onlyId ? c.id === onlyId : true));
+  const cards = POKEMON.filter((c) => (ULTRA_ONLY ? c.rarity === "ultra" : onlyId ? c.id === onlyId : true));
   let i = 0;
   for (const card of cards) {
     const style = STYLES[i++ % STYLES.length];
-    if (art[card.id] && !FORCE) { console.log(`[pkmn-art] skip ${card.id}`); continue; }
+    if (art[card.id] && !FORCE && !ULTRA_ONLY) { console.log(`[pkmn-art] skip ${card.id}`); continue; }
     console.log(`[pkmn-art] ${card.id} — ${style.split(",")[0]}…`);
     try {
       const buf = await restyle(card, style);

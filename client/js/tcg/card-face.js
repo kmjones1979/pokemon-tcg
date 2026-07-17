@@ -27,7 +27,10 @@ export function renderTcgCard(card, opts = {}) {
 
   const type = card.type || "colorless";
   const rarity = card.rarity || "common";
-  const wrap = el("div", `tcg-card tcg-pokemon tcg-${size} type-${type} rarity-${rarity}${card.genArt ? " gen-art" : ""}`);
+  // Ultra Rares with bespoke art render "full-art": the illustration fills the
+  // whole card and the text is overlaid, like a real Illustration Rare.
+  const fullArt = card.genArt && rarity === "ultra";
+  const wrap = el("div", `tcg-card tcg-pokemon tcg-${size} type-${type} rarity-${rarity}${card.genArt ? " gen-art" : ""}${fullArt ? " full-art" : ""}`);
   wrap.style.setProperty("--type", TCG_COLORS[type] || "#888");
   wrap.dataset.cardId = card.id;
   if (inst) wrap.dataset.uid = inst.uid;
