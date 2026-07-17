@@ -415,6 +415,12 @@ const GUEST_ARTISTS = {
   "psychic-alakazam": { illus: "Roy Lichtenstein", style: "Roy Lichtenstein pop-art comic — thick black outlines, flat primary red/yellow/blue, bold Ben-Day dot halftone shading, graphic comic-panel composition" },
   "psychic-gengar":   { illus: "Killer Acid",      style: "Killer Acid psychedelic poster art — trippy neon acid colours, melting surreal shapes, swirling hypnotic patterns, glowing eyes, 1960s blacklight counterculture vibe" },
   "lightning-raichu": { illus: "Osamu Tezuka",     style: "Osamu Tezuka golden-age manga — clean rounded retro linework, big sparkling expressive eyes, mid-century Astro Boy cartoon charm, cheerful vintage ink-and-colour" },
+  // Second wave of pop-culture guest artists.
+  "psychic-mewtwo":    { illus: "Yoshitaka Amano",  style: "Yoshitaka Amano ethereal Art Nouveau illustration — delicate flowing linework, ornate decorative detail, pale washed watercolour with shimmering gold accents, dreamlike Final Fantasy fantasy elegance" },
+  "darkness-houndoom": { illus: "Takeshi Obata",    style: "Takeshi Obata detailed gothic manga — sharp precise inking, dramatic high-contrast black shadows, ornate intricate detail and intense brooding presence, Death Note aesthetic" },
+  "fighting-machamp":  { illus: "Yusuke Murata",    style: "Yusuke Murata hyper-detailed action manga — cinematic dynamic composition, explosive motion and impact, hyper-realistic muscular anatomy and insanely detailed rendering, One Punch Man aesthetic" },
+  "darkness-umbreon":  { illus: "CLAMP",            style: "CLAMP shojo manga art — elegant elongated graceful figures, elaborate flowing ribbons and ornament, delicate ornate linework and soft ethereal moonlit beauty, Cardcaptor Sakura aesthetic" },
+  "lightning-zapdos":  { illus: "Mika Pikazo",      style: "Mika Pikazo bold neon digital illustration — vibrant saturated neon colour palette, glowing rim light and electric sparks, playful modern pop character design, high-energy contemporary anime" },
 };
 
 for (const p of POKEMON) {

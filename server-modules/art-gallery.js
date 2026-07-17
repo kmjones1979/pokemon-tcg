@@ -10,8 +10,9 @@ let _cards = null;
 
 // Guest-artist styles used to generate the marquee Ultra full-arts.
 const GUEST_ARTISTS = [
-  "Akira Toriyama", "Eiichiro Oda", "Hayao Miyazaki",
-  "Roy Lichtenstein", "Killer Acid", "Osamu Tezuka",
+  "Akira Toriyama", "Eiichiro Oda", "Hayao Miyazaki", "Roy Lichtenstein",
+  "Killer Acid", "Osamu Tezuka", "Yoshitaka Amano", "Takeshi Obata",
+  "Yusuke Murata", "CLAMP", "Mika Pikazo",
 ];
 
 // A full-res art URL (.../tcg-art/<id>.png) → its lightweight thumbnail
