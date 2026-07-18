@@ -171,7 +171,7 @@ const POKEMON = [
   mon({ id: "grass-tangela", name: "Tangela", dex: 114, stage: "basic", type: "grass", hp: 80, weak: "fire", retreat: 2,
     attacks: [atk("Bind", "GC", 20, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed."), atk("Vine Whip", "GGC", 50)] }),
   mon({ id: "grass-scyther", name: "Scyther", dex: 123, stage: "basic", type: "grass", hp: 90, weak: "fire", retreat: 0,
-    attacks: [atk("Quick Slash", "GC", 30), atk("Slash", "GCC", 60)] }),
+    attacks: [atk("Quick Attack", "C", 20, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Slash", "CC", 50)] }),
 
   // ===== EXPANSION: more Lightning =====
   mon({ id: "lightning-jolteon", name: "Jolteon", dex: 135, stage: "stage1", from: "colorless-eevee", type: "lightning", hp: 100, weak: "fighting", retreat: 0,
@@ -197,7 +197,7 @@ const POKEMON = [
   mon({ id: "fighting-hitmonchan", name: "Hitmonchan", dex: 107, stage: "basic", type: "fighting", hp: 90, weak: "psychic", retreat: 2,
     attacks: [atk("Jab", "TC", 30), atk("Special Punch", "TTC", 70)] }),
   mon({ id: "fighting-onix", name: "Onix", dex: 95, stage: "basic", type: "fighting", hp: 110, weak: "grass", retreat: 3,
-    attacks: [atk("Rock Throw", "TC", 20), atk("Harden", "TT", 0, { type: "healSelf", amount: 20 }, "Heal 20 damage from this Pokémon.")] }),
+    attacks: [atk("Tackle", "C", 20), atk("Rock Throw", "TC", 40)] }),
   mon({ id: "fighting-cubone", name: "Cubone", dex: 104, stage: "basic", type: "fighting", hp: 60, weak: "grass", retreat: 1,
     attacks: [atk("Bonemerang", "TC", 30, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
   mon({ id: "fighting-marowak", name: "Marowak", dex: 105, stage: "stage1", from: "fighting-cubone", type: "fighting", hp: 100, weak: "grass", retreat: 1,
