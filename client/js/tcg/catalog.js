@@ -370,6 +370,58 @@ const POKEMON = [
     attacks: [atk("Draining Kiss", "YC", 40, { type: "healSelf", amount: 30 }, "Heal 30 damage from this Pokémon."), atk("Fairy Ribbon", "YYC", 80)] }),
   mon({ id: "fairy-mawile", name: "Mawile", dex: 303, stage: "basic", type: "fairy", hp: 80, weak: "metal", retreat: 1,
     attacks: [atk("Bite", "C", 10), atk("Vice Crunch", "YC", 40)] }),
+
+  // ===== JOHTO STARTERS =====
+  mon({ id: "fire-cyndaquil", name: "Cyndaquil", dex: 155, stage: "basic", type: "fire", hp: 60, weak: "water", retreat: 1,
+    attacks: [atk("Tackle", "C", 10), atk("Ember", "FC", 30, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Fire Energy.")] }),
+  mon({ id: "fire-quilava", name: "Quilava", dex: 156, stage: "stage1", from: "fire-cyndaquil", type: "fire", hp: 90, weak: "water", retreat: 1,
+    attacks: [atk("Flame Charge", "FC", 40), atk("Lava Plume", "FFC", 60)] }),
+  mon({ id: "fire-typhlosion", name: "Typhlosion", dex: 157, stage: "stage2", from: "fire-quilava", type: "fire", hp: 160, weak: "water", retreat: 2,
+    attacks: [atk("Flame Wheel", "FFC", 70), atk("Eruption", "FFCC", 130, { type: "selfDiscardEnergy", amount: 2 }, "Discard 2 Fire Energy.")] }),
+  mon({ id: "water-totodile", name: "Totodile", dex: 158, stage: "basic", type: "water", hp: 60, weak: "lightning", retreat: 1,
+    attacks: [atk("Scratch", "C", 10), atk("Water Gun", "WC", 30)] }),
+  mon({ id: "water-croconaw", name: "Croconaw", dex: 159, stage: "stage1", from: "water-totodile", type: "water", hp: 90, weak: "lightning", retreat: 1,
+    attacks: [atk("Bite", "WC", 40), atk("Aqua Tail", "WWC", 60)] }),
+  mon({ id: "water-feraligatr", name: "Feraligatr", dex: 160, stage: "stage2", from: "water-croconaw", type: "water", hp: 160, weak: "lightning", retreat: 2,
+    attacks: [atk("Slash", "WCC", 70), atk("Hydro Crunch", "WWCC", 120, { type: "plusPerEnergy", per: 20, energyType: "water", ignore: 3 }, "+20 for each extra Water Energy attached.")] }),
+  mon({ id: "grass-chikorita", name: "Chikorita", dex: 152, stage: "basic", type: "grass", hp: 60, weak: "fire", retreat: 1,
+    attacks: [atk("Tackle", "C", 10), atk("Razor Leaf", "GC", 30)] }),
+  mon({ id: "grass-bayleef", name: "Bayleef", dex: 153, stage: "stage1", from: "grass-chikorita", type: "grass", hp: 90, weak: "fire", retreat: 1,
+    attacks: [atk("Vine Whip", "GC", 40), atk("Body Slam", "GGC", 50, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed.")] }),
+  mon({ id: "grass-meganium", name: "Meganium", dex: 154, stage: "stage2", from: "grass-bayleef", type: "grass", hp: 160, weak: "fire", retreat: 2,
+    attacks: [atk("Petal Dance", "GGC", 70), atk("Solar Bloom", "GGCC", 110, { type: "healSelf", amount: 40 }, "Heal 40 damage from this Pokémon.")] }),
+
+  // ===== More LIGHTNING (Ampharos line) =====
+  mon({ id: "lightning-mareep", name: "Mareep", dex: 179, stage: "basic", type: "lightning", hp: 60, weak: "fighting", retreat: 1,
+    attacks: [atk("Tackle", "C", 10), atk("Static Shock", "LC", 20, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed.")] }),
+  mon({ id: "lightning-flaaffy", name: "Flaaffy", dex: 180, stage: "stage1", from: "lightning-mareep", type: "lightning", hp: 90, weak: "fighting", retreat: 1,
+    attacks: [atk("Thunder Wave", "LC", 30), atk("Discharge", "LLC", 60)] }),
+  mon({ id: "lightning-ampharos", name: "Ampharos", dex: 181, stage: "stage2", from: "lightning-flaaffy", type: "lightning", hp: 150, weak: "fighting", retreat: 2,
+    attacks: [atk("Thunder Punch", "LC", 40), atk("Zap Cannon", "LLCC", 120, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed.")] }),
+
+  // ===== More METAL (complete the Beldum line) =====
+  mon({ id: "metal-metang", name: "Metang", dex: 375, stage: "stage1", from: "metal-beldum", type: "metal", hp: 100, weak: "fire", retreat: 2,
+    attacks: [atk("Metal Claw", "MC", 40), atk("Confusion", "MMC", 50, { type: "applyStatusCoin", kind: "confuse" }, "Flip a coin. If heads, the Defending Pokémon is now Confused.")] }),
+  mon({ id: "metal-metagross", name: "Metagross", dex: 376, stage: "stage2", from: "metal-metang", type: "metal", hp: 160, weak: "fire", retreat: 3,
+    attacks: [atk("Psychic", "MMC", 70), atk("Meteor Mash", "MMCC", 130, { type: "coinFlipBonus", damage: 30 }, "Flip a coin. If heads, +30 damage.")] }),
+
+  // ===== More DARKNESS (Tyranitar line) =====
+  mon({ id: "darkness-larvitar", name: "Larvitar", dex: 246, stage: "basic", type: "darkness", hp: 70, weak: "fighting", retreat: 1,
+    attacks: [atk("Bite", "C", 10), atk("Rock Throw", "DC", 30)] }),
+  mon({ id: "darkness-pupitar", name: "Pupitar", dex: 247, stage: "stage1", from: "darkness-larvitar", type: "darkness", hp: 100, weak: "fighting", retreat: 2,
+    attacks: [atk("Rock Slide", "DC", 40), atk("Dark Impact", "DDC", 60, { type: "recoil", amount: 10 }, "This Pokémon does 10 damage to itself.")] }),
+  mon({ id: "darkness-tyranitar", name: "Tyranitar", dex: 248, stage: "stage2", from: "darkness-pupitar", type: "darkness", hp: 170, weak: "fighting", retreat: 3,
+    attacks: [atk("Crunch", "DDC", 80), atk("Dark Landslide", "DDCC", 140, { type: "selfDiscardEnergy", amount: 1 }, "Discard 1 Darkness Energy.")] }),
+
+  // ===== More PSYCHIC / WATER / COLORLESS =====
+  mon({ id: "psychic-espeon", name: "Espeon", dex: 196, stage: "stage1", from: "colorless-eevee", type: "psychic", hp: 110, weak: "psychic", retreat: 1,
+    attacks: [atk("Confusion", "PC", 40, { type: "applyStatusCoin", kind: "confuse" }, "Flip a coin. If heads, the Defending Pokémon is now Confused."), atk("Morning Sun", "PPC", 80, { type: "healSelf", amount: 30 }, "Heal 30 damage from this Pokémon.")] }),
+  mon({ id: "water-articuno", name: "Articuno", dex: 144, stage: "basic", type: "water", hp: 130, weak: "lightning", retreat: 2,
+    attacks: [atk("Ice Shard", "WC", 40), atk("Blizzard", "WWCC", 110, { type: "applyStatusCoin", kind: "paralyze" }, "Flip a coin. If heads, the Defending Pokémon is now Paralyzed.")] }),
+  mon({ id: "colorless-blissey", name: "Blissey", dex: 242, stage: "stage1", from: "colorless-chansey", type: "colorless", hp: 140, weak: "fighting", retreat: 2,
+    attacks: [atk("Soft-Boiled", "CC", 0, { type: "healSelf", amount: 60 }, "Heal 60 damage from this Pokémon."), atk("Blissful Blast", "CCC", 70, { type: "coinFlipBonus", damage: 30 }, "Flip a coin. If heads, +30 damage.")] }),
+  mon({ id: "colorless-miltank", name: "Miltank", dex: 241, stage: "basic", type: "colorless", hp: 110, weak: "fighting", retreat: 1,
+    attacks: [atk("Rollout", "CC", 30, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage."), atk("Milk Drink", "CCC", 0, { type: "healSelf", amount: 50 }, "Heal 50 damage from this Pokémon.")] }),
 ];
 
 // --- Energy ---------------------------------------------------------------
@@ -453,6 +505,9 @@ const ULTRA = new Set([
   "fairy-gardevoir", "fairy-togekiss",
   // Killer Acid guest-art set (promoted to full-art Ultra).
   "psychic-hypno", "water-tentacruel",
+  // Johto / Hoenn Illustration-Rare finishers + legendaries.
+  "fire-typhlosion", "water-feraligatr", "grass-meganium", "lightning-ampharos",
+  "metal-metagross", "darkness-tyranitar", "water-articuno", "psychic-espeon",
 ]);
 // Standout Stage 1s / strong Basics promoted to Rare (holo, no full-art).
 const RARE_PLUS = new Set([
@@ -471,6 +526,9 @@ const RARE_PLUS = new Set([
   // Dragon / Fairy promotions.
   "dragon-gabite", "dragon-shelgon", "dragon-altaria", "dragon-vibrava",
   "fairy-kirlia", "fairy-togetic", "fairy-granbull", "fairy-sylveon", "fairy-mawile",
+  // Johto / Hoenn promotions.
+  "fire-quilava", "water-croconaw", "grass-bayleef", "lightning-flaaffy",
+  "metal-metang", "darkness-pupitar", "colorless-blissey", "colorless-miltank",
 ]);
 
 // Guest-Artist Ultra Rares — a celebrated illustrator lends their signature
@@ -496,6 +554,12 @@ const GUEST_ARTISTS = {
   "psychic-hypno":     { illus: "Killer Acid",      style: KILLER_ACID },
   "grass-vileplume":   { illus: "Killer Acid",      style: KILLER_ACID },
   "water-tentacruel":  { illus: "Killer Acid",      style: KILLER_ACID },
+  // Third wave of pop-culture guest artists.
+  "metal-metagross":   { illus: "Katsuhiro Otomo",  style: "the detailed hard-sci-fi manga style of Katsuhiro Otomo (Akira) — meticulous mechanical detail, precise fine ink linework, dramatic perspective, gritty realistic shading, dystopian neo-Tokyo atmosphere" },
+  "darkness-tyranitar":{ illus: "Kentaro Miura",    style: "the dark epic fantasy style of Kentaro Miura (Berserk) — extraordinarily dense cross-hatched ink detail, brutal muscular anatomy, ominous gothic dread, dramatic chiaroscuro lighting and monumental scale" },
+  "lightning-ampharos":{ illus: "Hirohiko Araki",   style: "the flamboyant style of Hirohiko Araki (JoJo's Bizarre Adventure) — bold dramatic fashion poses, vivid unconventional colour palettes, sharp angular linework, ornate jewellery and 'menacing' onomatopoeia energy" },
+  "water-articuno":    { illus: "Makoto Shinkai",   style: "the luminous style of Makoto Shinkai (Your Name) — breathtaking hyper-detailed skies, radiant volumetric light and lens flares, glittering ice crystals, painterly clouds and emotional cinematic atmosphere" },
+  "psychic-espeon":    { illus: "Range Murata",     style: "the elegant refined style of Range Murata — delicate clean linework, soft muted pastel gradients, graceful poised composition, subtle Art-Nouveau-meets-retro-futurism sophistication" },
 };
 
 for (const p of POKEMON) {

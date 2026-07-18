@@ -229,6 +229,60 @@ export const STARTER_DECKS = [
       ...rep("energy-fairy", 22),
     ],
   },
+  {
+    id: "fire-johto",
+    name: "Ember Legacy",
+    type: "fire",
+    cover: 157, // Typhlosion
+    blurb: "Johto's fire-starter reborn — Typhlosion erupts for game-ending damage.",
+    cards: [
+      ...rep("fire-cyndaquil", 4), ...rep("fire-quilava", 3), ...rep("fire-typhlosion", 2),
+      ...rep("fire-growlithe", 2), ...rep("fire-arcanine", 2),
+      ...rep("fire-vulpix", 2), ...rep("fire-ninetales", 1),
+      ...TRAINER_CORE, ...rep("trainer-stadium-arena", 2),
+      ...rep("energy-fire", 22),
+    ],
+  },
+  {
+    id: "water-johto",
+    name: "Torrent",
+    type: "water",
+    cover: 160, // Feraligatr
+    blurb: "Feraligatr and Articuno freeze and flood — scale Hydro Crunch with every Energy.",
+    cards: [
+      ...rep("water-totodile", 4), ...rep("water-croconaw", 3), ...rep("water-feraligatr", 2),
+      ...rep("water-staryu", 3), ...rep("water-starmie", 2), ...rep("water-articuno", 2),
+      ...TRAINER_CORE, ...rep("trainer-stadium-spa", 2),
+      ...rep("energy-water", 22),
+    ],
+  },
+  {
+    id: "metal-legion",
+    name: "Iron Legion",
+    type: "metal",
+    cover: 376, // Metagross
+    blurb: "Assemble the machine — Metagross and Forretress wall up, then Meteor Mash through.",
+    cards: [
+      ...rep("metal-beldum", 4), ...rep("metal-metang", 3), ...rep("metal-metagross", 2),
+      ...rep("metal-skarmory", 3), ...rep("metal-pineco", 2), ...rep("metal-forretress", 2),
+      ...TRAINER_CORE, ...rep("trainer-stadium-plant", 2),
+      ...rep("energy-metal", 22),
+    ],
+  },
+  {
+    id: "darkness-tyranitar",
+    name: "Nightfall",
+    type: "darkness",
+    cover: 248, // Tyranitar
+    blurb: "The tyrant descends — Tyranitar's Dark Landslide crushes what Houndoom softens up.",
+    cards: [
+      ...rep("darkness-larvitar", 4), ...rep("darkness-pupitar", 3), ...rep("darkness-tyranitar", 2),
+      ...rep("darkness-houndour", 2), ...rep("darkness-houndoom", 2),
+      ...rep("darkness-sneasel", 2), ...rep("darkness-murkrow", 1),
+      ...TRAINER_CORE, ...rep("trainer-stadium-spa", 2),
+      ...rep("energy-darkness", 22),
+    ],
+  },
 ];
 
 export const deckById = (id) => STARTER_DECKS.find((d) => d.id === id) || null;
