@@ -126,7 +126,13 @@ export function openTcgMode({ onExit = () => {} } = {}) {
     packBtn.className = `tcg-btn ${packs > 0 ? "primary tcg-pack-cta" : "disabled"}`;
     packBtn.innerHTML = `${pokeballSVG()} Open Packs · ${packs}`;
     if (packs > 0) packBtn.onclick = () => openPacksFlow();
+    const galleryBtn = document.createElement("button");
+    galleryBtn.className = "tcg-btn";
+    galleryBtn.innerHTML = `🃏 Card Gallery`;
+    galleryBtn.title = "Browse every card in 3D";
+    galleryBtn.onclick = () => window.open("/cards", "_blank");
     shelf.appendChild(binderBtn);
+    shelf.appendChild(galleryBtn);
     shelf.appendChild(packBtn);
     wrap.appendChild(shelf);
 

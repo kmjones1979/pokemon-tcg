@@ -16,6 +16,7 @@ const multiplayer = require("./server-modules/multiplayer");
 const multiplayerHttp = require("./server-modules/multiplayer-http");
 const multiplayerTcg = require("./server-modules/multiplayer-tcg");
 const artGallery = require("./server-modules/art-gallery");
+const cardGallery = require("./server-modules/card-gallery");
 const rewards = require("./server-modules/rewards");
 const achievements = require("./server-modules/achievements");
 const dailyStreak = require("./server-modules/daily-streak");
@@ -321,6 +322,8 @@ multiplayerTcg.mount(app);
 
 // Public art gallery at /art — showcases the generated TCG artwork.
 artGallery.mount(app);
+// Public card gallery at /cards — browse every card face in 3D.
+cardGallery.mount(app);
 
 app.get("/api/pokedex/search", async (req, res) => {
   await ensurePokedex();

@@ -82,6 +82,7 @@ function page(cards, origin, focus) {
   <a class="back" href="/">← Pokémon Battle</a>
   <h1>Art Gallery</h1>
   <p class="sub">Every card in the TCG mode is illustrated with bespoke AI art — Mega&nbsp;EX full-arts, guest-artist Illustration Rares, and a whole Pokédex of styles. Tap any piece to enlarge and share.</p>
+  <p class="sub" style="margin-top:8px"><a href="/cards" style="color:#9db4ff;font-weight:700">🃏 Browse the full card gallery →</a></p>
   <div class="filters" id="filters"></div>
   <div class="artistbar" id="artistbar"></div>
 </header>
