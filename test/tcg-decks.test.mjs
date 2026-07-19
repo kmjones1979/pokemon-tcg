@@ -71,6 +71,37 @@ test("PLAYABILITY: every Basic that could open as Active can attack with the dec
   }
 });
 
+test("no WRONG Energy: a typed-element deck must provide that element's Energy", () => {
+  const ELEMENTS = new Set(["fire", "water", "grass", "lightning", "psychic", "fighting", "darkness", "metal", "dragon", "fairy"]);
+  for (const d of STARTER_DECKS) {
+    if (!ELEMENTS.has(d.type)) continue; // colorless decks may run any Energy
+    assert.ok(energyTypesOf(d).has(d.type), `${d.id} is a ${d.type} deck but has no ${d.type} Energy`);
+  }
+});
+
+test("no DEAD attacks: EVERY attack of every Pokémon in a deck is payable with the deck's Energy", () => {
+  // Stronger than the ≥1-attack playability check: a deck's Energy must not
+  // strand ANY printed attack (the "Sky Kings had Lightning" / "Onix's Rock
+  // Throw needed Fighting in a Metal deck" class of bug).
+  const dead = [];
+  for (const d of STARTER_DECKS) {
+    const att = poolFor(energyTypesOf(d));
+    const seen = new Set();
+    for (const id of d.cards) {
+      const c = cardById(id);
+      if (c.kind !== "pokemon" || seen.has(id)) continue;
+      seen.add(id);
+      for (const a of c.attacks) {
+        if (!canPayCost(att, a.cost)) {
+          const need = [...new Set(a.cost.filter((t) => t !== "colorless"))].join("+");
+          dead.push(`${d.id}: ${c.name} — ${a.name} (needs ${need})`);
+        }
+      }
+    }
+  }
+  assert.equal(dead.length, 0, `Dead attacks (wrong Energy in deck):\n  ${dead.join("\n  ")}`);
+});
+
 test("canPayCost: typed Energy must match; Colorless pays from any leftover", () => {
   assert.equal(canPayCost([], []), true, "free attack");
   assert.equal(canPayCost([{ energyType: "fighting" }], ["fighting"]), true);

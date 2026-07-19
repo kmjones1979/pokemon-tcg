@@ -144,14 +144,14 @@ export const STARTER_DECKS = [
     name: "Sky Kings",
     type: "colorless",
     cover: 149, // Dragonite
-    blurb: "Colorless titans — Dragonite, Snorlax and Mega Kangaskhan EX bulldoze any matchup.",
+    blurb: "Colorless titans — Dragonite, Snorlax and Mega Kangaskhan EX bulldoze any matchup. Every attack is Colorless, so Dragon Energy fuels the whole team.",
     cards: [
       ...rep("colorless-dratini", 4), ...rep("colorless-dragonair", 3), ...rep("colorless-dragonite", 2),
       ...rep("colorless-snorlax", 2), ...rep("colorless-tauros", 2),
       ...rep("colorless-kangaskhan", 2), ...rep("mega-kangaskhan-ex", 1),
       ...rep("colorless-eevee", 2),
       ...TRAINER_CORE, ...rep("trainer-stadium-arena", 2),
-      ...rep("energy-lightning", 20),
+      ...rep("energy-dragon", 20),
     ],
   },
   {

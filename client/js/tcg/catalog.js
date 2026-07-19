@@ -197,7 +197,7 @@ const POKEMON = [
   mon({ id: "fighting-hitmonchan", name: "Hitmonchan", dex: 107, stage: "basic", type: "fighting", hp: 90, weak: "psychic", retreat: 2,
     attacks: [atk("Jab", "TC", 30), atk("Special Punch", "TTC", 70)] }),
   mon({ id: "fighting-onix", name: "Onix", dex: 95, stage: "basic", type: "fighting", hp: 110, weak: "grass", retreat: 3,
-    attacks: [atk("Tackle", "C", 20), atk("Rock Throw", "TC", 40)] }),
+    attacks: [atk("Tackle", "C", 20), atk("Rock Throw", "CC", 40)] }),
   mon({ id: "fighting-cubone", name: "Cubone", dex: 104, stage: "basic", type: "fighting", hp: 60, weak: "grass", retreat: 1,
     attacks: [atk("Bonemerang", "TC", 30, { type: "coinFlipBonus", damage: 20 }, "Flip a coin. If heads, +20 damage.")] }),
   mon({ id: "fighting-marowak", name: "Marowak", dex: 105, stage: "stage1", from: "fighting-cubone", type: "fighting", hp: 100, weak: "grass", retreat: 1,
