@@ -16,6 +16,40 @@ function ctx() {
   return _ctx;
 }
 
+// --- Autoplay unlock -------------------------------------------------------
+// Browsers create an AudioContext in the "suspended" state and only let
+// resume() succeed when it's called from inside a user-gesture callback. Our
+// SFX / BGM / cries fire from timers and animation callbacks (not gestures),
+// so their inline resume() is effectively a no-op and everything stays silent
+// — while speechSynthesis (a separate API, exempt from this policy) keeps
+// working. That's why "only spoken audio" plays until the right kind of tap
+// happens. Fix: resume the context on the FIRST real user gesture, and keep
+// the listeners armed until it's genuinely running.
+export function unlockAudio() {
+  const c = ctx();
+  if (!c) return;
+  if (c.state !== "running") c.resume().catch(() => {});
+  // iOS additionally requires a zero-length buffer played within the gesture.
+  try {
+    const b = c.createBuffer(1, 1, 22050);
+    const s = c.createBufferSource();
+    s.buffer = b;
+    s.connect(c.destination);
+    s.start(0);
+  } catch {}
+}
+
+if (typeof window !== "undefined") {
+  const events = ["pointerdown", "touchstart", "mousedown", "keydown"];
+  const onGesture = () => {
+    unlockAudio();
+    if (_ctx && _ctx.state === "running") {
+      events.forEach((e) => window.removeEventListener(e, onGesture, true));
+    }
+  };
+  events.forEach((e) => window.addEventListener(e, onGesture, true));
+}
+
 async function loadBuffer(url) {
   if (_buffers.has(url)) return _buffers.get(url);
   if (_inFlight.has(url)) return _inFlight.get(url);
