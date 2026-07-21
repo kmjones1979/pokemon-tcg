@@ -253,7 +253,9 @@ body.tcg-mode #site-footer { display: none; }
 }
 .tcg-pokemon.mega-ex .tcg-card-head { background: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent); }
 .tcg-ex-ribbon {
-  position: absolute; top: 8px; right: -2px; z-index: 5;
+  /* Sits over the top of the artwork, BELOW the head row — the HP readout lives
+     in the top-right corner, so a top-anchored ribbon would cover it. */
+  position: absolute; top: 30px; right: -2px; z-index: 5;
   font-size: 9px; font-weight: 900; letter-spacing: 0.6px; color: #2a1c02;
   padding: 2px 8px 2px 9px; border-radius: 4px 0 0 4px;
   background: linear-gradient(90deg, #ffe08a, #ffb43d);
@@ -265,7 +267,7 @@ body.tcg-mode #site-footer { display: none; }
   position: absolute; left: 6px; bottom: 22px; z-index: 4;
   font-size: 7.5px; font-weight: 800; color: #ffdf8a; text-shadow: 0 1px 2px #000; letter-spacing: 0.3px;
 }
-.tcg-mini .tcg-ex-ribbon { font-size: 7px; padding: 1px 5px; top: 4px; }
+.tcg-mini .tcg-ex-ribbon { font-size: 7px; padding: 1px 5px; top: 17px; }
 
 /* ---- rarity ---- */
 .tcg-rarity-mark {
