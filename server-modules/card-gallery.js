@@ -30,6 +30,7 @@ function page(origin) {
   <input id="search" class="search" type="search" placeholder="Search cards…" autocomplete="off">
   <div class="filters" id="filters"></div>
   <div class="artistbar" id="artistbar"></div>
+  <button id="shineToggle" class="shinebtn" title="Turn off the animated card shine if the page feels laggy"></button>
 </header>
 <div id="count" class="count"></div>
 <main id="grid" class="cards-grid"></main>
@@ -80,6 +81,10 @@ h1{font-size:clamp(36px,7vw,68px);font-weight:900;letter-spacing:-1px;line-heigh
 .achip{padding:5px 11px;border-radius:999px;border:1px solid transparent;font-size:12px;font-weight:700;cursor:pointer;
  background:linear-gradient(90deg,rgba(200,107,255,.16),rgba(106,155,255,.16));color:#dcd6ff;transition:.15s}
 .achip:hover{background:linear-gradient(90deg,rgba(200,107,255,.3),rgba(106,155,255,.3))}.achip.on{background:linear-gradient(90deg,#c86bff,#6a9bff);color:#fff}
+.shinebtn{position:relative;z-index:1;margin:14px auto 0;display:block;cursor:pointer;padding:6px 14px;border-radius:999px;
+ font-size:12px;font-weight:700;color:#e7d6ff;border:1px solid rgba(180,130,255,.4);
+ background:linear-gradient(90deg,rgba(150,110,255,.18),rgba(200,107,255,.18));transition:.15s}
+.shinebtn:hover{background:linear-gradient(90deg,rgba(150,110,255,.34),rgba(200,107,255,.34))}
 .count{position:relative;z-index:1;text-align:center;color:#8a8daf;font-size:12.5px;margin:10px 0 0}
 .cards-grid{position:relative;z-index:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:26px 20px;
  padding:26px clamp(14px,4vw,52px) 50px;max-width:1600px;margin:0 auto}
@@ -209,6 +214,16 @@ document.getElementById('zoomNext').onclick=()=>step(1);
 zoom.addEventListener('click',e=>{if(e.target===zoom)closeZoom();});
 document.addEventListener('keydown',e=>{if(zoom.hidden)return;if(e.key==='Escape')closeZoom();if(e.key==='ArrowLeft')step(-1);if(e.key==='ArrowRight')step(1);});
 search.addEventListener('input',()=>{q=search.value.trim().toLowerCase();renderGrid();});
+
+// Shine toggle — mirrors the in-game setting via the same localStorage key, so
+// disabling the foil animation on the laggy 200-card grid sticks across visits.
+const SHINE_KEY='tcg-shine-off';
+const shineOff=()=>{try{return localStorage.getItem(SHINE_KEY)==='1';}catch{return false;}};
+const shineToggle=document.getElementById('shineToggle');
+function syncShine(){document.body.classList.toggle('no-shine',shineOff());shineToggle.textContent='✨ Shine: '+(shineOff()?'Off':'On');}
+shineToggle.addEventListener('click',()=>{try{localStorage.setItem(SHINE_KEY,shineOff()?'0':'1');}catch{}syncShine();});
+syncShine();
+
 renderChips();renderGrid();
 `;
 

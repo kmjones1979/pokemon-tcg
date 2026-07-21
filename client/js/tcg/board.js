@@ -13,6 +13,7 @@ import { openPack } from "./pack-open.js";
 import { cardById, POKEMON, TRAINERS } from "./catalog.js";
 import * as seasons from "./seasons.js";
 import * as net from "./net.js";
+import { shineOff, setShineOff, applyShine } from "./shine.js";
 
 const ART = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${dex}.png`;
 const SPRITE = (dex) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`;
@@ -27,6 +28,7 @@ export function openTcgMode({ onExit = () => {} } = {}) {
     menu?.classList.add("hidden");
     arena.classList.remove("hidden");
     document.body.classList.add("in-arena", "tcg-mode");
+    applyShine();
   }
   function leave() {
     document.body.classList.remove("tcg-mode");
@@ -131,9 +133,16 @@ export function openTcgMode({ onExit = () => {} } = {}) {
     galleryBtn.innerHTML = `🃏 Card Gallery`;
     galleryBtn.title = "Browse every card in 3D";
     galleryBtn.onclick = () => window.open("/cards", "_blank");
+    const shineBtn = document.createElement("button");
+    shineBtn.className = "tcg-btn";
+    shineBtn.title = "Turn off card shine animations if the game feels laggy";
+    const syncShine = () => { shineBtn.innerHTML = `✨ Shine: ${shineOff() ? "Off" : "On"}`; };
+    syncShine();
+    shineBtn.onclick = () => { setShineOff(!shineOff()); syncShine(); };
     shelf.appendChild(binderBtn);
     shelf.appendChild(galleryBtn);
     shelf.appendChild(packBtn);
+    shelf.appendChild(shineBtn);
     wrap.appendChild(shelf);
 
     const exitBtn = document.createElement("button");

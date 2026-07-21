@@ -276,6 +276,19 @@ body.tcg-mode #site-footer { display: none; }
 }
 .tcg-rarity-mark.rm-rare { color: #caa53a; }
 .tcg-rarity-mark.rm-ultra { color: transparent; background: linear-gradient(90deg, #ff5f6d, #ffc371, #47e0a0, #6a9bff, #c86bff); -webkit-background-clip: text; background-clip: text; }
+/* "Disable shine" preference (body.no-shine) + reduced-motion: kill the
+   continuously-animating foil sweeps that can stutter on low-end GPUs. Static
+   styling — rainbow borders, glows, rarity marks — is kept, so cards still look
+   premium; only the per-frame animation stops. Shared by the game and /cards. */
+body.no-shine .tcg-holo,
+body.no-shine .tcg-deck-shine { display: none !important; }
+body.no-shine .tcg-deck-card:hover .tcg-deck-shine { animation: none; opacity: 0; }
+body.no-shine .mc-tcg .mc-name { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tcg-holo { animation: none; }
+  .mc-tcg .mc-name { animation: none; }
+}
+
 /* Holo sheen sweeping over Rare/Ultra cards. */
 .tcg-holo {
   position: absolute; inset: 0; pointer-events: none; z-index: 3; border-radius: inherit; overflow: hidden;
