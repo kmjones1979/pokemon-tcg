@@ -60,10 +60,11 @@ const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:#eef;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100vh;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
+/* Static blurred backdrop. It used to animate (drift), but animating a
+   filter:blur(70px) layer re-rasterizes every frame and stutters on weak GPUs
+   even at idle — so it's frozen. */
 .aurora{position:fixed;inset:-30% -10% auto;height:70vh;z-index:0;pointer-events:none;filter:blur(70px);opacity:.5;
- background:radial-gradient(40% 60% at 20% 30%,#ff5f6d55,transparent),radial-gradient(45% 55% at 80% 20%,#6a9bff55,transparent),radial-gradient(50% 50% at 55% 70%,#c86bff55,transparent);
- animation:drift 18s ease-in-out infinite alternate}
-@keyframes drift{to{transform:translateY(30px) scale(1.1)}}
+ background:radial-gradient(40% 60% at 20% 30%,#ff5f6d55,transparent),radial-gradient(45% 55% at 80% 20%,#6a9bff55,transparent),radial-gradient(50% 50% at 55% 70%,#c86bff55,transparent)}
 .hero{position:relative;z-index:1;text-align:center;padding:40px 20px 14px;max-width:860px;margin:0 auto}
 .back{display:inline-block;font-size:13px;opacity:.7;margin-bottom:14px}.back:hover{opacity:1}
 h1{font-size:clamp(36px,7vw,68px);font-weight:900;letter-spacing:-1px;line-height:1;
@@ -89,11 +90,16 @@ h1{font-size:clamp(36px,7vw,68px);font-weight:900;letter-spacing:-1px;line-heigh
 .cards-grid{position:relative;z-index:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:26px 20px;
  padding:26px clamp(14px,4vw,52px) 50px;max-width:1600px;margin:0 auto}
 @media(max-width:520px){.cards-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:18px 12px}}
-/* 3D tilt wrapper */
-.cw{perspective:900px}
-.cw .tcg-card{width:100%!important;cursor:pointer;transition:transform .35s cubic-bezier(.2,.8,.3,1),box-shadow .35s;transform-style:preserve-3d;will-change:transform}
-.cw.live .tcg-card{transition:transform .06s linear}
-.cw .glare{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;mix-blend-mode:overlay;z-index:6}
+/* 3D tilt wrapper. content-visibility culls off-screen cards (huge win for a
+   200+ card grid — the browser skips their layout/paint entirely). will-change
+   and mix-blend-mode are applied ONLY to the hovered card (.live), so we don't
+   promote 200 permanent GPU layers or force 200 blend-mode composites at idle. */
+.cw{perspective:900px;content-visibility:auto;contain-intrinsic-size:190px 320px}
+.cw.live{content-visibility:visible}
+.cw .tcg-card{width:100%!important;cursor:pointer;transition:transform .35s cubic-bezier(.2,.8,.3,1),box-shadow .35s;transform-style:preserve-3d}
+.cw.live .tcg-card{transition:transform .06s linear;will-change:transform}
+.cw .glare{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;z-index:6}
+.cw.live .glare{mix-blend-mode:overlay}
 /* zoom overlay */
 .zoom{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
  background:rgba(4,3,10,.94);backdrop-filter:blur(10px);padding:20px}
@@ -174,14 +180,16 @@ function renderGrid(){
   view=ALL.filter(matches);
   countEl.textContent=view.length+' of '+ALL.length+' cards';
   grid.innerHTML='';
+  const frag=document.createDocumentFragment();
   view.forEach((card,i)=>{
     const cw=document.createElement('div');cw.className='cw';
     const {node}=makeCardNode(card);
     cw.appendChild(node);
     attachTilt(cw);
     node.addEventListener('click',()=>openZoom(i));
-    grid.appendChild(cw);
+    frag.appendChild(cw);
   });
+  grid.appendChild(frag);
 }
 // ---- zoom + spin ----
 let cur=-1;
