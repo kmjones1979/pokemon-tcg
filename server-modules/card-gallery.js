@@ -130,7 +130,7 @@ const ALL=[...POKEMON,...TRAINERS,...ENERGY];
 // Marquee ordering: Mega EX → guest → ultra → rare → the rest.
 const rank=c=>c.mega?0:c.illus?1:c.rarity==='ultra'?2:c.rarity==='rare'?3:c.kind==='energy'?6:4;
 ALL.sort((a,b)=>rank(a)-rank(b)||(a.name||'').localeCompare(b.name||''));
-const thumb=a=>/\\/tcg-art\\/[^/]+\\.png$/.test(a||'')?a.replace('/tcg-art/','/tcg-art/thumb/').replace(/\\.png$/,'.jpg'):a;
+const thumb=a=>/\\/tcg-art\\/[^/]+\\.png$/.test(a||'')?a.replace(/^.*\\/tcg-art\\//,'/tcg-art/thumb/').replace(/\\.png$/,'.jpg'):a;
 const ARTISTS=[...new Set(ALL.filter(c=>c.illus).map(c=>c.illus))].sort();
 const FILTERS=[['all','All'],['mega','Mega EX'],['guest','Guest Art'],['ultra','Ultra'],['rare','Rare'],
  ['pokemon','Pokémon'],['trainer','Trainers'],['energy','Energy'],

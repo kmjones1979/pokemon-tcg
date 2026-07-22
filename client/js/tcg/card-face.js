@@ -13,14 +13,16 @@ const el = (tag, cls, html) => {
   return n;
 };
 
-// Bespoke art is hosted full-res (~2.6 MB PNG) on Supabase Storage, with a 480px
-// JPEG thumbnail (~75 KB) generated alongside it. In-game cards render at ≤340px,
-// so we serve the thumbnail by default — a ~30× cut in Supabase egress. Only the
-// deliberate large views (the /cards zoom, /art lightbox) request hires. The
-// transform only rewrites Supabase tcg-art URLs; PokeAPI/GitHub art is untouched.
+// Bespoke art is full-res (~2.6 MB PNG) on Supabase Storage. A 480px JPEG
+// thumbnail (~75 KB) of each is committed to the repo and served from Vercel's
+// CDN at /tcg-art/thumb/<id>.jpg — off Supabase's metered egress entirely.
+// In-game cards render at ≤340px, so we serve the thumbnail by default; only the
+// deliberate large views (the /cards zoom, /art lightbox) request full-res hires.
+// The transform only rewrites Supabase tcg-art URLs; PokeAPI/GitHub art is left
+// alone. Keep this in sync with the copies in card-gallery.js / art-gallery.js.
 export const thumbUrl = (art) =>
   /\/tcg-art\/[^/]+\.png$/.test(art || "")
-    ? art.replace("/tcg-art/", "/tcg-art/thumb/").replace(/\.png$/, ".jpg")
+    ? art.replace(/^.*\/tcg-art\//, "/tcg-art/thumb/").replace(/\.png$/, ".jpg")
     : art;
 const artUrl = (card, hires) => (hires ? card.art : thumbUrl(card.art));
 

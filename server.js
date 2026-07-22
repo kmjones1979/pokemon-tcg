@@ -85,6 +85,20 @@ siteGate.parseFormBody(app);
 siteGate.mount(app);
 // app.use(siteGate.gateMiddleware);
 
+// Bespoke TCG card-art thumbnails, served from the repo (client/tcg-art/thumb)
+// on Vercel's CDN instead of metered Supabase Storage — the full-res art alone
+// blew the Supabase egress quota. Immutable long cache: filenames are stable
+// per card id, so browsers/edge can hold them for a year. Mounted BEFORE the
+// generic static handler so it wins and applies these headers.
+app.use(
+  "/tcg-art",
+  express.static(path.join(__dirname, "client", "tcg-art"), {
+    immutable: true,
+    maxAge: "365d",
+    fallthrough: false,
+  })
+);
+
 // Serve static files from the current directory
 app.use(express.static(path.join(__dirname)));
 
