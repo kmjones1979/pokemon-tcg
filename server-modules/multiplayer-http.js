@@ -195,30 +195,41 @@ function mount(app, supabase, getPokedex) {
     const seat = readSeat(req);
     if (!seat) return res.status(400).json({ error: "playerId required" });
 
-    // Already in a match? Just return it.
-    const existingMatchId = await store.playerLastRoom(seat.playerId);
-    if (existingMatchId) {
-      const m = await store.roomGet(existingMatchId);
-      if (m && !m.state.winner) {
-        const side = sideForPlayer(m, seat.playerId);
-        if (side) return res.json({ state: "matched", view: viewFor(m, side) });
-      }
-    }
+    try {
+      // Serialize the reconnect/pop/push critical section so two simultaneous
+      // joins can't both pop an empty queue and both wait forever (a race that
+      // only bites on Redis / serverless, not a single LAN process).
+      const result = await store.withNamedLock("battler", async () => {
+        // Already in a match? Just return it.
+        const existingMatchId = await store.playerLastRoom(seat.playerId);
+        if (existingMatchId) {
+          const m = await store.roomGet(existingMatchId);
+          if (m && !m.state.winner) {
+            const side = sideForPlayer(m, seat.playerId);
+            if (side) return { state: "matched", view: viewFor(m, side) };
+          }
+        }
 
-    // Try to pop the head of the queue and pair.
-    for (let safety = 0; safety < 5; safety++) {
-      const peer = await store.queuePopFifo();
-      if (!peer) break;
-      if (peer.playerId === seat.playerId) continue; // skip ourselves
-      // Pair
-      const match = await startMatch(peer, seat);
-      const side = sideForPlayer(match, seat.playerId);
-      return res.json({ state: "matched", view: viewFor(match, side) });
-    }
+        // Try to pop the head of the queue and pair.
+        for (let safety = 0; safety < 5; safety++) {
+          const peer = await store.queuePopFifo();
+          if (!peer) break;
+          if (peer.playerId === seat.playerId) continue; // skip ourselves
+          const match = await startMatch(peer, seat);
+          const side = sideForPlayer(match, seat.playerId);
+          return { state: "matched", view: viewFor(match, side) };
+        }
 
-    // Nobody waiting — enqueue.
-    await store.queuePush(seat);
-    res.json({ state: "waiting" });
+        // Nobody waiting — enqueue exactly once.
+        await store.queueRemove(seat.playerId);
+        await store.queuePush(seat);
+        return { state: "waiting" };
+      });
+      res.json(result);
+    } catch (err) {
+      console.error("[mp] queue:", err);
+      res.status(503).json({ error: "Matchmaking busy — try again." });
+    }
   });
 
   app.delete("/api/mp/queue", async (req, res) => {
@@ -429,7 +440,7 @@ function mount(app, supabase, getPokedex) {
           const winnerSide = m.state.winner;
           const winnerSeat = m.players[winnerSide];
           supabase.from("matches").update({
-            winner_id: winnerSeat.userId || null,
+            winner_id: winnerSeat?.userId || null,
             reason: action === "concede" ? "concede" : "ko",
             turns: m.state.turn,
             ended_at: new Date().toISOString(),
@@ -446,14 +457,14 @@ function mount(app, supabase, getPokedex) {
         }
         const winnerSide = m.state.winner;
         if (dex?.length) {
-          if (m.players.player.userId) {
+          if (m.players.player?.userId) {
             try {
               m.rewardForPlayer = await offerForOutcome(m.players.player.userId, dex, winnerSide === "player");
             } catch (err) {
               console.error("[mp] offerForOutcome(player) failed:", err);
             }
           }
-          if (m.players.ai.userId) {
+          if (m.players.ai?.userId) {
             try {
               m.rewardForAi = await offerForOutcome(m.players.ai.userId, dex, winnerSide === "ai");
             } catch (err) {

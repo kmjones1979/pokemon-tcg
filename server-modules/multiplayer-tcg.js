@@ -131,25 +131,41 @@ function mount(app) {
     const seat = readSeat(req);
     if (!seat) return res.status(400).json({ error: "playerId required" });
 
-    // Already in a live match? Return it (reconnect).
-    const existing = await store.playerLastRoom(seat.playerId);
-    if (existing) {
-      const m = await store.roomGet(existing);
-      if (m && m.state && !m.state.winner) {
-        const side = sideForPlayer(m, seat.playerId);
-        if (side) return res.json({ state: "matched", view: viewFor(m, side) });
-      }
-    }
+    try {
+      // Serialize the whole reconnect/pop/push critical section. Without this,
+      // two players clicking Quick Match at nearly the same time each pop an
+      // empty queue (the pop and push are separate Redis round-trips) and both
+      // get stuck "waiting" forever — the reason Quick Match worked on a single
+      // LAN process but not over the internet.
+      const result = await store.withNamedLock("tcg", async () => {
+        // Already in a live match? Return it (reconnect).
+        const existing = await store.playerLastRoom(seat.playerId);
+        if (existing) {
+          const m = await store.roomGet(existing);
+          if (m && m.state && !m.state.winner) {
+            const side = sideForPlayer(m, seat.playerId);
+            if (side) return { state: "matched", view: viewFor(m, side) };
+          }
+        }
 
-    for (let safety = 0; safety < 5; safety++) {
-      const peer = await store.tcgQueuePopFifo();
-      if (!peer) break;
-      if (peer.playerId === seat.playerId) continue;
-      const match = await startMatch(peer, seat);
-      return res.json({ state: "matched", view: viewFor(match, sideForPlayer(match, seat.playerId)) });
+        for (let safety = 0; safety < 5; safety++) {
+          const peer = await store.tcgQueuePopFifo();
+          if (!peer) break;
+          if (peer.playerId === seat.playerId) continue;
+          const match = await startMatch(peer, seat);
+          return { state: "matched", view: viewFor(match, sideForPlayer(match, seat.playerId)) };
+        }
+        // Not paired — (re)queue exactly once so a re-click can't leave a
+        // duplicate "ghost" seat that pairs someone against an absent player.
+        await store.tcgQueueRemove(seat.playerId);
+        await store.tcgQueuePush(seat);
+        return { state: "waiting" };
+      });
+      res.json(result);
+    } catch (err) {
+      console.error("[mp-tcg] queue:", err);
+      res.status(503).json({ error: "Matchmaking busy — try again." });
     }
-    await store.tcgQueuePush(seat);
-    res.json({ state: "waiting" });
   });
 
   app.delete("/api/mp/tcg/queue", async (req, res) => {

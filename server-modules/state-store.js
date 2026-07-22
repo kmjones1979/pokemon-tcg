@@ -269,6 +269,15 @@ async function roomWithLock(roomId, fn) {
   });
 }
 
+// Global mutex around a named critical section. Used to serialize matchmaking:
+// on Redis the queue pop+push are separate round-trips, so two simultaneous
+// joins can both pop an empty queue and both end up waiting forever (the bug
+// that made Quick Match work on a single-process LAN server but not over the
+// internet). Wrapping the whole pop-or-push in this lock closes that window.
+async function withNamedLock(name, fn) {
+  return withLock(`mm:${name}`, fn);
+}
+
 // --- Socket / player binding ---------------------------------------------
 async function socketBind(socketId, ref) {
   const r = client();
@@ -376,7 +385,7 @@ module.exports = {
   queuePush, queuePopFifo, queueRemove, queueLength,
   tcgQueuePush, tcgQueuePopFifo, tcgQueueRemove,
   tcgPrivateRoomSet, tcgPrivateRoomTake,
-  roomSet, roomGet, roomDelete, roomExists, roomWithLock,
+  roomSet, roomGet, roomDelete, roomExists, roomWithLock, withNamedLock,
   socketBind, socketRoom, socketUnbind,
   playerBind, playerLastRoom, playerUnbind,
   privateRoomSet, privateRoomTake, privateRoomRemoveBySocket,
