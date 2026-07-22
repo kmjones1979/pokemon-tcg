@@ -196,7 +196,7 @@ let cur=-1;
 function openZoom(i){
   cur=i;const card=view[i];
   zoomStage.innerHTML='';
-  const node=renderTcgCard(card,{size:'full'}); // full-res art in the zoom
+  const node=renderTcgCard(card,{size:'full',hires:true}); // full-res art in the zoom
   const glare=document.createElement('div');glare.className='glare';node.appendChild(glare);
   node.classList.add('spin');
   zoomStage.appendChild(node);

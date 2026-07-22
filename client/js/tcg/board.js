@@ -5,7 +5,7 @@
 
 import * as engine from "./engine.js";
 import { aiTakeTurn } from "./ai.js";
-import { renderTcgCard, renderCardBack, TCG_COLORS } from "./card-face.js";
+import { renderTcgCard, renderCardBack, TCG_COLORS, thumbUrl } from "./card-face.js";
 import { energyBadge, pileSVG, trainerSVG, trophySVG, pokeballSVG } from "./icons.js";
 import { STARTER_DECKS, deckStats } from "./decks.js";
 import * as collection from "./collection.js";
@@ -44,7 +44,7 @@ export function openTcgMode({ onExit = () => {} } = {}) {
     const span = next ? next.min - tier.min : 1;
     const pct = next ? Math.min(100, Math.round((into / span) * 100)) : 100;
     const feat = s.featuredUltras.map((id) => {
-      let art = ""; try { art = cardById(id).art; } catch {}
+      let art = ""; try { art = thumbUrl(cardById(id).art); } catch {}
       return `<span class="tcg-season-ultra" style="background-image:url('${art}')"></span>`;
     }).join("");
     const el = document.createElement("div");

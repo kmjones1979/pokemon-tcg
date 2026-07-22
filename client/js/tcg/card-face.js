@@ -13,6 +13,17 @@ const el = (tag, cls, html) => {
   return n;
 };
 
+// Bespoke art is hosted full-res (~2.6 MB PNG) on Supabase Storage, with a 480px
+// JPEG thumbnail (~75 KB) generated alongside it. In-game cards render at ≤340px,
+// so we serve the thumbnail by default — a ~30× cut in Supabase egress. Only the
+// deliberate large views (the /cards zoom, /art lightbox) request hires. The
+// transform only rewrites Supabase tcg-art URLs; PokeAPI/GitHub art is untouched.
+export const thumbUrl = (art) =>
+  /\/tcg-art\/[^/]+\.png$/.test(art || "")
+    ? art.replace("/tcg-art/", "/tcg-art/thumb/").replace(/\.png$/, ".jpg")
+    : art;
+const artUrl = (card, hires) => (hires ? card.art : thumbUrl(card.art));
+
 const STAGE = { basic: "Basic", stage1: "Stage 1", stage2: "Stage 2", mega: "Mega Evolution" };
 const RARITY_MARK = { common: "●", uncommon: "◆", rare: "★", ultra: "✦" };
 const STATUS_ABBR = { poison: "PSN", burn: "BRN", paralyze: "PAR", sleep: "SLP", confuse: "CNF" };
@@ -21,9 +32,9 @@ const STATUS_ABBR = { poison: "PSN", burn: "BRN", paralyze: "PAR", sleep: "SLP",
 // (current HP, attached Energy, damage). `opts.affordable` is a Set of attack
 // indices the engine says are payable. `opts.size` = "full" | "mini".
 export function renderTcgCard(card, opts = {}) {
-  const { inst = null, size = "full" } = opts;
+  const { inst = null, size = "full", hires = false } = opts;
   if (card.kind === "energy") return renderEnergyCard(card, size);
-  if (["item", "supporter", "stadium"].includes(card.kind)) return renderTrainerCard(card, size);
+  if (["item", "supporter", "stadium"].includes(card.kind)) return renderTrainerCard(card, size, hires);
 
   const type = card.type || "colorless";
   const rarity = card.rarity || "common";
@@ -48,7 +59,7 @@ export function renderTcgCard(card, opts = {}) {
      </div>`));
 
   const art = el("div", "tcg-art");
-  art.innerHTML = `<div class="tcg-art-frame"><img loading="lazy" src="${card.art}" alt="${card.name}" draggable="false"></div>`;
+  art.innerHTML = `<div class="tcg-art-frame"><img loading="lazy" decoding="async" src="${artUrl(card, hires)}" alt="${card.name}" draggable="false"></div>`;
   if (inst) {
     if (inst.attached?.length) {
       art.insertAdjacentHTML("beforeend",
@@ -115,7 +126,7 @@ function renderEnergyCard(card, size) {
   return wrap;
 }
 
-function renderTrainerCard(card, size) {
+function renderTrainerCard(card, size, hires = false) {
   const wrap = el("div", `tcg-card tcg-trainer kind-${card.kind} art-${card.artStyle || "icon"} tcg-${size}`);
   wrap.dataset.cardId = card.id;
   const label = card.kind === "item" ? "Item" : card.kind === "supporter" ? "Supporter" : "Stadium";
@@ -123,7 +134,7 @@ function renderTrainerCard(card, size) {
   // banner above and the name/text below. Falls back to the SVG icon if a
   // card has no art.
   const art = card.art
-    ? `<div class="tcg-trainer-art"><img loading="lazy" src="${card.art}" alt="${card.name}" draggable="false"></div>`
+    ? `<div class="tcg-trainer-art"><img loading="lazy" decoding="async" src="${artUrl(card, hires)}" alt="${card.name}" draggable="false"></div>`
     : `<div class="tcg-trainer-art tcg-trainer-art-icon">${trainerSVG(card.kind)}</div>`;
   wrap.innerHTML =
     `<div class="tcg-trainer-banner">${label}</div>
